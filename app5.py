@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-import PyMuPDF  # PyMuPDF
+import fitz # PyMuPDF
 from io import BytesIO
 from datetime import datetime, timedelta
 import base64
