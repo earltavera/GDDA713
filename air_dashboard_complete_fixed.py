@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import os
-import fitz  # PyMuPDF
+import fitz
 from io import BytesIO
 from datetime import datetime, timedelta
 import base64
@@ -13,7 +13,6 @@ import re
 
 st.set_page_config(page_title="Auckland Air Discharge Dashboard", layout="wide")
 st.title("Auckland Air Discharge Consents Dashboard")
-st.write("Facilitating understanding of industrial air discharges in Auckland (2016 to date)")
 
 @st.cache_resource
 def load_bert_model():
@@ -37,7 +36,12 @@ def map_rule_category(rule_code):
     return "Unclassified"
 
 def extract_text_with_fitz(file_path_or_stream):
-    doc = fitz.open(stream=file_path_or_stream, filetype="pdf") if isinstance(file_path_or_stream, BytesIO) else fitz.open(file_path_or_stream)
+    if isinstance(file_path_or_stream, BytesIO):
+        doc = fitz.open(stream=file_path_or_stream, filetype="pdf")
+    elif isinstance(file_path_or_stream, str) and os.path.exists(file_path_or_stream):
+        doc = fitz.open(file_path_or_stream)
+    else:
+        raise ValueError("Unsupported input type for extract_text_with_fitz")
     return "\n".join([page.get_text() for page in doc])
 
 def extract_text_with_ocr_fallback(file_like):
@@ -50,27 +54,29 @@ def extract_text_with_ocr_fallback(file_like):
         return f"[Failed to extract text: {e}]", True
 
 def extract_real_metadata(file_name, text):
-    def find_match(pattern, default="Unknown", flags=re.IGNORECASE):
+    def find_match(pattern, default="Unknown", flags=re.IGNORECASE | re.MULTILINE):
         match = re.search(pattern, text, flags)
         return match.group(1).strip() if match else default
 
-    industry = find_match(r"Industry[:\-]?\s*(.*)")
-    location = find_match(r"Location[:\-]?\s*(.*)")
-    consultant = find_match(r"Consultant[:\-]?\s*(.*)")
-    consent_date = find_match(r"(?:Consent|Application|Applied) Date[:\-]?\s*(\d{4}-\d{2}-\d{2})", default=None)
-    expiry_date = find_match(r"Expiry Date[:\-]?\s*(\d{4}-\d{2}-\d{2})", default=None)
+    industry = find_match(r"Industry(?: Name)?[:\-]?\s*(.*)")
+    location = find_match(r"(?:(?:Site|Location|Address))[:\-]?\s*(.*)")
+    consultant = find_match(r"(?:Environmental Consultant|Consultant)[:\-]?\s*(.*)")
+    consent_date = find_match(r"(?:Consent|Application|Applied) Date[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})", default=None)
+    expiry_date = find_match(r"(?:Expiry|Expiration) Date[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})", default=None)
 
     try:
         if consent_date and expiry_date:
-            duration_years = (pd.to_datetime(expiry_date) - pd.to_datetime(consent_date)).days // 365
+            consent_dt = pd.to_datetime(consent_date, dayfirst=True, errors="coerce")
+            expiry_dt = pd.to_datetime(expiry_date, dayfirst=True, errors="coerce")
+            duration_years = (expiry_dt - consent_dt).days // 365 if not pd.isnull(expiry_dt) and not pd.isnull(consent_dt) else None
         else:
             duration_years = None
     except:
         duration_years = None
 
-    pollutants = ", ".join(sorted(set(re.findall(r"(PM10|NOx|SO2|CO2|VOC|dust|odour)", text, flags=re.IGNORECASE))))
+    pollutants = ", ".join(sorted(set(re.findall(r"\b(PM10|NOx|SO2|CO2|VOC|dust|odour)\b", text, flags=re.IGNORECASE))))
     rules = ", ".join(sorted(set(re.findall(r"(E14\.\d+\.\d+)", text))))
-    mitigation = find_match(r"Mitigation Measures?[:\-]?\s*(.*)")
+    mitigation = find_match(r"Mitigation (?:Strategies|Measures)?[:\-]?\s*(.*)")
 
     return {
         "filename": file_name,
