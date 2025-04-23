@@ -136,13 +136,20 @@ if upload_mode == "📂 Folder Path (Local)":
     progress_bar.empty()
 
 else:
-    uploaded_files = st.sidebar.file_uploader("Upload one or more PDF files", type="pdf", accept_multiple_files=True)
+    uploaded_files = st.sidebar.file_uploader(
+        "📄 Upload one or more PDF files", 
+        type="pdf", 
+        accept_multiple_files=True
+    )
+    
     if not uploaded_files:
         st.warning("📭 Please upload one or more PDF files to begin.")
         st.stop()
 
-    st.info(f"📄 Processing {len(uploaded_files)} uploaded file(s)...")
-    progress_bar = st.progress(0)
+    with st.spinner("🌀 Extracting PDF content... please wait"):
+        st.info(f"📄 Processing {len(uploaded_files)} uploaded file(s)...")
+        progress_bar = st.progress(0)
+
 
     for idx, uploaded_file in enumerate(uploaded_files):
         file_name = uploaded_file.name
