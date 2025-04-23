@@ -1,27 +1,35 @@
+
 import streamlit as st
 import pandas as pd
 import os
-import fitz # PyMuPDF
+import fitz  # PyMuPDF
 from io import BytesIO
 from datetime import datetime, timedelta
 import base64
 from sentence_transformers import SentenceTransformer, util
 import altair as alt
-import pytesseract
 from PIL import Image
-from pdf2image import convert_from_path
 import re
 
-# ------------------- Setup -------------------
 st.set_page_config(page_title="Auckland Air Discharge Dashboard", layout="wide")
 st.title("Auckland Air Discharge Consents Dashboard")
-st.write("Facilitating understanding of industrial air discharges in Auckland (2016 to date)")
 
 @st.cache_resource
 def load_bert_model():
     return SentenceTransformer("multi-qa-MiniLM-L6-cos-v1")
 
 bert_model = load_bert_model()
+
+def extract_text_with_fitz(file_path):
+    doc = fitz.open(file_path)
+    return "\n".join([page.get_text() for page in doc])
+
+def extract_text_with_ocr_fallback(path):
+    text = extract_text_with_fitz(path)
+    if len(text.strip()) >= 50:
+        return text, False
+    return "[OCR skipped — not available in cloud mode]", True
+
 
 # ------------------- Rule Categories -------------------
 RULE_CATEGORIES = {
@@ -102,8 +110,15 @@ def extract_text_with_ocr_fallback(path):
     text = extract_text_with_fitz(path)
     if len(text.strip()) >= 50:
         return text, False
-    # Fallback if no readable text — just return the default message
-    return "[Scanned PDF — OCR not available in this environment]", True
+    else:
+        try:
+            images = convert_from_path(path)
+            ocr_text = ""
+            for img in images:
+                ocr_text += pytesseract.image_to_string(img)
+            return ocr_text, True
+        except Exception as e:
+            raise RuntimeError(f"OCR failed: {e}")
 
 def extract_real_metadata(file_name, text):
     def find_match(pattern, default="Unknown", flags=re.IGNORECASE):
