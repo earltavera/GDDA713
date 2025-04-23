@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import os
@@ -44,15 +43,34 @@ def extract_text_with_fitz(file_path_or_stream):
         raise ValueError("Unsupported input type for extract_text_with_fitz")
     return "\n".join([page.get_text() for page in doc])
 
+
 def extract_text_with_ocr_fallback(file_like):
     try:
-        text = extract_text_with_fitz(file_like)
-        if len(text.strip()) >= 50:
-            return text, False
-        return "[OCR skipped — not available in cloud mode]", True
-    except Exception as e:
-        return f"[Failed to extract text: {e}]", True
+        from pdf2image import convert_from_bytes
+        import pytesseract
 
+        if isinstance(file_like, BytesIO):
+            text = extract_text_with_fitz(file_like)
+            if len(text.strip()) >= 50:
+                return text, False
+
+            file_like.seek(0)
+            images = convert_from_bytes(file_like.read())
+        else:
+            text = extract_text_with_fitz(file_like)
+            if len(text.strip()) >= 50:
+                return text, False
+
+            from pdf2image import convert_from_path
+            images = convert_from_path(file_like)
+
+        ocr_text = ""
+        for img in images:
+            ocr_text += pytesseract.image_to_string(img)
+
+        return ocr_text, True
+    except Exception as e:
+        return f"[OCR failed: {e}]", True
 def extract_real_metadata(file_name, text):
     def find_match(pattern, default="Unknown", flags=re.IGNORECASE | re.MULTILINE):
         match = re.search(pattern, text, flags)
