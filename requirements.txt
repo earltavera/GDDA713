@@ -1,6 +1,11 @@
 streamlit
-PyMuPDF
 pandas
+PyMuPDF
+pillow
 altair
 sentence-transformers
-Pillow  # still needed for PDF image previews (if ever used)
+torch
+transformers
+scikit-learn
+pdf2image
+pytesseract
