@@ -102,15 +102,8 @@ def extract_text_with_ocr_fallback(path):
     text = extract_text_with_fitz(path)
     if len(text.strip()) >= 50:
         return text, False
-    else:
-        try:
-            images = convert_from_path(path)
-            ocr_text = ""
-            for img in images:
-                ocr_text += pytesseract.image_to_string(img)
-            return ocr_text, True
-        except Exception as e:
-            raise RuntimeError(f"OCR failed: {e}")
+    # Fallback if no readable text — just return the default message
+    return "[Scanned PDF — OCR not available in this environment]", True
 
 def extract_real_metadata(file_name, text):
     def find_match(pattern, default="Unknown", flags=re.IGNORECASE):
