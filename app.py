@@ -40,13 +40,10 @@ def extract_metadata(text, filename):
     rc_str = match(r"(Resource Consent Number|Consent No\.?|Application Number|RCN|Consent #:?)[:\-]?\s*(.+)", group=2)
     company_str = match(r"(Company Name|Applicant Name|Organisation Name|Company|Applicant|Organisation)[:\-]?\s*(.+)", group=2)
     address_str = match(r"(Location|Site Address|Address)[:\-]?\s*(.+)", group=2)
-    triggers_str = match(r"AUP\(OP\) Trigger\(s\)[:\-]?\s*(.+)")
-    proposal_str = match(r"Reason for Consent[:\-]?\s*(.+)")
-    conditions_numbers = match(r"Consent Condition\(s\)[:\-]?\s*(.+)")
-    mitigation_str = match(r"Mitigation[:\-]?\s*(.+)")
-
-    rules = re.findall(r"E14\.\d+\.\d+", text)
-    mitigation = re.findall(r"(bag filter|scrubber|water spray|carbon filter|electrostatic)", text, re.IGNORECASE)
+    triggers_str = match(r"(AUP\(OP\)|AUP)[\s\-:]*Trigger[s]*[:\-]?\s*(.{3,100})", group=2)
+    proposal_str = match(r"(Reason for Consent|Proposal|Purpose)[:\-]?\s*(.{3,200})", group=2)
+    conditions_numbers = match(r"(Consent Condition[s]*|Conditions Applied)[:\-]?\s*(.{3,200})", group=2)
+    mitigation_str = match(r"(Mitigation Measures|Mitigation)[:\-]?\s*(.{3,200})", group=2)
 
     expiry_date_str = match(r"Expiry Date[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", group=1, default=None)
     issue_date_str = match(r"(Consent Date|Application Date|Applied Date|Date of Consent)[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", group=2, default=None)
@@ -86,7 +83,7 @@ def extract_metadata(text, filename):
         "Resource Consent Number": rc_str,
         "Company Name": company_str,
         "Address": address_str,
-                "Issue Date": issue_date_dt,
+        "Issue Date": issue_date_dt,
         "Expiry Date": expiry_date_dt,
         "Expiry Status": status,
         "Duration (years)": duration,
