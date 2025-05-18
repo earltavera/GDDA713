@@ -117,17 +117,17 @@ for file in uploaded_files:
     metadata = extract_metadata(text, file.name)
     data.append(metadata)
     
+# Create dataframe
+df = pd.DataFrame(data)
+st.success(f"Extracted data from {len(df)} files.")
+st.dataframe(df, use_container_width=True)
+
 # Summary statistics
 st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
 st.metric("Total Consents", len(df))
 st.metric("Issued", (df["Expiry Status"] == "Issued").sum())
 st.metric("About to Expire", (df["Expiry Status"] == "About to expire").sum())
 st.metric("Expired", (df["Expiry Status"] == "Expired").sum())
-
-# Create dataframe
-df = pd.DataFrame(data)
-st.success(f"Extracted data from {len(df)} files.")
-st.dataframe(df, use_container_width=True)
 
 # CSV download
 csv = df.to_csv(index=False)
