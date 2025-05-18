@@ -37,9 +37,17 @@ def extract_metadata(text, filename):
         result = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
         return result.group(group).strip().replace('\n', ' ') if result else default
 
+    rc_str = match(r"Resource Consent Number[:\-]?\s*(.+)")
+    company_str = match(r"(Company|Applicant|Organisation) Name[:\-]?\s*(.+)", group=2)
+    address_str = match(r"(Location|Site Address|Address)[:\-]?\s*(.+)", group=2)
+    triggers_str = match(r"AUP\(OP\) Trigger\(s\)[:\-]?\s*(.+)")
+    proposal_str = match(r"Reason for Consent[:\-]?\s*(.+)")
+    conditions_numbers = match(r"Consent Condition\(s\)[:\-]?\s*(.+)")
+    mitigation_str = match(r"Mitigation[:\-]?\s*(.+)")
+
     consultant = match(r"(Consultant|Prepared by|Prepared for)[:\-]?\s*(.+)", group=2)
     industry = match(r"(Industry|Sector|Type of Industry)[:\-]?\s*(.+)", group=2)
-    location = match(r"(Location|Site Address|Address)[:\-]?\s*(.+)", group=2)
+    location = address_str
     pollutants = match(r"(Pollutants|Emissions|Discharges)[:\-]?\s*(.+)", group=2)
 
     rules = re.findall(r"E14\.\d+\.\d+", text)
@@ -52,7 +60,6 @@ def extract_metadata(text, filename):
         expiry_date_dt = pd.to_datetime(expiry_date_str, dayfirst=True, errors='coerce')
         issue_date_dt = pd.to_datetime(issue_date_str, dayfirst=True, errors='coerce')
 
-        # Fallback: scan all possible dates if issue_date_dt is missing
         if pd.isna(issue_date_dt) or pd.isna(expiry_date_dt):
             possible_dates = re.findall(r"\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}", text)
             parsed_dates = pd.to_datetime(possible_dates, dayfirst=True, errors='coerce').dropna()
@@ -78,15 +85,21 @@ def extract_metadata(text, filename):
     else:
         status = "Unknown"
 
-    # Flagging invalid or missing dates
     invalid_date_note = "Invalid or missing" if pd.isna(issue_date_dt) or pd.isna(expiry_date_dt) else "Valid"
 
     return {
         "Filename": filename,
+        "Resource Consent Numbers": rc_str,
+        "Company Name": company_str,
+        "Address": address_str,
         "Consultant": consultant,
         "Industry": industry,
         "Location": location,
         "Pollutants": pollutants,
+        "AUP(OP) Triggers": triggers_str,
+        "Reason for Consent": proposal_str,
+        "Consent Conditions": conditions_numbers,
+        "Mitigation (Consent Conditions)": mitigation_str,
         "Mitigation": ", ".join(set(mitigation)) if mitigation else "None Found",
         "Rules Triggered": ", ".join(set(rules)) if rules else "None Found",
         "Consent Date": issue_date_dt,
@@ -96,46 +109,50 @@ def extract_metadata(text, filename):
         "Date Validity": invalid_date_note
     }
 
-# Upload PDF files
+# Upload and parse PDFs
 uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], accept_multiple_files=True)
-
 if not uploaded_files:
     st.warning("Please upload PDF files from a folder to continue.")
     st.stop()
 
-# Process each file
 data = []
 for file in uploaded_files:
     text = extract_text_from_pdf(file.read())
     metadata = extract_metadata(text, file.name)
     data.append(metadata)
 
-# Create dataframe
 df = pd.DataFrame(data)
 
-# Highlight rows with invalid/missing dates
-highlighted_df = df.style.apply(
-    lambda x: ["background-color: #ffcccc" if x["Date Validity"] == "Invalid or missing" else "" for _ in x],
-    axis=1
-)
+# Filters
+industries = df['Industry'].dropna().unique().tolist()
+statuses = df['Expiry Status'].dropna().unique().tolist()
+selected_industries = st.multiselect("Filter by Industry", sorted(industries), default=industries)
+selected_statuses = st.multiselect("Filter by Expiry Status", sorted(statuses), default=statuses)
+df = df[df['Industry'].isin(selected_industries) & df['Expiry Status'].isin(selected_statuses)]
 
-st.success(f"Extracted data from {len(df)} files.")
-
-# Filter preview
-st.markdown("<h3 style='color:#1f77b4;'>Filter and Preview Data</h3>", unsafe_allow_html=True)
-doc_keyword = st.text_input("Filter filename by keyword (e.g. memo, AEE, EMP):").lower()
-filtered_df = df[df["Filename"].str.lower().str.contains(doc_keyword)] if doc_keyword else df
-
-# Reapply highlighting to filtered preview
-highlighted_filtered_df = filtered_df.style.apply(
-    lambda x: ["background-color: #ffcccc" if x["Date Validity"] == "Invalid or missing" else "" for _ in x],
-    axis=1
-)
-st.dataframe(highlighted_filtered_df, use_container_width=True)
-
-# CSV download
-csv = df.to_csv(index=False)
-st.download_button("Download CSV", csv, "air_discharge_consents.csv", "text/csv")
+# Consent summaries
+st.markdown("## Consent Document Summaries")
+for _, row in df.iterrows():
+    with st.expander(f"📄 {row['Filename']} — {row['Company Name']}"):
+        st.markdown(f"""
+        **Resource Consent Number:** {row['Resource Consent Numbers']}  
+        **Company Name:** {row['Company Name']}  
+        **Address:** {row['Address']}  
+        **Consultant:** {row['Consultant']}  
+        **Industry:** {row['Industry']}  
+        **Pollutants:** {row['Pollutants']}  
+        **Triggers:** {row['AUP(OP) Triggers']}  
+        **Reason for Consent:** {row['Reason for Consent']}  
+        **Consent Conditions:** {row['Consent Conditions']}  
+        **Mitigation (Consent Conditions):** {row['Mitigation (Consent Conditions)']}  
+        **Mitigation:** {row['Mitigation']}  
+        **Rules Triggered:** {row['Rules Triggered']}  
+        **Issue Date:** {row['Consent Date']}  
+        **Expiry Date:** {row['Expiry Date']}  
+        **Expiry Status:** {row['Expiry Status']}  
+        **Duration (years):** {row['Duration (years)']}  
+        **Date Validity:** {row['Date Validity']}  
+        """)
 
 #########################################
 
