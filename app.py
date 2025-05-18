@@ -37,7 +37,7 @@ def extract_metadata(text, filename):
         result = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
         return result.group(group).strip().replace('\n', ' ') if result else default
 
-    rc_str = match(r"Application number:\s*(.+?)(?=\s*Applicant)")
+    rc_str = match(r"(Resource Consent Number|Consent No\.?|RCN|Consent #:?)[:\-]?\s*(.+)", group=2)
     company_str = match(r"(Company Name|Applicant Name|Organisation Name|Applicant|Company|Organisation)[:\-]?\s*(.+)", group=2)
     address_str = match(r"(Location|Site Address|Address)[:\-]?\s*(.+)", group=2)
     triggers_str = match(r"(AUP\(OP\)|AUP)[\s\-:]*Trigger[s]*[:\-]?\s*(.{3,100})", group=2)
