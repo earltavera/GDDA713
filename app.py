@@ -11,7 +11,6 @@ from datetime import datetime
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
 
-# ✅ Must be the first Streamlit command
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide")
 
 # ------------------------
