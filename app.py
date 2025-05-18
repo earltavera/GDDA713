@@ -122,8 +122,8 @@ if uploaded_files:
     if all_data:
         df = pd.DataFrame(all_data)
         total_consents = len(df)
-        expired_consents = df["Is Expired"].value_counts().get("Expired", 0)
-        active_consents = df["Is Expired"].value_counts().get("Active", 0)
+        expired_consents = df["Consent Status"].value_counts().get("Expired", 0)
+        active_consents = df["Consent Status"].value_counts().get("Active", 0)
 
         st.markdown(f"<h4 style='color:#228B22;'><b>Processed {total_consents} PDF file(s)</b></h4>", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
@@ -161,7 +161,7 @@ if uploaded_files:
                 st.markdown(f"**{i+1}. {row['Company Name']} — {row['Address']}**")
                 st.markdown(f"- Triggers: `{row['AUP(OP) Triggers']}`")
                 st.markdown(f"- Reason: {row['Reason for Consent']}")
-                st.markdown(f"- Status: `{row['Is Expired']}` | Expires: `{row['Expiry Date']}`")
+                st.markdown(f"- Status: `{row['Consent Status']}` | Expires: `{row['Expiry Date']}`")
                 st.markdown("---")
 else:
     st.info("\U0001F4C4 Please upload one or more PDF files to begin.")
