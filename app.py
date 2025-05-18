@@ -86,7 +86,7 @@ def extract_metadata(text, filename):
         "Resource Consent Number": rc_str,
         "Company Name": company_str,
         "Address": address_str,
-        "Industry": match(r"(Industry|Sector|Type of Industry)[:\-]?\s*(.+)", group=2),
+        "Industry": match(r"(Industry Name|Industry Type|Type of Industry|Sector|Industry)[:\-]?\s*(.+)", group=2),
         "Pollutants": match(r"(Pollutants|Emissions|Discharges)[:\-]?\s*(.+)", group=2),
         "Issue Date": issue_date_dt,
         "Expiry Date": expiry_date_dt,
