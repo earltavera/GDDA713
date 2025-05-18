@@ -156,12 +156,6 @@ def colored_bar_chart(df, x_col, y_col, title):
     ).properties(title=title)
     st.altair_chart(chart, use_container_width=True)
 
-# Rule chart
-st.subheader("Rule Trigger Frequency")
-rule_counts = df["Rules Triggered"].dropna().str.split(", ").explode().value_counts().reset_index()
-rule_counts.columns = ["Rule Triggered", "count"]
-colored_bar_chart(rule_counts, "Rule Triggered", "count", "AUP E14 Rules Triggered")
-
 # Industry chart
 st.subheader("Industry Type Frequency")
 industry_counts = df["Industry"].dropna().value_counts().reset_index()
