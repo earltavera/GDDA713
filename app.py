@@ -111,14 +111,8 @@ for file in uploaded_files:
 
 # Create dataframe
 df = pd.DataFrame(data)
-
-# Highlight rows with invalid/missing dates
-highlighted_df = df.style.apply(
-    lambda x: ["background-color: #ffcccc" if x["Date Validity"] == "Invalid or missing" else "" for _ in x],
-    axis=1
-)
-
 st.success(f"Extracted data from {len(df)} files.")
+st.dataframe(df, use_container_width=True)
 
 # Filter preview
 st.markdown("<h3 style='color:#1f77b4;'>Filter and Preview Data</h3>", unsafe_allow_html=True)
