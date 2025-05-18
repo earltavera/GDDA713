@@ -101,7 +101,22 @@ uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], acc
 if not uploaded_files:
     st.warning("Please upload PDF files from a folder to continue.")
     st.stop()
+    
+# Summary statistics
+st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
+st.metric("Total Consents", len(df))
+st.metric("Issued", (df["Expiry Status"] == "Issued").sum())
+st.metric("About to Expire", (df["Expiry Status"] == "About to expire").sum())
+st.metric("Expired", (df["Expiry Status"] == "Expired").sum())
 
+# Visualization helper
+def colored_bar_chart(df, x_col, y_col, title):
+    chart = alt.Chart(df).mark_bar(color='#1f77b4').encode(
+        x=alt.X(x_col, sort='-y'),
+        y=y_col,
+        tooltip=[x_col, y_col]
+    ).properties(title=title)
+    st.altair_chart(chart, use_container_width=True)
 # Process each file
 data = []
 for file in uploaded_files:
@@ -119,22 +134,6 @@ csv = df.to_csv(index=False)
 st.download_button("Download CSV", csv, "air_discharge_consents.csv", "text/csv")
 
 #########################################
-
-# Summary statistics
-st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
-st.metric("Total Consents", len(df))
-st.metric("Issued", (df["Expiry Status"] == "Issued").sum())
-st.metric("About to Expire", (df["Expiry Status"] == "About to expire").sum())
-st.metric("Expired", (df["Expiry Status"] == "Expired").sum())
-
-# Visualization helper
-def colored_bar_chart(df, x_col, y_col, title):
-    chart = alt.Chart(df).mark_bar(color='#1f77b4').encode(
-        x=alt.X(x_col, sort='-y'),
-        y=y_col,
-        tooltip=[x_col, y_col]
-    ).properties(title=title)
-    st.altair_chart(chart, use_container_width=True)
 
 # Duration chart
 st.subheader("Consent Duration Distribution")
