@@ -101,13 +101,6 @@ uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], acc
 if not uploaded_files:
     st.warning("Please upload PDF files from a folder to continue.")
     st.stop()
-    
-# Summary statistics
-st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
-st.metric("Total Consents", len(df))
-st.metric("Issued", (df["Expiry Status"] == "Issued").sum())
-st.metric("About to Expire", (df["Expiry Status"] == "About to expire").sum())
-st.metric("Expired", (df["Expiry Status"] == "Expired").sum())
 
 # Visualization helper
 def colored_bar_chart(df, x_col, y_col, title):
@@ -123,6 +116,13 @@ for file in uploaded_files:
     text = extract_text_from_pdf(file.read())
     metadata = extract_metadata(text, file.name)
     data.append(metadata)
+    
+# Summary statistics
+st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
+st.metric("Total Consents", len(df))
+st.metric("Issued", (df["Expiry Status"] == "Issued").sum())
+st.metric("About to Expire", (df["Expiry Status"] == "About to expire").sum())
+st.metric("Expired", (df["Expiry Status"] == "Expired").sum())
 
 # Create dataframe
 df = pd.DataFrame(data)
