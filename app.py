@@ -170,4 +170,4 @@ else:
 # Footer
 # ------------------------
 st.markdown("---")
-st.caption("\U0001F393 Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence Dashboard © 2025")
+st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence Dashboard © 2025")
