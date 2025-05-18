@@ -94,17 +94,6 @@ def extract_metadata(text, filename):
         "Mitigation": mitigation_str
     }
 
-# ===========================
-# EXPIRY ANALYSIS CHART
-# ===========================
-st.subheader("Expiry Status Breakdown by Years to Expiry")
-if 'Expiry Date' in df.columns:
-    df['Years to Expiry'] = ((df['Expiry Date'] - pd.Timestamp.now()).dt.days / 365).round(1)
-    expiry_bins = pd.cut(df['Years to Expiry'], bins=[-100, -1, 0, 1, 3, 5, 10, 50], right=False)
-    expiry_chart = expiry_bins.value_counts().sort_index().reset_index()
-    expiry_chart.columns = ["Years Range", "Count"]
-    st.bar_chart(data=expiry_chart.set_index("Years Range"))
-
 # Upload PDF files
 uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], accept_multiple_files=True)
 
@@ -184,6 +173,16 @@ if df["Expiry Date"].notna().any():
 
     about_to_expire_by_year = df[df["Expiry Status"] == "About to expire"]["Expiry Year"].value_counts().sort_index()
     st.line_chart(about_to_expire_by_year.rename("Consents About to Expire"))
+# ===========================
+# EXPIRY ANALYSIS CHART
+# ===========================
+st.subheader("Expiry Status Breakdown by Years to Expiry")
+if 'Expiry Date' in df.columns:
+    df['Years to Expiry'] = ((df['Expiry Date'] - pd.Timestamp.now()).dt.days / 365).round(1)
+    expiry_bins = pd.cut(df['Years to Expiry'], bins=[-100, -1, 0, 1, 3, 5, 10, 50], right=False)
+    expiry_chart = expiry_bins.value_counts().sort_index().reset_index()
+    expiry_chart.columns = ["Years Range", "Count"]
+    st.bar_chart(data=expiry_chart.set_index("Years Range"))
 
 # Download filtered files
 st.subheader("Download Documents by Type")
