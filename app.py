@@ -8,28 +8,12 @@ from io import BytesIO
 from datetime import datetime
 import re
 import altair as alt
-from sentence_transformers import SentenceTransformer, util
 from PIL import Image
 import pytesseract
 
 # Set Streamlit page config
 st.set_page_config(page_title="Auckland Air Discharge Dashboard", layout="wide")
 st.markdown("<h1 style='color:#2c6e91;'>Auckland Industrial Air Discharge Consent Dashboard</h1>", unsafe_allow_html=True)
-
-# Load BERT model
-@st.cache_resource
-def load_bert_model():
-    return SentenceTransformer("all-MiniLM-L6-v2")
-
-bert_model = load_bert_model()
-
-# Semantic scoring function
-def semantic_score(value, expected_examples):
-    if not value or value in ["Not Found", "None"]:
-        return 0.0
-    embeddings = bert_model.encode([value] + expected_examples, convert_to_tensor=True)
-    score = util.cos_sim(embeddings[0], embeddings[1:]).max().item()
-    return round(score, 2)
 
 # PDF Text Extraction
 def extract_text_from_pdf(file_bytes):
@@ -84,20 +68,6 @@ def extract_metadata(text, filename):
     else:
         status = "Unknown"
 
-    examples = {
-        "Industry": ["Chemical Manufacturing", "Food Processing", "Wood Treatment", "Petroleum Refining"],
-        "Location": ["Wiri, Auckland", "East Tamaki", "Penrose", "Onehunga"],
-        "Pollutants": ["PM10, VOC", "NOx, SO2", "Carbon monoxide", "Odour"],
-        "Consultant": ["GHD", "Tonkin + Taylor", "Beca", "Pattle Delamore Partners"]
-    }
-
-    confidence = {
-        "Industry Score": semantic_score(industry, examples["Industry"]),
-        "Location Score": semantic_score(location, examples["Location"]),
-        "Pollutants Score": semantic_score(pollutants, examples["Pollutants"]),
-        "Consultant Score": semantic_score(consultant, examples["Consultant"]),
-    }
-
     # Flagging invalid or missing dates
     invalid_date_note = "Invalid or missing" if pd.isna(issue_date_dt) or pd.isna(expiry_date_dt) else "Valid"
 
@@ -113,8 +83,7 @@ def extract_metadata(text, filename):
         "Expiry Date": expiry_date_dt,
         "Expiry Status": status,
         "Duration (years)": duration,
-        "Date Validity": invalid_date_note,
-        **confidence
+        "Date Validity": invalid_date_note
     }
 
 # Upload PDF files
@@ -157,7 +126,6 @@ st.dataframe(highlighted_filtered_df, use_container_width=True)
 # CSV download
 csv = df.to_csv(index=False)
 st.download_button("Download CSV", csv, "air_discharge_consents.csv", "text/csv")
-
 
 # Summary statistics
 st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
