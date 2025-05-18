@@ -94,6 +94,23 @@ def extract_metadata(text, filename):
         "Mitigation": mitigation_str
     }
 
+# Upload PDF files
+uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], accept_multiple_files=True)
+
+if not uploaded_files:
+    st.warning("Please upload PDF files from a folder to continue.")
+    st.stop()
+
+# Process each file
+data = []
+for file in uploaded_files:
+    text = extract_text_from_pdf(file.read())
+    metadata = extract_metadata(text, file.name)
+    data.append(metadata)
+
+# Create dataframe
+df = pd.DataFrame(data)
+
 # ===========================
 # FILTERS FOR EXPIRY STATUS & RANGE
 # ===========================
