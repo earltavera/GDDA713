@@ -1,160 +1,174 @@
+# --------------------------------------------
 # Auckland Air Discharge Consent Dashboard
+# --------------------------------------------
+
 import streamlit as st
 import pandas as pd
 import pymupdf
 fitz = pymupdf
-import zipfile
-from io import BytesIO
-from datetime import datetime
 import re
-import altair as alt
-from PIL import Image
-import pytesseract
+from datetime import datetime
+import plotly.express as px
+from sentence_transformers import SentenceTransformer, util
 
-# Set Streamlit page config
-st.set_page_config(page_title="Auckland Air Discharge Dashboard", layout="wide")
-st.markdown("<h1 style='color:#2c6e91;'>Auckland Industrial Air Discharge Consent Dashboard</h1>", unsafe_allow_html=True)
+# ✅ Must be the first Streamlit command
+st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide")
 
-# PDF Text Extraction
-def extract_text_from_pdf(file_bytes):
-    with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-        text = "\n".join(page.get_text() for page in doc)
-    if len(text.strip()) < 50:
-        try:
-            text = ""
-            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-                for page in doc:
-                    pix = page.get_pixmap()
-                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                    text += pytesseract.image_to_string(img)
-        except Exception as e:
-            text += f"\n[OCR failed: {e}]"
-    return text
+# ------------------------
+# Custom Styling
+# ------------------------
+st.markdown("""
+    <style>
+    h1 {
+        color: #2c6e91;
+        text-align: center;
+        font-size: 2.5em;
+    }
+    .metric-label {
+        font-weight: bold !important;
+        color: #003366;
+    }
+    .stDataFrame {
+        background-color: #ffffff !important;
+    }
+    .stPlotlyChart {
+        background-color: #f9f9ff !important;
+        padding: 1rem;
+        border-radius: 10px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
+st.markdown("<h1>Auckland Air Discharge Consent Dashboard</h1>", unsafe_allow_html=True)
+
+# ------------------------
+# Expiry Check
+# ------------------------
+def check_expiry(expiry_date):
+    if expiry_date is None:
+        return "Unknown"
+    return "Expired" if expiry_date < datetime.now() else "Active"
+
+# ------------------------
 # Metadata Extraction
-def extract_metadata(text, filename):
-    def match(pattern, group=1, default="Not Found"):
-        result = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
-        return result.group(group).strip().replace('\n', ' ') if result else default
+# ------------------------
+def extract_metadata(text):
+    rc_str = "".join(dict.fromkeys(re.findall(r"Application number:\s*(.+?)(?=\s*Applicant)", text)))
+    company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
+    address_str = "".join(dict.fromkeys(re.findall(r"Site address:\s*(.+?)(?=\s*Legal description)", text)))
 
-    rc_str = match(r"(Resource Consent Number|Consent No\.?|Application Number|RCN|Consent #:?)[:\-]?\s*(.+)", group=2)
-    company_str = match(r"(Company Name|Applicant Name|Organisation Name|Company|Applicant|Organisation)[:\-]?\s*(.+)", group=2)
-    address_str = match(r"(Location|Site Address|Address)[:\-]?\s*(.+)", group=2)
-    triggers_str = match(r"(AUP\(OP\)|AUP)[\s\-:]*Trigger[s]*[:\-]?\s*(.{3,100})", group=2)
-    proposal_str = match(r"(Reason for Consent|Proposal|Purpose)[:\-]?\s*(.{3,200})", group=2)
-    conditions_numbers = match(r"(Consent Condition[s]*|Conditions Applied)[:\-]?\s*(.{3,200})", group=2)
-    mitigation_str = match(r"(Mitigation Measures|Mitigation)[:\-]?\s*(.{3,200})", group=2)
-
-    expiry_date_str = match(r"Expiry Date[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", group=1, default=None)
-    issue_date_str = match(r"(Consent Date|Application Date|Applied Date|Date of Consent)[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", group=2, default=None)
-
+    matches_issue = re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})", text)
+    issue_str = "".join(dict.fromkeys(matches_issue))
     try:
-        expiry_date_dt = pd.to_datetime(expiry_date_str, dayfirst=True, errors='coerce')
-        issue_date_dt = pd.to_datetime(issue_date_str, dayfirst=True, errors='coerce')
-
-        if pd.isna(issue_date_dt) or pd.isna(expiry_date_dt):
-            possible_dates = re.findall(r"\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}", text)
-            parsed_dates = pd.to_datetime(possible_dates, dayfirst=True, errors='coerce').dropna()
-            if pd.isna(issue_date_dt) and not parsed_dates.empty:
-                issue_date_dt = parsed_dates.min()
-            if pd.isna(expiry_date_dt) and len(parsed_dates) > 1:
-                expiry_date_dt = parsed_dates.max()
-
-        duration = (expiry_date_dt.year - issue_date_dt.year) if not pd.isna(expiry_date_dt) and not pd.isna(issue_date_dt) else None
+        issue_date = datetime.strptime(issue_str, "%d %B %Y")
     except:
-        expiry_date_dt = None
-        issue_date_dt = None
-        duration = None
+        issue_date = None
 
-    now = pd.Timestamp.now()
-    if pd.notna(expiry_date_dt):
-        if expiry_date_dt < now:
-            status = "Expired"
-        elif expiry_date_dt < now + pd.DateOffset(months=6):
-            status = "About to expire"
-        else:
-            status = "Issued"
-    else:
-        status = "Unknown"
+    matches_expiry = re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
+    expiry_str = "".join(dict.fromkeys(matches_expiry))
+    try:
+        expiry_date = datetime.strptime(expiry_str, "%d %B %Y")
+    except:
+        expiry_date = None
 
-    invalid_date_note = "Invalid or missing" if pd.isna(issue_date_dt) or pd.isna(expiry_date_dt) else "Valid"
+    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
+    triggers_str = " ".join(dict.fromkeys(triggers))
+
+    proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
+
+    conditions_str = "".join(re.findall(r"(?<=Conditions).*?(?=Advice notes)", text, re.DOTALL))
+    conditions_numbers = re.findall(r"^\d+(?=\.)", conditions_str, re.MULTILINE)
+    managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in re.findall(r"(?i)\b(\w+)\sManagement Plan", conditions_str)]))
 
     return {
-        "Resource Consent Number": rc_str,
+        "Resource Consent Numbers": rc_str,
         "Company Name": company_str,
         "Address": address_str,
-        "Issue Date": issue_date_dt,
-        "Expiry Date": expiry_date_dt,
-        "Expiry Status": status,
-        "Duration (years)": duration,
-        "Date Validity": invalid_date_note,
+        "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown",
         "AUP(OP) Triggers": triggers_str,
         "Reason for Consent": proposal_str,
-        "Consent Conditions": conditions_numbers,
-        "Mitigation": mitigation_str
+        "Consent Conditions": ", ".join(conditions_numbers),
+        "Mitigation (Consent Conditions)": ", ".join(managementplan_final),
+        "Is Expired": check_expiry(expiry_date),
+        "Text Blob": text
     }
 
-# Upload PDF files
-uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], accept_multiple_files=True)
+# ------------------------
+# BERT model for semantic search
+# ------------------------
+@st.cache_resource
+def load_bert_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
-if not uploaded_files:
-    st.warning("Please upload PDF files from a folder to continue.")
-    st.stop()
+model = load_bert_model()
 
-# Visualization helper
-def colored_bar_chart(df, x_col, y_col, title):
-    chart = alt.Chart(df).mark_bar(color='#1f77b4').encode(
-        x=alt.X(x_col, sort='-y'),
-        y=y_col,
-        tooltip=[x_col, y_col]
-    ).properties(title=title)
-    st.altair_chart(chart, use_container_width=True)
-# Process each file
-data = []
-for file in uploaded_files:
-    text = extract_text_from_pdf(file.read())
-    metadata = extract_metadata(text, file.name)
-    data.append(metadata)
-    
-# Create dataframe
-df = pd.DataFrame(data)
-st.success(f"Extracted data from {len(df)} files.")
-st.dataframe(df, use_container_width=True)
+# ------------------------
+# File Upload and Processing
+# ------------------------
+uploaded_files = st.file_uploader("\U0001F4C2 Upload one or more PDF files", type=["pdf"], accept_multiple_files=True)
 
-# Summary statistics
-st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
-st.metric("Total Consents", len(df))
-st.metric("Issued", (df["Expiry Status"] == "Issued").sum())
-st.metric("About to Expire", (df["Expiry Status"] == "About to expire").sum())
-st.metric("Expired", (df["Expiry Status"] == "Expired").sum())
+df = pd.DataFrame()
+if uploaded_files:
+    all_data = []
+    for file in uploaded_files:
+        try:
+            with fitz.open(stream=file.read(), filetype="pdf") as doc:
+                text = "\n".join(page.get_text() for page in doc)
+            structured_data = extract_metadata(text)
+            all_data.append(structured_data)
+        except Exception as e:
+            st.error(f"\u274C Error processing {file.name}: {e}")
 
-# CSV download
-csv = df.to_csv(index=False)
-st.download_button("Download CSV", csv, "air_discharge_consents.csv", "text/csv")
+    if all_data:
+        df = pd.DataFrame(all_data)
+        total_consents = len(df)
+        expired_consents = df["Is Expired"].value_counts().get("Expired", 0)
+        active_consents = df["Is Expired"].value_counts().get("Active", 0)
 
-#########################################
+        st.markdown(f"<h4 style='color:#228B22;'><b>Processed {total_consents} PDF file(s)</b></h4>", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        col1.metric("Total Consents Uploaded", total_consents)
+        col2.metric("Total Expired Consents", expired_consents)
 
-# Duration chart
-st.subheader("Consent Duration Distribution")
-duration_counts = df["Duration (years)"].dropna().value_counts().sort_index().reset_index()
-duration_counts.columns = ["Duration (years)", "count"]
-colored_bar_chart(duration_counts, "Duration (years)", "count", "Consent Duration in Years")
+        st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
+        st.dataframe(df.drop(columns=["Text Blob"]))
 
-# Download filtered files
-st.subheader("Download Documents by Type")
-doc_type = st.selectbox("Choose document keyword", ["memo", "aee", "aqa", "emp", "aqmp", "dmp", "omp"])
-filtered_files = [file for file in uploaded_files if doc_type.lower() in file.name.lower()]
+        chart_df = pd.DataFrame({
+            "Consent Status": ["Expired", "Active"],
+            "Count": [expired_consents, active_consents]
+        })
+        bar_fig = px.bar(chart_df, x="Consent Status", y="Count", title="Expired vs Active Consents", text="Count")
+        bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
+        st.plotly_chart(bar_fig)
 
-if filtered_files:
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w") as zipf:
-        for file in filtered_files:
-            zipf.writestr(file.name, file.read())
-    st.download_button(
-        f"Download {doc_type.upper()} Documents", zip_buffer.getvalue(), f"{doc_type}_documents.zip", "application/zip")
+        csv = df.drop(columns=["Text Blob"]).to_csv(index=False).encode("utf-8")
+        st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
+
+        st.markdown("<h4><b>Semantic Search</b></h4>", unsafe_allow_html=True)
+        query = st.text_input("Ask a question (e.g., 'expired consents in Onehunga', 'dust mitigation')")
+
+        if query and not df.empty:
+            st.markdown("**Top 3 matching consents:**")
+            corpus = df["Text Blob"].tolist()
+            corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
+            query_embedding = model.encode(query, convert_to_tensor=True)
+
+            scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+            top_k_idx = scores.argsort(descending=True)[:3]
+
+            for i, idx in enumerate(top_k_idx):
+                row = df.iloc[idx.item()]
+                st.markdown(f"**{i+1}. {row['Company Name']} — {row['Address']}**")
+                st.markdown(f"- Triggers: `{row['AUP(OP) Triggers']}`")
+                st.markdown(f"- Reason: {row['Reason for Consent']}")
+                st.markdown(f"- Status: `{row['Is Expired']}` | Expires: `{row['Expiry Date']}`")
+                st.markdown("---")
 else:
-    st.info("No matching documents found.")
+    st.info("\U0001F4C4 Please upload one or more PDF files to begin.")
 
+# ------------------------
 # Footer
+# ------------------------
 st.markdown("---")
-st.caption("Built by Earl Tavera • Alana Jacobson-Pepere • Auckland Air Discharge Intelligence Dashboard • © 2025")
+st.caption("\U0001F393 Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence Dashboard © 2025")
