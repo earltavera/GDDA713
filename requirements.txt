@@ -1,11 +1,19 @@
+# Core framework
 streamlit
+
+# PDF parsing
+pymupdf
+
+# Data handling
 pandas
-PyMuPDF
-pillow
-altair
+
+# NLP search with BERT
 sentence-transformers
-torch
-transformers
-scikit-learn
-pdf2image
-pytesseract
+
+# Plotting and visualization
+plotly
+
+# OCR fallback (optional)
+pillow
+
+# Regex is built-in, no need to include it
