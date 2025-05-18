@@ -89,7 +89,7 @@ def extract_metadata(text):
         "Reason for Consent": proposal_str,
         "Consent Conditions": ", ".join(conditions_numbers),
         "Mitigation (Consent Conditions)": ", ".join(managementplan_final),
-        "Is Expired": check_expiry(expiry_date),
+        "Consent Status": check_expiry(expiry_date),
         "Text Blob": text
     }
 
