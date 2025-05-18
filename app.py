@@ -61,20 +61,20 @@ def extract_metadata(text, filename):
     rules = re.findall(r"E14\.\d+\.\d+", text)
     mitigation = re.findall(r"(bag filter|scrubber|water spray|carbon filter|electrostatic)", text, re.IGNORECASE)
 
-    expiry_date = match(r"Expiry Date[:\-]?\s*(\d{4}-\d{2}-\d{2})", group=1, default=None)
-    issue_date = match(r"(Consent|Application|Applied) Date[:\-]?\s*(\d{4}-\d{2}-\d{2})", group=2, default=None)
+    expiry_date_str = match(r"Expiry Date[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", group=1, default=None)
+    issue_date_str = match(r"(Consent|Application|Applied) Date[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})", group=2, default=None)
 
     try:
-        expiry_date_dt = pd.to_datetime(expiry_date)
-        issue_date_dt = pd.to_datetime(issue_date)
-        duration = expiry_date_dt.year - issue_date_dt.year
+        expiry_date_dt = pd.to_datetime(expiry_date_str, dayfirst=True, errors='coerce')
+        issue_date_dt = pd.to_datetime(issue_date_str, dayfirst=True, errors='coerce')
+        duration = (expiry_date_dt.year - issue_date_dt.year) if not pd.isna(expiry_date_dt) and not pd.isna(issue_date_dt) else None
     except:
         expiry_date_dt = None
         issue_date_dt = None
         duration = None
 
     now = pd.Timestamp.now()
-    if expiry_date_dt:
+    if pd.notna(expiry_date_dt):
         if expiry_date_dt < now:
             status = "Expired"
         elif expiry_date_dt < now + pd.DateOffset(months=6):
@@ -98,6 +98,9 @@ def extract_metadata(text, filename):
         "Consultant Score": semantic_score(consultant, examples["Consultant"]),
     }
 
+    # Flagging invalid or missing dates
+    invalid_date_note = "Invalid or missing" if pd.isna(issue_date_dt) or pd.isna(expiry_date_dt) else "Valid"
+
     return {
         "Filename": filename,
         "Consultant": consultant,
@@ -110,6 +113,7 @@ def extract_metadata(text, filename):
         "Expiry Date": expiry_date_dt,
         "Expiry Status": status,
         "Duration (years)": duration,
+        "Date Validity": invalid_date_note,
         **confidence
     }
 
@@ -129,17 +133,31 @@ for file in uploaded_files:
 
 # Create dataframe
 df = pd.DataFrame(data)
+
+# Highlight rows with invalid/missing dates
+highlighted_df = df.style.apply(
+    lambda x: ["background-color: #ffcccc" if x["Date Validity"] == "Invalid or missing" else "" for _ in x],
+    axis=1
+)
+
 st.success(f"Extracted data from {len(df)} files.")
 
 # Filter preview
 st.markdown("<h3 style='color:#1f77b4;'>Filter and Preview Data</h3>", unsafe_allow_html=True)
 doc_keyword = st.text_input("Filter filename by keyword (e.g. memo, AEE, EMP):").lower()
 filtered_df = df[df["Filename"].str.lower().str.contains(doc_keyword)] if doc_keyword else df
-st.dataframe(filtered_df)
+
+# Reapply highlighting to filtered preview
+highlighted_filtered_df = filtered_df.style.apply(
+    lambda x: ["background-color: #ffcccc" if x["Date Validity"] == "Invalid or missing" else "" for _ in x],
+    axis=1
+)
+st.dataframe(highlighted_filtered_df, use_container_width=True)
 
 # CSV download
 csv = df.to_csv(index=False)
 st.download_button("Download CSV", csv, "air_discharge_consents.csv", "text/csv")
+
 
 # Summary statistics
 st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
