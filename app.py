@@ -94,111 +94,31 @@ def extract_metadata(text, filename):
         "Mitigation": mitigation_str
     }
 
-# Upload PDF files
-uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], accept_multiple_files=True)
+# ===========================
+# FILTERS FOR EXPIRY STATUS & RANGE
+# ===========================
+if 'Expiry Date' in df.columns:
+    df['Years to Expiry'] = ((df['Expiry Date'] - pd.Timestamp.now()).dt.days / 365).round(1)
 
-if not uploaded_files:
-    st.warning("Please upload PDF files from a folder to continue.")
-    st.stop()
+    # Filter by expiry status
+    expiry_status_options = df['Expiry Status'].dropna().unique().tolist()
+    selected_statuses = st.multiselect("Filter by Expiry Status", expiry_status_options, default=expiry_status_options)
 
-# Process each file
-data = []
-for file in uploaded_files:
-    text = extract_text_from_pdf(file.read())
-    metadata = extract_metadata(text, file.name)
-    data.append(metadata)
+    # Filter by years to expiry
+    min_years = int(df['Years to Expiry'].min(skipna=True)) if not df['Years to Expiry'].isna().all() else -10
+    max_years = int(df['Years to Expiry'].max(skipna=True)) if not df['Years to Expiry'].isna().all() else 10
+    selected_year_range = st.slider("Filter by Years to Expiry", min_years, max_years, (min_years, max_years))
 
-# Create dataframe
-df = pd.DataFrame(data)
+    df = df[df['Expiry Status'].isin(selected_statuses) &
+            df['Years to Expiry'].between(selected_year_range[0], selected_year_range[1], inclusive='both')]
 
-# Highlight rows with invalid/missing dates
-highlighted_df = df.style.apply(
-    lambda x: ["background-color: #ffcccc" if x["Date Validity"] == "Invalid or missing" else "" for _ in x],
-    axis=1
-)
-
-st.success(f"Extracted data from {len(df)} files.")
-
-# Filter preview
-st.markdown("<h3 style='color:#1f77b4;'>Filter and Preview Data</h3>", unsafe_allow_html=True)
-doc_keyword = st.text_input("Filter filename by keyword (e.g. memo, AEE, EMP):").lower()
-filtered_df = df[df["Filename"].str.lower().str.contains(doc_keyword)] if doc_keyword else df
-
-# Reapply highlighting to filtered preview
-highlighted_filtered_df = filtered_df.style.apply(
-    lambda x: ["background-color: #ffcccc" if x["Date Validity"] == "Invalid or missing" else "" for _ in x],
-    axis=1
-)
-st.dataframe(highlighted_filtered_df, use_container_width=True)
-
-# CSV download
-csv = df.to_csv(index=False)
-st.download_button("Download CSV", csv, "air_discharge_consents.csv", "text/csv")
-
-#########################################
-
-# Summary statistics
-st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
-st.metric("Total Consents", len(df))
-st.metric("Issued", (df["Expiry Status"] == "Issued").sum())
-st.metric("About to Expire", (df["Expiry Status"] == "About to expire").sum())
-st.metric("Expired", (df["Expiry Status"] == "Expired").sum())
-
-# Visualization helper
-def colored_bar_chart(df, x_col, y_col, title):
-    chart = alt.Chart(df).mark_bar(color='#1f77b4').encode(
-        x=alt.X(x_col, sort='-y'),
-        y=y_col,
-        tooltip=[x_col, y_col]
-    ).properties(title=title)
-    st.altair_chart(chart, use_container_width=True)
-
-# Duration chart
-st.subheader("Consent Duration Distribution")
-duration_counts = df["Duration (years)"].dropna().value_counts().sort_index().reset_index()
-duration_counts.columns = ["Duration (years)", "count"]
-colored_bar_chart(duration_counts, "Duration (years)", "count", "Consent Duration in Years")
-
-# Yearly trends
-st.subheader("Yearly Trends")
-if df["Consent Date"].notna().any():
-    df["Consent Year"] = df["Consent Date"].dt.year
-    issued_by_year = df["Consent Year"].value_counts().sort_index()
-    st.line_chart(issued_by_year.rename("Consents Issued"))
-
-if df["Expiry Date"].notna().any():
-    df["Expiry Year"] = df["Expiry Date"].dt.year
-    expired_by_year = df[df["Expiry Status"] == "Expired"]["Expiry Year"].value_counts().sort_index()
-    st.line_chart(expired_by_year.rename("Consents Expired"))
-
-    about_to_expire_by_year = df[df["Expiry Status"] == "About to expire"]["Expiry Year"].value_counts().sort_index()
-    st.line_chart(about_to_expire_by_year.rename("Consents About to Expire"))
 # ===========================
 # EXPIRY ANALYSIS CHART
 # ===========================
-st.subheader("Expiry Status Breakdown by Years to Expiry")
 if 'Expiry Date' in df.columns:
+    st.subheader("Expiry Status Breakdown by Years to Expiry")
     df['Years to Expiry'] = ((df['Expiry Date'] - pd.Timestamp.now()).dt.days / 365).round(1)
     expiry_bins = pd.cut(df['Years to Expiry'], bins=[-100, -1, 0, 1, 3, 5, 10, 50], right=False)
     expiry_chart = expiry_bins.value_counts().sort_index().reset_index()
     expiry_chart.columns = ["Years Range", "Count"]
     st.bar_chart(data=expiry_chart.set_index("Years Range"))
-
-# Download filtered files
-st.subheader("Download Documents by Type")
-doc_type = st.selectbox("Choose document keyword", ["memo", "aee", "aqa", "emp", "aqmp", "dmp", "omp"])
-filtered_files = [file for file in uploaded_files if doc_type.lower() in file.name.lower()]
-
-if filtered_files:
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w") as zipf:
-        for file in filtered_files:
-            zipf.writestr(file.name, file.read())
-    st.download_button(
-        f"Download {doc_type.upper()} Documents", zip_buffer.getvalue(), f"{doc_type}_documents.zip", "application/zip")
-else:
-    st.info("No matching documents found.")
-
-# Footer
-st.markdown("---")
-st.caption("Built by Earl Tavera • Alana Jacobson-Pepere • Auckland Air Discharge Intelligence Dashboard • © 2025")
