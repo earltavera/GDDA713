@@ -14,18 +14,6 @@ from sentence_transformers import SentenceTransformer, util
 # Set Streamlit layout and styling
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide")
 
-# Add sky blue background with custom CSS
-st.markdown("""
-    <style>
-        body {
-            background-color: #e6f2ff;
-        }
-        .stApp {
-            background-color: #e6f2ff;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 # ------------------------
 # Custom Styling
 # ------------------------
