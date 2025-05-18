@@ -153,12 +153,6 @@ def colored_bar_chart(df, x_col, y_col, title):
     ).properties(title=title)
     st.altair_chart(chart, use_container_width=True)
 
-# Pollutant chart
-st.subheader("Pollutants Frequency")
-pollutant_counts = df["Pollutants"].dropna().str.extractall(r"(PM10|NOx|VOC|SO2|CO2|CO|dust|odour)").value_counts().reset_index()
-pollutant_counts.columns = ["Pollutant", "Count"]
-colored_bar_chart(pollutant_counts, "Pollutant", "Count", "Pollutant Type Frequency")
-
 # Duration chart
 st.subheader("Consent Duration Distribution")
 duration_counts = df["Duration (years)"].dropna().value_counts().sort_index().reset_index()
