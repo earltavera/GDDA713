@@ -37,10 +37,13 @@ def extract_metadata(text, filename):
         result = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
         return result.group(group).strip().replace('\n', ' ') if result else default
 
-    consultant = match(r"(Consultant|Prepared by|Prepared for)[:\-]?\s*(.+)", group=2)
-    industry = match(r"(Industry|Sector|Type of Industry)[:\-]?\s*(.+)", group=2)
-    location = match(r"(Location|Site Address|Address)[:\-]?\s*(.+)", group=2)
-    pollutants = match(r"(Pollutants|Emissions|Discharges)[:\-]?\s*(.+)", group=2)
+    rc_str = match(r"Resource Consent Number[:\-]?\s*(.+)")
+    company_str = match(r"(Company|Applicant|Organisation) Name[:\-]?\s*(.+)", group=2)
+    address_str = match(r"(Location|Site Address|Address)[:\-]?\s*(.+)", group=2)
+    triggers_str = match(r"AUP\(OP\) Trigger\(s\)[:\-]?\s*(.+)")
+    proposal_str = match(r"Reason for Consent[:\-]?\s*(.+)")
+    conditions_numbers = match(r"Consent Condition\(s\)[:\-]?\s*(.+)")
+    mitigation_str = match(r"Mitigation[:\-]?\s*(.+)")
 
     rules = re.findall(r"E14\.\d+\.\d+", text)
     mitigation = re.findall(r"(bag filter|scrubber|water spray|carbon filter|electrostatic)", text, re.IGNORECASE)
@@ -52,7 +55,6 @@ def extract_metadata(text, filename):
         expiry_date_dt = pd.to_datetime(expiry_date_str, dayfirst=True, errors='coerce')
         issue_date_dt = pd.to_datetime(issue_date_str, dayfirst=True, errors='coerce')
 
-        # Fallback: scan all possible dates if issue_date_dt is missing
         if pd.isna(issue_date_dt) or pd.isna(expiry_date_dt):
             possible_dates = re.findall(r"\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}", text)
             parsed_dates = pd.to_datetime(possible_dates, dayfirst=True, errors='coerce').dropna()
@@ -78,22 +80,23 @@ def extract_metadata(text, filename):
     else:
         status = "Unknown"
 
-    # Flagging invalid or missing dates
     invalid_date_note = "Invalid or missing" if pd.isna(issue_date_dt) or pd.isna(expiry_date_dt) else "Valid"
 
     return {
-        "Filename": filename,
-        "Consultant": consultant,
-        "Industry": industry,
-        "Location": location,
-        "Pollutants": pollutants,
-        "Mitigation": ", ".join(set(mitigation)) if mitigation else "None Found",
-        "Rules Triggered": ", ".join(set(rules)) if rules else "None Found",
-        "Consent Date": issue_date_dt,
+        "Resource Consent Number": rc_str,
+        "Company Name": company_str,
+        "Address": address_str,
+        "Industry": match(r"(Industry|Sector|Type of Industry)[:\-]?\s*(.+)", group=2),
+        "Pollutants": match(r"(Pollutants|Emissions|Discharges)[:\-]?\s*(.+)", group=2),
+        "Issue Date": issue_date_dt,
         "Expiry Date": expiry_date_dt,
         "Expiry Status": status,
         "Duration (years)": duration,
-        "Date Validity": invalid_date_note
+        "Date Validity": invalid_date_note,
+        "AUP(OP) Triggers": triggers_str,
+        "Reason for Consent": proposal_str,
+        "Consent Conditions": conditions_numbers,
+        "Mitigation": mitigation_str
     }
 
 # Upload PDF files
