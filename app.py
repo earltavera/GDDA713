@@ -119,6 +119,17 @@ highlighted_df = df.style.apply(
 
 st.success(f"Extracted data from {len(df)} files.")
 
+# Filter preview
+st.markdown("<h3 style='color:#1f77b4;'>Filter and Preview Data</h3>", unsafe_allow_html=True)
+doc_keyword = st.text_input("Filter filename by keyword (e.g. memo, AEE, EMP):").lower()
+filtered_df = df[df["Filename"].str.lower().str.contains(doc_keyword)] if doc_keyword else df
+
+# Reapply highlighting to filtered preview
+highlighted_filtered_df = filtered_df.style.apply(
+    lambda x: ["background-color: #ffcccc" if x["Date Validity"] == "Invalid or missing" else "" for _ in x],
+    axis=1
+)
+st.dataframe(highlighted_filtered_df, use_container_width=True)
 
 # CSV download
 csv = df.to_csv(index=False)
@@ -191,5 +202,3 @@ else:
 # Footer
 st.markdown("---")
 st.caption("Built by Earl Tavera • Alana Jacobson-Pepere • Auckland Air Discharge Intelligence Dashboard • © 2025")
-
-
