@@ -160,20 +160,6 @@ duration_counts = df["Duration (years)"].dropna().value_counts().sort_index().re
 duration_counts.columns = ["Duration (years)", "count"]
 colored_bar_chart(duration_counts, "Duration (years)", "count", "Consent Duration in Years")
 
-# Yearly trends
-st.subheader("Yearly Trends")
-if df["Consent Date"].notna().any():
-    df["Consent Year"] = df["Consent Date"].dt.year
-    issued_by_year = df["Consent Year"].value_counts().sort_index()
-    st.line_chart(issued_by_year.rename("Consents Issued"))
-
-if df["Expiry Date"].notna().any():
-    df["Expiry Year"] = df["Expiry Date"].dt.year
-    expired_by_year = df[df["Expiry Status"] == "Expired"]["Expiry Year"].value_counts().sort_index()
-    st.line_chart(expired_by_year.rename("Consents Expired"))
-
-    about_to_expire_by_year = df[df["Expiry Status"] == "About to expire"]["Expiry Year"].value_counts().sort_index()
-    st.line_chart(about_to_expire_by_year.rename("Consents About to Expire"))
 # ===========================
 # EXPIRY ANALYSIS CHART
 # ===========================
