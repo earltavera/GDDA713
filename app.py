@@ -2,31 +2,41 @@
 import streamlit as st
 import pandas as pd
 import pymupdf
-fitz = pymupdf  # Ensure correct fitz from PyMuPDF
+fitz = pymupdf
 import zipfile
 from io import BytesIO
 from datetime import datetime
 import re
 import altair as alt
+from sentence_transformers import SentenceTransformer, util
+from PIL import Image
+import pytesseract
 
+# Set Streamlit page config
 st.set_page_config(page_title="Auckland Air Discharge Dashboard", layout="wide")
 st.markdown("<h1 style='color:#2c6e91;'>Auckland Industrial Air Discharge Consent Dashboard</h1>", unsafe_allow_html=True)
 
-# Upload PDF files
-uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], accept_multiple_files=True)
+# Load BERT model
+@st.cache_resource
+def load_bert_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
-if not uploaded_files:
-    st.warning("Please upload PDF files from a folder to continue.")
-    st.stop()
+bert_model = load_bert_model()
 
-# Helper function to extract text from PDF using fitz (PyMuPDF)
+# Semantic scoring function
+def semantic_score(value, expected_examples):
+    if not value or value in ["Not Found", "None"]:
+        return 0.0
+    embeddings = bert_model.encode([value] + expected_examples, convert_to_tensor=True)
+    score = util.cos_sim(embeddings[0], embeddings[1:]).max().item()
+    return round(score, 2)
+
+# PDF Text Extraction
 def extract_text_from_pdf(file_bytes):
     with fitz.open(stream=file_bytes, filetype="pdf") as doc:
         text = "\n".join(page.get_text() for page in doc)
     if len(text.strip()) < 50:
         try:
-            from PIL import Image
-            import pytesseract
             text = ""
             with fitz.open(stream=file_bytes, filetype="pdf") as doc:
                 for page in doc:
@@ -37,16 +47,22 @@ def extract_text_from_pdf(file_bytes):
             text += f"\n[OCR failed: {e}]"
     return text
 
-# Helper to extract metadata from text
+# Metadata Extraction
 def extract_metadata(text, filename):
-    def match(pattern, group=1, default=None):
-        result = re.search(pattern, text, re.IGNORECASE)
-        return result.group(group).strip() if result else default
+    def match(pattern, group=1, default="Not Found"):
+        result = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        return result.group(group).strip().replace('\n', ' ') if result else default
+
+    consultant = match(r"(Consultant|Prepared by|Prepared for)[:\-]?\s*(.+)", group=2)
+    industry = match(r"(Industry|Sector|Type of Industry)[:\-]?\s*(.+)", group=2)
+    location = match(r"(Location|Site Address|Address)[:\-]?\s*(.+)", group=2)
+    pollutants = match(r"(Pollutants|Emissions|Discharges)[:\-]?\s*(.+)", group=2)
 
     rules = re.findall(r"E14\.\d+\.\d+", text)
     mitigation = re.findall(r"(bag filter|scrubber|water spray|carbon filter|electrostatic)", text, re.IGNORECASE)
-    expiry_date = match(r"Expiry Date[:\-]?\s*(\d{4}-\d{2}-\d{2})")
-    issue_date = match(r"(Consent|Application|Applied) Date[:\-]?\s*(\d{4}-\d{2}-\d{2})", 2)
+
+    expiry_date = match(r"Expiry Date[:\-]?\s*(\d{4}-\d{2}-\d{2})", group=1, default=None)
+    issue_date = match(r"(Consent|Application|Applied) Date[:\-]?\s*(\d{4}-\d{2}-\d{2})", group=2, default=None)
 
     try:
         expiry_date_dt = pd.to_datetime(expiry_date)
@@ -68,48 +84,71 @@ def extract_metadata(text, filename):
     else:
         status = "Unknown"
 
+    examples = {
+        "Industry": ["Chemical Manufacturing", "Food Processing", "Wood Treatment", "Petroleum Refining"],
+        "Location": ["Wiri, Auckland", "East Tamaki", "Penrose", "Onehunga"],
+        "Pollutants": ["PM10, VOC", "NOx, SO2", "Carbon monoxide", "Odour"],
+        "Consultant": ["GHD", "Tonkin + Taylor", "Beca", "Pattle Delamore Partners"]
+    }
+
+    confidence = {
+        "Industry Score": semantic_score(industry, examples["Industry"]),
+        "Location Score": semantic_score(location, examples["Location"]),
+        "Pollutants Score": semantic_score(pollutants, examples["Pollutants"]),
+        "Consultant Score": semantic_score(consultant, examples["Consultant"]),
+    }
+
     return {
         "Filename": filename,
-        "Consultant": match(r"Consultant[:\-]?\s*(.+)"),
-        "Industry": match(r"Industry[:\-]?\s*(.+)"),
-        "Location": match(r"Location[:\-]?\s*(.+)"),
-        "Pollutants": match(r"Pollutants[:\-]?\s*(.+)"),
-        "Mitigation": ", ".join(set(mitigation)) if mitigation else None,
-        "Rules Triggered": ", ".join(set(rules)) if rules else None,
+        "Consultant": consultant,
+        "Industry": industry,
+        "Location": location,
+        "Pollutants": pollutants,
+        "Mitigation": ", ".join(set(mitigation)) if mitigation else "None Found",
+        "Rules Triggered": ", ".join(set(rules)) if rules else "None Found",
         "Consent Date": issue_date_dt,
         "Expiry Date": expiry_date_dt,
         "Expiry Status": status,
-        "Duration (years)": duration
+        "Duration (years)": duration,
+        **confidence
     }
 
-# Process each PDF and extract metadata
+# Upload PDF files
+uploaded_files = st.file_uploader("Upload multiple PDF files", type=["pdf"], accept_multiple_files=True)
+
+if not uploaded_files:
+    st.warning("Please upload PDF files from a folder to continue.")
+    st.stop()
+
+# Process each file
 data = []
 for file in uploaded_files:
     text = extract_text_from_pdf(file.read())
     metadata = extract_metadata(text, file.name)
     data.append(metadata)
 
-# Create DataFrame and CSV download
+# Create dataframe
 df = pd.DataFrame(data)
 st.success(f"Extracted data from {len(df)} files.")
 
 # Filter preview
-st.markdown(f"<h3 style='color:#1f77b4;'>{"Filter and Preview Data".strip('"')}</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='color:#1f77b4;'>Filter and Preview Data</h3>", unsafe_allow_html=True)
 doc_keyword = st.text_input("Filter filename by keyword (e.g. memo, AEE, EMP):").lower()
 filtered_df = df[df["Filename"].str.lower().str.contains(doc_keyword)] if doc_keyword else df
 st.dataframe(filtered_df)
 
+# CSV download
 csv = df.to_csv(index=False)
 st.download_button("Download CSV", csv, "air_discharge_consents.csv", "text/csv")
 
 # Summary statistics
-st.markdown(f"<h2 style='color:#144e68;'>{"Summary Statistics".strip('"')}</h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='color:#144e68;'>Summary Statistics</h2>", unsafe_allow_html=True)
 st.metric("Total Consents", len(df))
 st.metric("Issued", (df["Expiry Status"] == "Issued").sum())
 st.metric("About to Expire", (df["Expiry Status"] == "About to expire").sum())
 st.metric("Expired", (df["Expiry Status"] == "Expired").sum())
 
-# Bar chart helper using Altair with color
+# Visualization helper
 def colored_bar_chart(df, x_col, y_col, title):
     chart = alt.Chart(df).mark_bar(color='#1f77b4').encode(
         x=alt.X(x_col, sort='-y'),
@@ -118,27 +157,31 @@ def colored_bar_chart(df, x_col, y_col, title):
     ).properties(title=title)
     st.altair_chart(chart, use_container_width=True)
 
+# Rule chart
 st.subheader("Rule Trigger Frequency")
 rule_counts = df["Rules Triggered"].dropna().str.split(", ").explode().value_counts().reset_index()
 rule_counts.columns = ["Rule Triggered", "count"]
 colored_bar_chart(rule_counts, "Rule Triggered", "count", "AUP E14 Rules Triggered")
 
+# Industry chart
 st.subheader("Industry Type Frequency")
 industry_counts = df["Industry"].dropna().value_counts().reset_index()
 industry_counts.columns = ["Industry", "count"]
 colored_bar_chart(industry_counts, "Industry", "count", "Industry Types Involved")
 
+# Pollutant chart
 st.subheader("Pollutants Frequency")
 pollutant_counts = df["Pollutants"].dropna().str.extractall(r"(PM10|NOx|VOC|SO2|CO2|CO|dust|odour)").value_counts().reset_index()
 pollutant_counts.columns = ["Pollutant", "Count"]
 colored_bar_chart(pollutant_counts, "Pollutant", "Count", "Pollutant Type Frequency")
 
+# Duration chart
 st.subheader("Consent Duration Distribution")
 duration_counts = df["Duration (years)"].dropna().value_counts().sort_index().reset_index()
 duration_counts.columns = ["Duration (years)", "count"]
 colored_bar_chart(duration_counts, "Duration (years)", "count", "Consent Duration in Years")
 
-# Yearly Trends
+# Yearly trends
 st.subheader("Yearly Trends")
 if df["Consent Date"].notna().any():
     df["Consent Year"] = df["Consent Date"].dt.year
@@ -153,7 +196,7 @@ if df["Expiry Date"].notna().any():
     about_to_expire_by_year = df[df["Expiry Status"] == "About to expire"]["Expiry Year"].value_counts().sort_index()
     st.line_chart(about_to_expire_by_year.rename("Consents About to Expire"))
 
-# Download by document type
+# Download filtered files
 st.subheader("Download Documents by Type")
 doc_type = st.selectbox("Choose document keyword", ["memo", "aee", "aqa", "emp", "aqmp", "dmp", "omp"])
 filtered_files = [file for file in uploaded_files if doc_type.lower() in file.name.lower()]
