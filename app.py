@@ -160,17 +160,6 @@ duration_counts = df["Duration (years)"].dropna().value_counts().sort_index().re
 duration_counts.columns = ["Duration (years)", "count"]
 colored_bar_chart(duration_counts, "Duration (years)", "count", "Consent Duration in Years")
 
-# ===========================
-# EXPIRY ANALYSIS CHART
-# ===========================
-st.subheader("Expiry Status Breakdown by Years to Expiry")
-if 'Expiry Date' in df.columns:
-    df['Years to Expiry'] = ((df['Expiry Date'] - pd.Timestamp.now()).dt.days / 365).round(1)
-    expiry_bins = pd.cut(df['Years to Expiry'], bins=[-100, -1, 0, 1, 3, 5, 10, 50], right=False)
-    expiry_chart = expiry_bins.value_counts().sort_index().reset_index()
-    expiry_chart.columns = ["Years Range", "Count"]
-    st.bar_chart(data=expiry_chart.set_index("Years Range"))
-
 # Download filtered files
 st.subheader("Download Documents by Type")
 doc_type = st.selectbox("Choose document keyword", ["memo", "aee", "aqa", "emp", "aqmp", "dmp", "omp"])
