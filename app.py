@@ -211,7 +211,7 @@ if uploaded_files:
                 row = df.iloc[idx.item()]
                 st.markdown(f"**{i+1}. {row['Company Name']} — {row['Address']}**")
                 st.markdown(f"- Triggers: `{row['AUP(OP) Triggers']}`")
-                st.markdown(f"- Reason: {row['Reason for Consent']}")
+                st.markdown(f"- Reason for Consent: {row['Reason for Consent']}")
                 st.markdown(f"- Status: `{row['Consent Status']}` | Expires: `{row['Expiry Date']}`")
                 st.download_button(
                     label="📄 Download Original PDF",
