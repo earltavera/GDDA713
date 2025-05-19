@@ -95,7 +95,7 @@ def extract_metadata(text):
     }
 
 # ------------------------
-# BERT model for semantic search
+# Load BERT model
 # ------------------------
 @st.cache_resource
 def load_bert_model():
@@ -113,9 +113,12 @@ if uploaded_files:
     all_data = []
     for file in uploaded_files:
         try:
-            with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            file_bytes = file.getvalue()
+            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
                 text = "\n".join(page.get_text() for page in doc)
             structured_data = extract_metadata(text)
+            structured_data["__file_name__"] = file.name
+            structured_data["__file_bytes__"] = file_bytes
             all_data.append(structured_data)
         except Exception as e:
             st.error(f"\u274C Error processing {file.name}: {e}")
@@ -131,9 +134,34 @@ if uploaded_files:
         col1.metric("Total Consents Uploaded", total_consents)
         col2.metric("Total Expired Consents", expired_consents)
 
-        st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
-        st.dataframe(df.drop(columns=["Text Blob"]))
+        # ------------------------
+        # Interactive Row-by-Row Cards
+        # ------------------------
+        st.markdown("<h4><b>Consent Summary (Interactive View)</b></h4>", unsafe_allow_html=True)
 
+        for idx, row in df.iterrows():
+            with st.expander(f"📄 {row['Company Name']} — {row['Address']}"):
+                col1, col2, col3 = st.columns(3)
+                col1.markdown(f"**Issue Date:** {row['Issue Date']}")
+                col2.markdown(f"**Expiry Date:** {row['Expiry Date']}")
+                col3.markdown(f"**Status:** `{row['Consent Status']}`")
+
+                st.markdown(f"- **Triggers:** `{row['AUP(OP) Triggers']}`")
+                st.markdown(f"- **Reason:** {row['Reason for Consent']}")
+                st.markdown(f"- **Conditions:** {row['Consent Conditions']}")
+                st.markdown(f"- **Mitigation Plans:** {row['Mitigation (Consent Conditions)']}")
+
+                st.download_button(
+                    label=f"📥 Download Original PDF: {row['__file_name__']}",
+                    data=row["__file_bytes__"],
+                    file_name=row["__file_name__"],
+                    mime="application/pdf",
+                    key=f"row_download_{idx}"
+                )
+
+        # ------------------------
+        # Summary Chart
+        # ------------------------
         chart_df = pd.DataFrame({
             "Consent Status": ["Expired", "Active"],
             "Count": [expired_consents, active_consents]
@@ -142,9 +170,15 @@ if uploaded_files:
         bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
         st.plotly_chart(bar_fig)
 
-        csv = df.drop(columns=["Text Blob"]).to_csv(index=False).encode("utf-8")
+        # ------------------------
+        # CSV Download
+        # ------------------------
+        csv = df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__"]).to_csv(index=False).encode("utf-8")
         st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
 
+        # ------------------------
+        # Semantic Search
+        # ------------------------
         st.markdown("<h4><b>Semantic Search</b></h4>", unsafe_allow_html=True)
         query = st.text_input("Ask a question (e.g., 'expired consents in Onehunga', 'dust mitigation')")
 
@@ -163,6 +197,13 @@ if uploaded_files:
                 st.markdown(f"- Triggers: `{row['AUP(OP) Triggers']}`")
                 st.markdown(f"- Reason: {row['Reason for Consent']}")
                 st.markdown(f"- Status: `{row['Consent Status']}` | Expires: `{row['Expiry Date']}`")
+                st.download_button(
+                    label="📄 Download Original PDF",
+                    data=row["__file_bytes__"],
+                    file_name=row["__file_name__"],
+                    mime="application/pdf",
+                    key=f"semantic_download_{i}"
+                )
                 st.markdown("---")
 else:
     st.info("\U0001F4C4 Please upload one or more PDF files to begin.")
