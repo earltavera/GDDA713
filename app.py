@@ -148,7 +148,7 @@ if uploaded_files:
         # About to expire in 90 days
         today = datetime.now()
         df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce')
-        about_to_expire = df[(df["Expiry Date"].notnull()) & (df["Raw Expiry Date"] > today) & (df["Raw Expiry Date"] <= today + timedelta(days=90))]
+        about_to_expire = df[(df["Expiry Date"].notnull()) & (df["Expiry Date"] > today) & (df["Expiry Date"] <= today + timedelta(days=90))]
         about_to_expire_count = len(about_to_expire)
 
         st.markdown(f"<h4 style='color:#228B22;'><b>Processed {total_consents} PDF file(s)</b></h4>", unsafe_allow_html=True)
