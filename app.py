@@ -135,6 +135,13 @@ if uploaded_files:
         df["Latitude"] = df["Coordinates"].apply(lambda loc: loc.latitude if loc else None)
         df["Longitude"] = df["Coordinates"].apply(lambda loc: loc.longitude if loc else None)
 
+        # Clean coordinates
+        df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
+        df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
+        map_df = df.dropna(subset=["Latitude", "Longitude"]).copy()
+        map_df = map_df.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
+
+        # Summary metrics
         total_consents = len(df)
         expired_consents = df["Consent Status"].value_counts().get("Expired", 0)
         active_consents = df["Consent Status"].value_counts().get("Active", 0)
@@ -144,27 +151,18 @@ if uploaded_files:
         col1.metric("Total Consents Uploaded", total_consents)
         col2.metric("Total Expired Consents", expired_consents)
 
-        # Summary Table
+        # Consent Table
         st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
         st.dataframe(df.drop(columns=["Text Blob", "Coordinates", "__file_bytes__", "__file_name__"]))
 
-        # Map
-        # Clean and validate coordinates
-        df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
-        df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
-        map_df = df.dropna(subset=["Latitude", "Longitude"])
+        # Map View
+        if not map_df.empty:
+            st.markdown("<h4><b>Consent Locations Map</b></h4>", unsafe_allow_html=True)
+            st.map(map_df[["latitude", "longitude"]])
+        else:
+            st.info("No valid geolocation data available to display a map.")
 
-    # Rename columns for st.map()
-        map_df = map_df.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
-
-if not map_df.empty:
-    st.markdown("<h4><b>Consent Locations Map</b></h4>", unsafe_allow_html=True)
-    st.map(map_df[["latitude", "longitude"]])
-else:
-    st.info("No valid geolocation data available to display a map.")
-
-
-        # Chart
+        # Bar Chart
         chart_df = pd.DataFrame({
             "Consent Status": ["Expired", "Active"],
             "Count": [expired_consents, active_consents]
@@ -173,7 +171,7 @@ else:
         bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
         st.plotly_chart(bar_fig)
 
-        # CSV Download
+        # CSV Export
         csv = df.drop(columns=["Text Blob", "Coordinates", "__file_bytes__", "__file_name__"]).to_csv(index=False).encode("utf-8")
         st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
 
