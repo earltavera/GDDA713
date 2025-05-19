@@ -158,35 +158,7 @@ if uploaded_files:
         col3.metric("Expiring in 90 Days", about_to_expire_count)
 
         st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
-        st.dataframe(df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]))
-
-        map_df = df.dropna(subset=["Latitude", "Longitude"])
-        if not map_df.empty:
-            st.markdown("<h4><b>Consent Locations Map (Mapbox)</b></h4>", unsafe_allow_html=True)
-            fig = px.scatter_mapbox(
-                map_df,
-                lat="Latitude",
-                lon="Longitude",
-                hover_name="Company Name",
-                hover_data={"Address": True, "Consent Status": True},
-                zoom=10,
-                height=500
-            )
-            fig.update_layout(mapbox_style="open-street-map")
-            fig.update_traces(marker=dict(size=12, color="blue"))
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No valid geolocation data available to display a map.")
-
-        chart_df = pd.DataFrame({
-            "Consent Status": ["Expired", "Active"],
-            "Count": [expired_consents, active_consents]
-        })
-        bar_fig = px.bar(chart_df, x="Consent Status", y="Count", title="Expired vs Active Consents", text="Count")
-        bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
-        st.plotly_chart(bar_fig)
-
-        csv = df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]).to_csv(index=False).encode("utf-8")
+        st.dataframe(df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]).reset_index(drop=False).rename(columns={"index": "No"}).to_csv(index=False).encode("utf-8")
         st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
 
         st.markdown("<h4><b>Semantic Search</b></h4>", unsafe_allow_html=True)
