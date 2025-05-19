@@ -40,7 +40,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Auckland_Council_Logo.svg/2560px-Auckland_Council_Logo.svg.png", width=200)
 st.markdown("<h1>Auckland Air Discharge Consent Dashboard</h1>", unsafe_allow_html=True)
 
 # ------------------------
