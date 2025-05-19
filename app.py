@@ -10,6 +10,8 @@ import re
 from datetime import datetime
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
+from geopy.geocoders import Nominatim
+from geopy.extra.rate_limiter import RateLimiter
 
 # Set Streamlit layout and styling
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide")
@@ -95,7 +97,7 @@ def extract_metadata(text):
     }
 
 # ------------------------
-# BERT model for semantic search
+# Load BERT model
 # ------------------------
 @st.cache_resource
 def load_bert_model():
@@ -113,15 +115,26 @@ if uploaded_files:
     all_data = []
     for file in uploaded_files:
         try:
-            with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            file_bytes = file.getvalue()
+            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
                 text = "\n".join(page.get_text() for page in doc)
             structured_data = extract_metadata(text)
+            structured_data["__file_name__"] = file.name
+            structured_data["__file_bytes__"] = file_bytes
             all_data.append(structured_data)
         except Exception as e:
             st.error(f"\u274C Error processing {file.name}: {e}")
 
     if all_data:
         df = pd.DataFrame(all_data)
+
+        # Geolocation
+        geolocator = Nominatim(user_agent="air_discharge_dashboard")
+        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+        df["Coordinates"] = df["Address"].apply(lambda x: geocode(x) if pd.notnull(x) else None)
+        df["Latitude"] = df["Coordinates"].apply(lambda loc: loc.latitude if loc else None)
+        df["Longitude"] = df["Coordinates"].apply(lambda loc: loc.longitude if loc else None)
+
         total_consents = len(df)
         expired_consents = df["Consent Status"].value_counts().get("Expired", 0)
         active_consents = df["Consent Status"].value_counts().get("Active", 0)
@@ -131,9 +144,19 @@ if uploaded_files:
         col1.metric("Total Consents Uploaded", total_consents)
         col2.metric("Total Expired Consents", expired_consents)
 
+        # Summary Table
         st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
-        st.dataframe(df.drop(columns=["Text Blob"]))
+        st.dataframe(df.drop(columns=["Text Blob", "Coordinates", "__file_bytes__", "__file_name__"]))
 
+        # Map
+        map_df = df.dropna(subset=["Latitude", "Longitude"])
+        if not map_df.empty:
+            st.markdown("<h4><b>Consent Locations Map</b></h4>", unsafe_allow_html=True)
+            st.map(map_df[["Latitude", "Longitude"]], zoom=10)
+        else:
+            st.info("No valid geolocation data available to display a map.")
+
+        # Chart
         chart_df = pd.DataFrame({
             "Consent Status": ["Expired", "Active"],
             "Count": [expired_consents, active_consents]
@@ -142,9 +165,11 @@ if uploaded_files:
         bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
         st.plotly_chart(bar_fig)
 
-        csv = df.drop(columns=["Text Blob"]).to_csv(index=False).encode("utf-8")
+        # CSV Download
+        csv = df.drop(columns=["Text Blob", "Coordinates", "__file_bytes__", "__file_name__"]).to_csv(index=False).encode("utf-8")
         st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
 
+        # Semantic Search
         st.markdown("<h4><b>Semantic Search</b></h4>", unsafe_allow_html=True)
         query = st.text_input("Ask a question (e.g., 'expired consents in Onehunga', 'dust mitigation')")
 
@@ -163,6 +188,13 @@ if uploaded_files:
                 st.markdown(f"- Triggers: `{row['AUP(OP) Triggers']}`")
                 st.markdown(f"- Reason: {row['Reason for Consent']}")
                 st.markdown(f"- Status: `{row['Consent Status']}` | Expires: `{row['Expiry Date']}`")
+                st.download_button(
+                    label="📄 Download Original PDF",
+                    data=row["__file_bytes__"],
+                    file_name=row["__file_name__"],
+                    mime="application/pdf",
+                    key=f"semantic_download_{i}"
+                )
                 st.markdown("---")
 else:
     st.info("\U0001F4C4 Please upload one or more PDF files to begin.")
