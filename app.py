@@ -149,14 +149,20 @@ if uploaded_files:
         st.dataframe(df.drop(columns=["Text Blob", "Coordinates", "__file_bytes__", "__file_name__"]))
 
         # Map
+        # Clean and validate coordinates
+        df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
+        df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
         map_df = df.dropna(subset=["Latitude", "Longitude"])
 
-        if not map_df.empty:
-            map_df = map_df.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
-            st.markdown("<h4><b>Consent Locations Map</b></h4>", unsafe_allow_html=True)
-            st.map(map_df[["latitude", "longitude"]], zoom=10)
-        else:
-            st.info("No valid geolocation data available to display a map.")
+    # Rename columns for st.map()
+        map_df = map_df.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
+
+if not map_df.empty:
+    st.markdown("<h4><b>Consent Locations Map</b></h4>", unsafe_allow_html=True)
+    st.map(map_df[["latitude", "longitude"]])
+else:
+    st.info("No valid geolocation data available to display a map.")
+
 
         # Chart
         chart_df = pd.DataFrame({
