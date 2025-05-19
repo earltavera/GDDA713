@@ -210,8 +210,8 @@ if uploaded_files:
                 st.markdown(f"- Status: `{row['Consent Status']}` | Expires: `{row['Expiry Date']}`")
                 st.download_button(
                     label="📄 Download Original PDF",
-                    data=row["__file_bytes"],
-                    file_name=row["__file_name"],
+                    data=row.get("__file_bytes", b""),
+                    file_name=row.get("__file_name", f"document_{i+1}.pdf"),
                     mime="application/pdf",
                     key=f"semantic_download_{i}"
                 )
