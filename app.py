@@ -7,7 +7,7 @@ import pandas as pd
 import pymupdf
 fitz = pymupdf
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
 from geopy.geocoders import Nominatim
@@ -92,7 +92,7 @@ def extract_metadata(text):
         "Address": address_str,
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
         "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown",
-                "AUP(OP) Triggers": triggers_str,
+        "AUP(OP) Triggers": triggers_str,
         "Reason for Consent": proposal_str,
         "Consent Conditions": ", ".join(conditions_numbers),
         "Mitigation (Consent Conditions)": ", ".join(managementplan_final),
@@ -145,17 +145,10 @@ if uploaded_files:
         expired_consents = df["Consent Status"].value_counts().get("Expired", 0)
         active_consents = df["Consent Status"].value_counts().get("Active", 0)
 
-        # About to expire in 90 days
-        today = datetime.now()
-        df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce')
-        about_to_expire = df[(df["Expiry Date"].notnull()) & (df["Expiry Date"] > today) & (df["Expiry Date"] <= today + timedelta(days=90))]
-        about_to_expire_count = len(about_to_expire)
-
         st.markdown(f"<h4 style='color:#228B22;'><b>Processed {total_consents} PDF file(s)</b></h4>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         col1.metric("Total Consents Uploaded", total_consents)
         col2.metric("Total Expired Consents", expired_consents)
-        col3.metric("Expiring in 90 Days", about_to_expire_count)
 
         st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
         st.dataframe(df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]))
@@ -209,8 +202,8 @@ if uploaded_files:
                 st.markdown(f"- Status: `{row['Consent Status']}` | Expires: `{row['Expiry Date']}`")
                 st.download_button(
                     label="📄 Download Original PDF",
-                    data=row["__file_bytes"],
-                    file_name=row["__file_name"],
+                    data=row["__file_bytes__"],
+                    file_name=row["__file_name__"],
                     mime="application/pdf",
                     key=f"semantic_download_{i}"
                 )
