@@ -17,3 +17,8 @@ plotly
 pillow
 
 # Regex is built-in, no need to include it
+
+geopy
+folium
+streamlit-folium
+
