@@ -150,9 +150,11 @@ if uploaded_files:
 
         # Map
         map_df = df.dropna(subset=["Latitude", "Longitude"])
+
         if not map_df.empty:
+            map_df = map_df.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
             st.markdown("<h4><b>Consent Locations Map</b></h4>", unsafe_allow_html=True)
-            st.map(map_df[["Latitude", "Longitude"]], zoom=10)
+            st.map(map_df[["latitude", "longitude"]], zoom=10)
         else:
             st.info("No valid geolocation data available to display a map.")
 
