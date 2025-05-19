@@ -153,6 +153,9 @@ if uploaded_files:
         st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
         st.dataframe(df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]))
 
+        csv = df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]).to_csv(index=False).encode("utf-8")
+        st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
+
         map_df = df.dropna(subset=["Latitude", "Longitude"])
         if not map_df.empty:
             st.markdown("<h4><b>Consent Locations Map (Mapbox)</b></h4>", unsafe_allow_html=True)
@@ -178,9 +181,6 @@ if uploaded_files:
         bar_fig = px.bar(chart_df, x="Consent Status", y="Count", title="Expired vs Active Consents", text="Count")
         bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
         st.plotly_chart(bar_fig)
-
-        csv = df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]).to_csv(index=False).encode("utf-8")
-        st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
 
         st.markdown("<h4><b>Semantic Search</b></h4>", unsafe_allow_html=True)
         query = st.text_input("Ask a question (e.g., 'expired consents in Onehunga', 'dust mitigation')")
