@@ -16,7 +16,7 @@ from geopy.extra.rate_limiter import RateLimiter
 # ------------------------
 # Streamlit Page Config & Style
 # ------------------------
-st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide")
+st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🔵")
 
 st.markdown("""
     <style>
