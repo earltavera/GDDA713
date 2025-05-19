@@ -10,6 +10,9 @@ import re
 from datetime import datetime
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
+from geopy.geocoders import Nominatim
+import folium
+from streamlit_folium import st_folium
 
 # Set Streamlit layout and styling
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide")
@@ -71,7 +74,7 @@ def extract_metadata(text):
     except:
         expiry_date = None
 
-    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
+    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
     triggers_str = " ".join(dict.fromkeys(triggers))
 
     proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
@@ -103,6 +106,11 @@ def load_bert_model():
 
 model = load_bert_model()
 
+def highlight_keywords(text, query):
+    for word in query.lower().split():
+        text = re.sub(f"(?i)({word})", r"<mark>\\1</mark>", text)
+    return text
+
 # ------------------------
 # File Upload and Processing
 # ------------------------
@@ -131,8 +139,14 @@ if uploaded_files:
         col1.metric("Total Consents Uploaded", total_consents)
         col2.metric("Total Expired Consents", expired_consents)
 
+        # Filters
+        st.markdown("<h4><b>Filter Consents</b></h4>", unsafe_allow_html=True)
+        selected_status = st.multiselect("Filter by Consent Status", options=df["Consent Status"].unique(), default=df["Consent Status"].unique())
+        selected_company = st.multiselect("Filter by Company Name", options=df["Company Name"].unique(), default=df["Company Name"].unique())
+        filtered_df = df[df["Consent Status"].isin(selected_status) & df["Company Name"].isin(selected_company)]
+
         st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
-        st.dataframe(df.drop(columns=["Text Blob"]))
+        st.dataframe(filtered_df.drop(columns=["Text Blob"]))
 
         chart_df = pd.DataFrame({
             "Consent Status": ["Expired", "Active"],
@@ -142,9 +156,34 @@ if uploaded_files:
         bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
         st.plotly_chart(bar_fig)
 
+        pie_fig = px.pie(chart_df, names="Consent Status", values="Count", title="Consent Status Distribution")
+        pie_fig.update_traces(textinfo='label+percent', pull=[0.05, 0])
+        st.plotly_chart(pie_fig)
+
+        # Map with Geopy and Folium
+        st.markdown("<h4><b>Map of Consent Locations</b></h4>", unsafe_allow_html=True)
+        geolocator = Nominatim(user_agent="air_discharge_dashboard")
+        df["Coordinates"] = df["Address"].apply(lambda x: geolocator.geocode(x) if x else None)
+        df["Lat"] = df["Coordinates"].apply(lambda loc: loc.latitude if loc else None)
+        df["Lon"] = df["Coordinates"].apply(lambda loc: loc.longitude if loc else None)
+
+        valid_coords_df = df.dropna(subset=["Lat", "Lon"])
+        map_ = folium.Map(location=[-36.8485, 174.7633], zoom_start=10)
+
+        for _, row in valid_coords_df.iterrows():
+            folium.Marker(
+                location=[row["Lat"], row["Lon"]],
+                popup=f"{row['Company Name']}<br>{row['Address']}",
+                tooltip=row["Company Name"]
+            ).add_to(map_)
+
+        st_folium(map_, width=700, height=450)
+
+        # CSV download
         csv = df.drop(columns=["Text Blob"]).to_csv(index=False).encode("utf-8")
         st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
 
+        # Semantic Search
         st.markdown("<h4><b>Semantic Search</b></h4>", unsafe_allow_html=True)
         query = st.text_input("Ask a question (e.g., 'expired consents in Onehunga', 'dust mitigation')")
 
@@ -159,10 +198,13 @@ if uploaded_files:
 
             for i, idx in enumerate(top_k_idx):
                 row = df.iloc[idx.item()]
+                snippet = row["Text Blob"][:600]
+                highlighted = highlight_keywords(snippet, query)
                 st.markdown(f"**{i+1}. {row['Company Name']} — {row['Address']}**")
                 st.markdown(f"- Triggers: `{row['AUP(OP) Triggers']}`")
                 st.markdown(f"- Reason: {row['Reason for Consent']}")
                 st.markdown(f"- Status: `{row['Consent Status']}` | Expires: `{row['Expiry Date']}`")
+                st.markdown(f"<div style='background-color:#f1f1f1;padding:8px;border-radius:8px'>{highlighted}...</div>", unsafe_allow_html=True)
                 st.markdown("---")
 else:
     st.info("\U0001F4C4 Please upload one or more PDF files to begin.")
