@@ -92,8 +92,7 @@ def extract_metadata(text):
         "Address": address_str,
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
         "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown",
-        "Raw Expiry Date": expiry_date,
-        "AUP(OP) Triggers": triggers_str,
+                "AUP(OP) Triggers": triggers_str,
         "Reason for Consent": proposal_str,
         "Consent Conditions": ", ".join(conditions_numbers),
         "Mitigation (Consent Conditions)": ", ".join(managementplan_final),
@@ -148,8 +147,8 @@ if uploaded_files:
 
         # About to expire in 90 days
         today = datetime.now()
-        df["Raw Expiry Date"] = pd.to_datetime(df["Raw Expiry Date"], errors='coerce')
-        about_to_expire = df[(df["Raw Expiry Date"].notnull()) & (df["Raw Expiry Date"] > today) & (df["Raw Expiry Date"] <= today + timedelta(days=90))]
+        df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce')
+        about_to_expire = df[(df["Expiry Date"].notnull()) & (df["Raw Expiry Date"] > today) & (df["Raw Expiry Date"] <= today + timedelta(days=90))]
         about_to_expire_count = len(about_to_expire)
 
         st.markdown(f"<h4 style='color:#228B22;'><b>Processed {total_consents} PDF file(s)</b></h4>", unsafe_allow_html=True)
