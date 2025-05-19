@@ -13,12 +13,11 @@ from sentence_transformers import SentenceTransformer, util
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 
-# Set Streamlit layout and styling
+# ------------------------
+# Streamlit Page Config & Style
+# ------------------------
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide")
 
-# ------------------------
-# Custom Styling
-# ------------------------
 st.markdown("""
     <style>
     h1 {
@@ -44,16 +43,21 @@ st.markdown("""
 st.markdown("<h1>Auckland Air Discharge Consent Dashboard</h1>", unsafe_allow_html=True)
 
 # ------------------------
-# Expiry Check
+# Utility Functions
 # ------------------------
+
 def check_expiry(expiry_date):
     if expiry_date is None:
         return "Unknown"
     return "Expired" if expiry_date < datetime.now() else "Active"
 
-# ------------------------
-# Metadata Extraction
-# ------------------------
+@st.cache_data(show_spinner=False)
+def geocode_address(address):
+    geolocator = Nominatim(user_agent="air_discharge_dashboard")
+    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+    location = geocode(address)
+    return (location.latitude, location.longitude) if location else (None, None)
+
 def extract_metadata(text):
     rc_str = "".join(dict.fromkeys(re.findall(r"Application number:\s*(.+?)(?=\s*Applicant)", text)))
     company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
@@ -96,9 +100,6 @@ def extract_metadata(text):
         "Text Blob": text
     }
 
-# ------------------------
-# Load BERT model
-# ------------------------
 @st.cache_resource
 def load_bert_model():
     return SentenceTransformer("all-MiniLM-L6-v2")
@@ -106,8 +107,9 @@ def load_bert_model():
 model = load_bert_model()
 
 # ------------------------
-# File Upload and Processing
+# Main App Logic
 # ------------------------
+
 uploaded_files = st.file_uploader("\U0001F4C2 Upload one or more PDF files", type=["pdf"], accept_multiple_files=True)
 
 df = pd.DataFrame()
@@ -128,20 +130,17 @@ if uploaded_files:
     if all_data:
         df = pd.DataFrame(all_data)
 
-        # Geolocation
-        geolocator = Nominatim(user_agent="air_discharge_dashboard")
-        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-        df["Coordinates"] = df["Address"].apply(lambda x: geocode(x) if pd.notnull(x) else None)
-        df["Latitude"] = df["Coordinates"].apply(lambda loc: loc.latitude if loc else None)
-        df["Longitude"] = df["Coordinates"].apply(lambda loc: loc.longitude if loc else None)
+        df["GeoKey"] = df["Address"].str.lower().str.strip()
+        latitudes, longitudes = [], []
 
-        # Clean coordinates
-        df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
-        df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
-        map_df = df.dropna(subset=["Latitude", "Longitude"]).copy()
-        map_df = map_df.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
+        for addr in df["GeoKey"]:
+            lat, lon = geocode_address(addr)
+            latitudes.append(lat)
+            longitudes.append(lon)
 
-        # Summary metrics
+        df["Latitude"] = latitudes
+        df["Longitude"] = longitudes
+
         total_consents = len(df)
         expired_consents = df["Consent Status"].value_counts().get("Expired", 0)
         active_consents = df["Consent Status"].value_counts().get("Active", 0)
@@ -151,18 +150,27 @@ if uploaded_files:
         col1.metric("Total Consents Uploaded", total_consents)
         col2.metric("Total Expired Consents", expired_consents)
 
-        # Consent Table
         st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
-        st.dataframe(df.drop(columns=["Text Blob", "Coordinates", "__file_bytes__", "__file_name__"]))
+        st.dataframe(df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]))
 
-        # Map View
+        map_df = df.dropna(subset=["Latitude", "Longitude"])
         if not map_df.empty:
-            st.markdown("<h4><b>Consent Locations Map</b></h4>", unsafe_allow_html=True)
-            st.map(map_df[["latitude", "longitude"]])
+            st.markdown("<h4><b>Consent Locations Map (Mapbox)</b></h4>", unsafe_allow_html=True)
+            fig = px.scatter_mapbox(
+                map_df,
+                lat="Latitude",
+                lon="Longitude",
+                hover_name="Company Name",
+                hover_data={"Address": True, "Consent Status": True},
+                zoom=10,
+                height=500
+            )
+            fig.update_layout(mapbox_style="open-street-map")
+            fig.update_traces(marker=dict(size=12, color="blue"))
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No valid geolocation data available to display a map.")
 
-        # Bar Chart
         chart_df = pd.DataFrame({
             "Consent Status": ["Expired", "Active"],
             "Count": [expired_consents, active_consents]
@@ -171,11 +179,9 @@ if uploaded_files:
         bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
         st.plotly_chart(bar_fig)
 
-        # CSV Export
-        csv = df.drop(columns=["Text Blob", "Coordinates", "__file_bytes__", "__file_name__"]).to_csv(index=False).encode("utf-8")
+        csv = df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]).to_csv(index=False).encode("utf-8")
         st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
 
-        # Semantic Search
         st.markdown("<h4><b>Semantic Search</b></h4>", unsafe_allow_html=True)
         query = st.text_input("Ask a question (e.g., 'expired consents in Onehunga', 'dust mitigation')")
 
