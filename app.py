@@ -105,9 +105,9 @@ def extract_metadata(text):
 def load_bert_model(model_name):
     return SentenceTransformer(model_name)
 
-model_name = st.selectbox("Choose LLM model:", [
-    "multi-qa-MiniLM-L6-cos-v1",
+model_name = st.selectbox("Choose LLM model:", [ 
     "all-MiniLM-L6-v2",
+    "multi-qa-MiniLM-L6-cos-v1",
     "BAAI/bge-base-en-v1.5",
     "intfloat/e5-base-v2"
 ])
