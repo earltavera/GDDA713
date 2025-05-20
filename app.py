@@ -193,7 +193,7 @@ if uploaded_files:
     color_discrete_sequence=["blue"]
 )
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
-                fig.update_traces(marker=dict(size=12, color="blue", opacity=0.8, textposition="top center"))
+                fig.update_traces(marker=dict(size=12, color="blue", opacity=0.8, textposition="top center", textposition="top center"))
                 st.plotly_chart(fig, use_container_width=True)
                 click_data = st.session_state.get("map_click", None)
 
