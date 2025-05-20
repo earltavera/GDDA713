@@ -156,10 +156,10 @@ if uploaded_files:
 
         st.subheader("Consent Summary Metrics")
         col1, col2, col3 = st.columns(3)
-        col1.markdown(f"<h3 style='color:#1f77b4'>🟦 {len(df)} Total Consents</h3>", unsafe_allow_html=True)
-        col2.markdown(f"<h3 style='color:#d62728'>🟥 {df['Consent Status'].value_counts().get('Expired', 0)} Expired</h3>", unsafe_allow_html=True)
+        col1.markdown(f"<h3 style='color:#1f77b4'>{len(df)} Total Consents</h3>", unsafe_allow_html=True)
+        col2.markdown(f"<h3 style='color:#d62728'>{df['Consent Status'].value_counts().get('Expired', 0)} Expired</h3>", unsafe_allow_html=True)
         exp_soon = df[(df["Expiry Date"] > datetime.now()) & (df["Expiry Date"] <= datetime.now() + timedelta(days=90))]
-        col3.markdown(f"<h3 style='color:#ff9900'>🟨 {len(exp_soon)} Expiring in 90 Days</h3>", unsafe_allow_html=True)
+        col3.markdown(f"<h3 style='color:#ff9900'>{len(exp_soon)} Expiring in 90 Days</h3>", unsafe_allow_html=True)
 
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
