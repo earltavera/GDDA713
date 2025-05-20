@@ -178,12 +178,14 @@ if uploaded_files:
     lon="Longitude",
     hover_name="Company Name",
     hover_data={
+        "Company Name": True,
         "Address": True,
         "Consent Status": True,
         "Issue Date": True,
         "Expiry Date": True,
         "AUP(OP) Triggers": True,
-        "Mitigation (Consent Conditions)": True
+        "Mitigation (Consent Conditions)": True,
+        "Reason for Consent": True
     },
     zoom=10,
     height=500
