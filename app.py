@@ -197,7 +197,7 @@ if uploaded_files:
                 st.plotly_chart(fig, use_container_width=True)
                 click_data = st.session_state.get("map_click", None)
 
-                click_data = st.experimental_get_query_params().get("map_click", None)
+                click_data = st.query_params.get("map_click", None)
 
                 if click_data and "points" in click_data:
                     clicked_info = click_data["points"][0]
