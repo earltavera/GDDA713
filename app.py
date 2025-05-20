@@ -164,9 +164,9 @@ if uploaded_files:
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status"] == status_filter]
-            st.dataframe(filtered_df.drop(columns=["Text Blob", "__file_bytes__", "GeoKey"]))
+            st.dataframe(filtered_df.rename(columns={"__file_name__": "File Name"})[["File Name"] + [col for col in filtered_df.columns if col not in ["__file_name__", "Text Blob", "__file_bytes__", "GeoKey"]]])
 
-            csv = filtered_df.drop(columns=["Text Blob", "__file_bytes__", "GeoKey"]).to_csv(index=False).encode("utf-8")
+            csv = filtered_df.rename(columns={"__file_name__": "File Name"})[["File Name"] + [col for col in filtered_df.columns if col not in ["__file_name__", "Text Blob", "__file_bytes__", "GeoKey"]]].to_csv(index=False).encode("utf-8")
             st.download_button("Download CSV", csv, "consents_summary.csv", "text/csv")
 
         with st.expander("Consent Map", expanded=True):
