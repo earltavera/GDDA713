@@ -65,8 +65,6 @@ def geocode_address(address):
 
 def extract_metadata(text):
     rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE)
-if not rc_matches:
-        rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE)
     if not rc_matches:
         rc_matches = re.findall(r"RC[0-9]{5,}", text)
     rc_str = "".join(dict.fromkeys(rc_matches))
@@ -88,7 +86,7 @@ if not rc_matches:
     except:
         expiry_date = None
 
-    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
+    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
     triggers_str = " ".join(dict.fromkeys(triggers))
 
     proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
