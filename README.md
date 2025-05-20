@@ -1,72 +1,67 @@
-# Auckland Air Discharge Consent Dashboard
+Auckland Air Discharge Consent Dashboard
+Interactive AI-powered dashboard for exploring industrial air discharge consents across Auckland, New Zealand.
+This tool enables semantic search, geospatial mapping, and automated metadata extraction from unstructured PDF consent documents.
 
-A powerful Streamlit dashboard for analyzing industrial air discharge consents in Auckland. Supports both local folder and file upload modes. Features OCR, BERT-powered semantic search, visual summaries, and CSV export.
+📊 Features
 
----
+✅ Upload and process multiple PDF consent documents
+📍 Extract and geocode site addresses using Nominatim
+🧠 Perform semantic search across consents using BERT-based LLMs (MiniLM, BGE, E5)
+📅 Detect issue and expiry dates, and categorize expiring consents
+🗺️ Visualize consents on an interactive map with Plotly
+📈 View charts of consent status (Active, Expired, Expiring Soon)
+🧾 Download CSV summaries and original PDF documents
+🧠 Powered by SentenceTransformers (all-MiniLM-L6-v2 and others)
+⚡ Built with Streamlit for fast, responsive interaction
 
-## 🚀 Features
+===================================
 
-- 📁 Load PDFs from local folder or upload directly
-- 🔍 BERT-based semantic search over consent documents
-- 🧾 OCR fallback for scanned PDFs using Tesseract
-- 📊 Interactive visual summaries (Altair + Streamlit)
-- 📈 Filters by industry, pollutant, suburb
-- 📥 Download filtered results as CSV or PDFs
-- 🧠 Auto-detect consent metadata like:
-  - Industry
-  - Pollutants
-  - Consent / Expiry Dates
-  - Mitigation Measures
-  - Consultant info
+🔍 How It Works
+  PDF Parsing: Uses PyMuPDF to extract text.
 
----
+  Metadata Extraction: Regex rules pull out:
+  Company Name
+  Consent Numbers
+  Site Address
+  Issue/Expiry Dates
+  Triggered AUP(E14) Rules
+  Mitigation Strategies
+  Geocoding: Uses geopy (Nominatim) to locate addresses on a map
+  Embedding & Semantic Search: Converts full-text blobs into embeddings, allowing query similarity via cosine distance
+  Visualizations: Plotly renders:
+  Consent status bar charts
+  Geolocation markers on a Mapbox map
+  
+===================================
 
-## 📦 Requirements
+🧠 Supported LLM Models
+  You can switch models from the sidebar:
+  all-MiniLM-L6-v2
+  multi-qa-MiniLM-L6-cos-v1
+  BAAI/bge-base-en-v1.5
+  intfloat/e5-base-v2
+  
+===================================
 
-Install dependencies:
+📥 Input Format
+  Upload 1 or more PDF files
+  The dashboard automatically parses and extracts relevant consent metadata
+  
+===================================
 
-```bash
-pip install -r requirements.txt
-```
+🧾 Output Options
+  Download metadata as CSV
+  Download individual PDF files from within search/map results
+  
+===================================
 
-> Note: `pytesseract` and `pdf2image` require system-level dependencies:
-- **Tesseract OCR** (https://github.com/tesseract-ocr/tesseract)
-- **Poppler** (https://github.com/oschwartz10612/poppler-windows or `brew install poppler` on macOS)
+⚠️ Limitations
+  Address geocoding may occasionally fail if the location format is incomplete
+  OCR fallback is not enabled by default (only pure text extraction from PDFs)
+  Consent expiry logic is based on simple datetime comparison
 
----
+  ===================================
 
-## 🖥️ Running the App
-
-```bash
-streamlit run air_dashboard_ocr_enabled.py
-```
-
----
-
-## 📁 Upload Modes
-
-Choose one:
-1. **📂 Folder Path**: Reads all PDFs in a local directory (use on your machine).
-2. **📄 Upload Files**: Drag-and-drop PDFs for processing (works in Streamlit Cloud).
-
----
-
-## 📄 Example Query
-
-Search bar accepts natural language:
-```text
-Mitigation for dust in South Auckland
-```
-
----
-
-## 👥 Authors
-
-- Earl Tavera
-- Alana Jacobson‑Pepere
-
----
-
-## 📝 License
-
-MIT License — use freely, credit the authors!
+👥 Contributors
+  Earl Tavera – Data Analytics Developer & Dashboard Architect
+  Alana Jacobson-Pepere – LLM Research and Consent Text Parsing
