@@ -156,10 +156,13 @@ if uploaded_files:
 
         st.subheader("Consent Summary Metrics")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total Consents", len(df))
-        col2.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
+        col1.metric("Total Consents", len(df), help="Total number of uploaded consents", delta_color="normal")
+        col1.markdown('<div style="background-color:#e6f2ff;padding:5px;border-radius:5px;color:#003366;text-align:center;">Total uploaded</div>', unsafe_allow_html=True)
+        col2.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0), help="Total expired consents")
+        col2.markdown('<div style="background-color:#ffe6e6;padding:5px;border-radius:5px;color:#990000;text-align:center;">Expired consents</div>', unsafe_allow_html=True)
         exp_soon = df[(df["Expiry Date"] > datetime.now()) & (df["Expiry Date"] <= datetime.now() + timedelta(days=90))]
-        col3.metric("Expiring in 90 Days", len(exp_soon))
+        col3.metric("Expiring in 90 Days", len(exp_soon), help="Consents expiring within the next 90 days")
+        col3.markdown('<div style="background-color:#fff8e1;padding:5px;border-radius:5px;color:#cc7a00;text-align:center;">Expiring soon</div>', unsafe_allow_html=True)
 
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
@@ -206,7 +209,7 @@ if uploaded_files:
                     )
                     st.markdown("---")
 else:
-    st.info("📄 Please upload one or more PDF files on the sidebar to begin.")
+    st.info("📄 Please upload one or more PDF files to begin.")
 
 # ------------------------
 # Footer
