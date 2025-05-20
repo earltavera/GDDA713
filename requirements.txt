@@ -22,3 +22,5 @@ folium
 streamlit-folium
 
 # Regex is built-in, no need to include it
+
+llama-cpp-python
