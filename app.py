@@ -66,8 +66,10 @@ def geocode_address(address):
 def extract_metadata(text):
     rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE)
 if not rc_matches:
-    rc_matches = re.findall(r"RC[0-9]{5,}", text)
-rc_str = "".join(dict.fromkeys(rc_matches))
+        rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE)
+    if not rc_matches:
+        rc_matches = re.findall(r"RC[0-9]{5,}", text)
+    rc_str = "".join(dict.fromkeys(rc_matches))
 
     company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
     address_str = "".join(dict.fromkeys(re.findall(r"Site address:\s*(.+?)(?=\s*Legal description)", text)))
