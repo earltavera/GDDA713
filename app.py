@@ -101,129 +101,112 @@ def extract_metadata(text):
         "Text Blob": text
     }
 
-@st.cache_resource
-def load_bert_model(model_name):
-    return SentenceTransformer(model_name)
-
-model_name = st.selectbox("Choose LLM model:", [ 
+# ------------------------
+# Sidebar and Upload Controls
+# ------------------------
+st.sidebar.title("Control Panel")
+model_name = st.sidebar.selectbox("Choose LLM model:", [
     "all-MiniLM-L6-v2",
     "multi-qa-MiniLM-L6-cos-v1",
     "BAAI/bge-base-en-v1.5",
     "intfloat/e5-base-v2"
 ])
-model = load_bert_model(model_name)
+
+uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
+query_input = st.sidebar.text_input("Semantic Search Query")
 
 # ------------------------
-# Main App Logic
+# Load Model
 # ------------------------
+@st.cache_resource
+def load_model(name):
+    return SentenceTransformer(name)
 
-uploaded_files = st.file_uploader("\U0001F4C2 Upload one or more PDF files", type=["pdf"], accept_multiple_files=True)
+model = load_model(model_name)
 
-df = pd.DataFrame()
+# ------------------------
+# File Processing & Main Dashboard
+# ------------------------
 if uploaded_files:
     all_data = []
     for file in uploaded_files:
         try:
-            file_bytes = file.getvalue()
+            file_bytes = file.read()
             with fitz.open(stream=file_bytes, filetype="pdf") as doc:
                 text = "\n".join(page.get_text() for page in doc)
-            structured_data = extract_metadata(text)
-            structured_data["__file_name__"] = file.name
-            structured_data["__file_bytes__"] = file_bytes
-            all_data.append(structured_data)
+            data = extract_metadata(text)
+            data["__file_name__"] = file.name
+            data["__file_bytes__"] = file_bytes
+            all_data.append(data)
         except Exception as e:
-            st.error(f"\u274C Error processing {file.name}: {e}")
+            st.error(f"Error processing {file.name}: {e}")
 
     if all_data:
         df = pd.DataFrame(all_data)
-
         df["GeoKey"] = df["Address"].str.lower().str.strip()
-        latitudes, longitudes = [], []
+        lat, lon = [], []
+        for address in df["GeoKey"]:
+            latitude, longitude = geocode_address(address)
+            lat.append(latitude)
+            lon.append(longitude)
+        df["Latitude"] = lat
+        df["Longitude"] = lon
 
-        for addr in df["GeoKey"]:
-            lat, lon = geocode_address(addr)
-            latitudes.append(lat)
-            longitudes.append(lon)
+        df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce', dayfirst=True)
 
-        df["Latitude"] = latitudes
-        df["Longitude"] = longitudes
-
-        total_consents = len(df)
-        expired_consents = df["Consent Status"].value_counts().get("Expired", 0)
-        active_consents = df["Consent Status"].value_counts().get("Active", 0)
-
-        # About to expire in 90 days
-        today = datetime.now()
-        df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce')
-        about_to_expire = df[(df["Expiry Date"].notnull()) & (df["Expiry Date"] > today) & (df["Expiry Date"] <= today + timedelta(days=90))]
-        about_to_expire_count = len(about_to_expire)
-
-        st.markdown(f"<h4 style='color:#228B22;'><b>Processed {total_consents} PDF file(s)</b></h4>", unsafe_allow_html=True)
+        st.subheader("Consent Summary Metrics")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total Consents Uploaded", total_consents)
-        col2.metric("Total Expired Consents", expired_consents)
-        col3.metric("Expiring in 90 Days", about_to_expire_count)
+        col1.metric("Total Consents", len(df))
+        col2.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
+        exp_soon = df[(df["Expiry Date"] > datetime.now()) & (df["Expiry Date"] <= datetime.now() + timedelta(days=90))]
+        col3.metric("Expiring in 90 Days", len(exp_soon))
 
-        st.markdown("<h4><b>Consent Summary Table</b></h4>", unsafe_allow_html=True)
-        st.dataframe(df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]))
-        
-        csv = df.drop(columns=["Text Blob", "__file_bytes__", "__file_name__", "GeoKey"]).to_csv(index=False).encode("utf-8")
-        st.download_button("\U0001F4E5 Download CSV", data=csv, file_name="consent_summary.csv", mime="text/csv")
-        
-        map_df = df.dropna(subset=["Latitude", "Longitude"])
-        if not map_df.empty:
-            st.markdown("<h4><b>Consent Locations Map (Mapbox)</b></h4>", unsafe_allow_html=True)
-            fig = px.scatter_mapbox(
-                map_df,
-                lat="Latitude",
-                lon="Longitude",
-                hover_name="Company Name",
-                hover_data={"Address": True, "Consent Status": True},
-                zoom=10,
-                height=500
-            )
-            fig.update_layout(mapbox_style="open-street-map")
-            fig.update_traces(marker=dict(size=12, color="blue"))
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No valid geolocation data available to display a map.")
+        with st.expander("Consent Table"):
+            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
+            filtered_df = df if status_filter == "All" else df[df["Consent Status"] == status_filter]
+            st.dataframe(filtered_df.drop(columns=["Text Blob", "__file_bytes__", "GeoKey"]))
 
-        chart_df = pd.DataFrame({
-            "Consent Status": ["Expired", "Active"],
-            "Count": [expired_consents, active_consents]
-        })
-        bar_fig = px.bar(chart_df, x="Consent Status", y="Count", title="Expired vs Active Consents", text="Count")
-        bar_fig.update_traces(marker_color=["crimson", "green"], textposition="outside")
-        st.plotly_chart(bar_fig)
+            csv = filtered_df.drop(columns=["Text Blob", "__file_bytes__", "GeoKey"]).to_csv(index=False).encode("utf-8")
+            st.download_button("Download CSV", csv, "consents_summary.csv", "text/csv")
 
-        st.markdown("<h4><b>Semantic Search</b></h4>", unsafe_allow_html=True)
-        query = st.text_input("Ask a question (e.g., 'expired consents in Onehunga', 'dust mitigation')")
-
-        if query and not df.empty:
-            st.markdown("**Top 3 matching consents:**")
-            corpus = df["Text Blob"].tolist()
-            corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
-            query_embedding = model.encode(query, convert_to_tensor=True)
-
-            scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-            top_k_idx = scores.argsort(descending=True)[:3]
-
-            for i, idx in enumerate(top_k_idx):
-                row = df.iloc[idx.item()]
-                st.markdown(f"**{i+1}. {row['Company Name']} — {row['Address']}**")
-                st.markdown(f"- Triggers: `{row['AUP(OP) Triggers']}`")
-                st.markdown(f"- Reason for Consent: {row['Reason for Consent']}")
-                st.markdown(f"- Status: `{row['Consent Status']}` | Expires: `{row['Expiry Date']}`")
-                st.download_button(
-                    label="📄 Download Original PDF",
-                    data=row.get("__file_bytes", b""),
-                    file_name=row.get("__file_name", f"document_{i+1}.pdf"),
-                    mime="application/pdf",
-                    key=f"semantic_download_{i}"
+        with st.expander("Consent Map"):
+            map_df = df.dropna(subset=["Latitude", "Longitude"])
+            if not map_df.empty:
+                fig = px.scatter_mapbox(
+                    map_df, lat="Latitude", lon="Longitude", hover_name="Company Name",
+                    hover_data={"Address": True, "Consent Status": True}, zoom=10, height=500
                 )
-                st.markdown("---")
+                fig.update_layout(mapbox_style="open-street-map")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with st.expander("Consent Status Chart"):
+            chart_df = df["Consent Status"].value_counts().reset_index()
+            chart_df.columns = ["Status", "Count"]
+            fig = px.bar(chart_df, x="Status", y="Count", text="Count", color="Status")
+            st.plotly_chart(fig)
+
+        with st.expander("Semantic Search Results"):
+            if query_input:
+                corpus = df["Text Blob"].tolist()
+                corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
+                query_embedding = model.encode(query_input, convert_to_tensor=True)
+                scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+                top_k = scores.argsort(descending=True)[:3]
+                for i, idx in enumerate(top_k):
+                    row = df.iloc[idx.item()]
+                    st.markdown(f"**{i+1}. {row['Company Name']} - {row['Address']}**")
+                    st.markdown(f"- **Triggers**: `{row['AUP(OP) Triggers']}`")
+                    st.markdown(f"- **Expires**: `{row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}`")
+                    st.download_button(
+                        f"📄 Download PDF ({row['__file_name__']})",
+                        data=row['__file_bytes__'],
+                        file_name=row['__file_name__'],
+                        mime="application/pdf",
+                        key=f"download_{i}"
+                    )
+                    st.markdown("---")
 else:
-    st.info("\U0001F4C4 Please upload one or more PDF files to begin.")
+    st.info("📄 Please upload one or more PDF files to begin.")
 
 # ------------------------
 # Footer
