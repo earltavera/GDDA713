@@ -161,7 +161,7 @@ if uploaded_files:
         exp_soon = df[(df["Expiry Date"] > datetime.now()) & (df["Expiry Date"] <= datetime.now() + timedelta(days=90))]
         col3.metric("Expiring in 90 Days", len(exp_soon))
 
-        with st.expander("Consent Table"):
+        with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status"] == status_filter]
             st.dataframe(filtered_df.drop(columns=["Text Blob", "__file_bytes__", "GeoKey"]))
@@ -169,7 +169,7 @@ if uploaded_files:
             csv = filtered_df.drop(columns=["Text Blob", "__file_bytes__", "GeoKey"]).to_csv(index=False).encode("utf-8")
             st.download_button("Download CSV", csv, "consents_summary.csv", "text/csv")
 
-        with st.expander("Consent Map"):
+        with st.expander("Consent Map", expanded=True):
             map_df = df.dropna(subset=["Latitude", "Longitude"])
             if not map_df.empty:
                 fig = px.scatter_mapbox(
@@ -179,13 +179,13 @@ if uploaded_files:
                 fig.update_layout(mapbox_style="open-street-map")
                 st.plotly_chart(fig, use_container_width=True)
 
-        with st.expander("Consent Status Chart"):
+        with st.expander("Consent Status Chart", expanded=True):
             chart_df = df["Consent Status"].value_counts().reset_index()
             chart_df.columns = ["Status", "Count"]
             fig = px.bar(chart_df, x="Status", y="Count", text="Count", color="Status")
             st.plotly_chart(fig)
 
-        with st.expander("Semantic Search Results"):
+        with st.expander("Semantic Search Results", expanded=True):
             if query_input:
                 corpus = df["Text Blob"].tolist()
                 corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
