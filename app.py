@@ -192,24 +192,6 @@ if uploaded_files:
 )
                 fig.update_layout(mapbox_style="open-street-map")
                 st.plotly_chart(fig, use_container_width=True)
-                click_data = st.session_state.get("map_click", None)
-
-                click_data = st.experimental_get_query_params().get("map_click", None)
-
-                if click_data and "points" in click_data:
-                    clicked_info = click_data["points"][0]
-                    lon, lat = clicked_info.get("lon"), clicked_info.get("lat")
-                    matched = df[(df["Latitude"] == lat) & (df["Longitude"] == lon)]
-                    if not matched.empty:
-                        row = matched.iloc[0]
-                        with st.expander("📌 Selected Consent Details", expanded=True):
-                            st.markdown(f"**Company**: {row['Company Name']}")
-                            st.markdown(f"**Address**: {row['Address']}")
-                            st.markdown(f"**Status**: {row['Consent Status']} | **Expires**: {row['Expiry Date']}")
-                            st.markdown(f"**Triggers**: `{row['AUP(OP) Triggers']}`")
-                            st.markdown(f"**Mitigation**: {row['Mitigation (Consent Conditions)']}")
-                            st.markdown(f"**Reason**: {row['Reason for Consent']}")
-                            st.download_button("📄 Download PDF", data=row['__file_bytes__'], file_name=row['__file_name__'], mime="application/pdf")
 
         with st.expander("Consent Status Chart", expanded=True):
             chart_df = df["Consent Status"].value_counts().reset_index()
@@ -239,11 +221,6 @@ if uploaded_files:
                     st.markdown("---")
 else:
     st.info("📄 Please upload one or more PDF files to begin.")
-
-
-        # Optional: Display selected point details if clickData is implemented in future
-        # if st.session_state.get('clickData'):
-        #     st.write(st.session_state.clickData)
 
 # ------------------------
 # Footer
