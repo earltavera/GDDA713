@@ -173,9 +173,21 @@ if uploaded_files:
             map_df = df.dropna(subset=["Latitude", "Longitude"])
             if not map_df.empty:
                 fig = px.scatter_mapbox(
-                    map_df, lat="Latitude", lon="Longitude", hover_name="Company Name",
-                    hover_data={"Address": True, "Consent Status": True}, zoom=10, height=500
-                )
+    map_df,
+    lat="Latitude",
+    lon="Longitude",
+    hover_name="Company Name",
+    hover_data={
+        "Address": True,
+        "Consent Status": True,
+        "Issue Date": True,
+        "Expiry Date": True,
+        "AUP(OP) Triggers": True,
+        "Mitigation (Consent Conditions)": True
+    },
+    zoom=10,
+    height=500
+)
                 fig.update_layout(mapbox_style="open-street-map")
                 st.plotly_chart(fig, use_container_width=True)
 
