@@ -183,15 +183,36 @@ if uploaded_files:
         "Consent Status": True,
         "Issue Date": True,
         "Expiry Date": True,
-        "AUP(OP) Triggers": True,
+        "AUP(OP, text=map_df["Company Name"]) Triggers": True,
         "Mitigation (Consent Conditions)": True,
         "Reason for Consent": True
     },
     zoom=10,
-    height=500
+    height=500,
+    size_max=15,
+    color_discrete_sequence=["blue"]
 )
-                fig.update_layout(mapbox_style="open-street-map")
+                fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
+                fig.update_traces(marker=dict(size=12, color="blue", opacity=0.8, textposition="top center"))
                 st.plotly_chart(fig, use_container_width=True)
+                click_data = st.session_state.get("map_click", None)
+
+                click_data = st.experimental_get_query_params().get("map_click", None)
+
+                if click_data and "points" in click_data:
+                    clicked_info = click_data["points"][0]
+                    lon, lat = clicked_info.get("lon"), clicked_info.get("lat")
+                    matched = df[(df["Latitude"] == lat) & (df["Longitude"] == lon)]
+                    if not matched.empty:
+                        row = matched.iloc[0]
+                        with st.expander("📌 Selected Consent Details", expanded=True):
+                            st.markdown(f"**Company**: {row['Company Name']}")
+                            st.markdown(f"**Address**: {row['Address']}")
+                            st.markdown(f"**Status**: {row['Consent Status']} | **Expires**: {row['Expiry Date']}")
+                            st.markdown(f"**Triggers**: `{row['AUP(OP) Triggers']}`")
+                            st.markdown(f"**Mitigation**: {row['Mitigation (Consent Conditions)']}")
+                            st.markdown(f"**Reason**: {row['Reason for Consent']}")
+                            st.download_button("📄 Download PDF", data=row['__file_bytes__'], file_name=row['__file_name__'], mime="application/pdf")
 
         with st.expander("Consent Status Chart", expanded=True):
             chart_df = df["Consent Status"].value_counts().reset_index()
