@@ -13,21 +13,11 @@ from sentence_transformers import SentenceTransformer, util
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import base64
-import openai
-import os
-from dotenv import load_dotenv
-import csv
-
-# ------------------------
-# API Key Setup
-# ------------------------
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # ------------------------
 # Streamlit Page Config & Style
 # ------------------------
-st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="NZ")
+st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
 st.markdown("""
     <style>
@@ -48,11 +38,6 @@ st.markdown("""
         padding: 1rem;
         border-radius: 10px;
     }
-    textarea[data-testid="stTextArea"] {
-        background-color: #f0f0f0 !important;
-        border-radius: 8px !important;
-        color: #333 !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -65,6 +50,7 @@ st.markdown("""
 # ------------------------
 # Utility Functions
 # ------------------------
+
 def check_expiry(expiry_date):
     if expiry_date is None:
         return "Unknown"
@@ -100,7 +86,7 @@ def extract_metadata(text):
     except:
         expiry_date = None
 
-    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
+    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
     triggers_str = " ".join(dict.fromkeys(triggers))
 
     proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
@@ -123,52 +109,6 @@ def extract_metadata(text):
         "Text Blob": text
     }
 
-def clean_surrogates(text):
-    return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
-
-def log_ai_chat(question, answer):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer}
-    file_exists = os.path.isfile("ai_chat_log.csv")
-    with open("ai_chat_log.csv", mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Timestamp", "Question", "Answer"])
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(log_entry)
-
-# ------------------------
-# Map Coloring Logic for Expired Consents
-# ------------------------
-def get_marker_color(status):
-    return "red" if status == "Expired" else "blue"
-
-# ------------------------
-# Apply marker color to map_df before plotting with map style toggle
-# ------------------------
-if 'df' in locals():
-    with st.expander("Consent Map", expanded=True):
-        map_df = df.dropna(subset=["Latitude", "Longitude"])
-        if not map_df.empty:
-            map_df["MarkerColor"] = map_df["Consent Status"].apply(get_marker_color)
-            map_style = st.radio("Map Style", ["Street", "Satellite"], horizontal=True)
-            style = "open-street-map" if map_style == "Street" else "satellite-streets"
-
-            fig = px.scatter_mapbox(
-                map_df,
-                lat="Latitude",
-                lon="Longitude",
-                hover_name="Company Name",
-                hover_data={"Company Name": True, "Address": True, "Consent Status": True, "Issue Date": True, "Expiry Date": True},
-                zoom=10,
-                height=500,
-                color="MarkerColor",
-                color_discrete_map="identity"
-            )
-            fig.update_layout(mapbox_style=style, margin={"r":0,"t":0,"l":0,"b":0})
-            fig.update_traces(marker=dict(size=12, opacity=0.8))
-            st.plotly_chart(fig, use_container_width=True)
-
-
 # ------------------------
 # Sidebar and Upload Controls
 # ------------------------
@@ -180,9 +120,12 @@ model_name = st.sidebar.selectbox("Choose LLM model:", [
     "intfloat/e5-base-v2"
 ])
 
-uploaded_files = st.sidebar.file_uploader("Please upload one or more PDF files to begin.", type=["pdf"], accept_multiple_files=True)
+uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
 query_input = st.sidebar.text_input("Semantic Search Query")
 
+# ------------------------
+# Load Model
+# ------------------------
 @st.cache_resource
 def load_model(name):
     return SentenceTransformer(name)
@@ -216,6 +159,7 @@ if uploaded_files:
             lon.append(longitude)
         df["Latitude"] = lat
         df["Longitude"] = lon
+
         df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce', dayfirst=True)
 
         st.subheader("Consent Summary Metrics")
@@ -225,28 +169,64 @@ if uploaded_files:
         exp_soon = df[(df["Expiry Date"] > datetime.now()) & (df["Expiry Date"] <= datetime.now() + timedelta(days=90))]
         col3.markdown(f"<h3 style='color:#ff9900'>{len(exp_soon)} Expiring in 90 Days</h3>", unsafe_allow_html=True)
 
-        # Consent Status Chart
-        status_counts = df["Consent Status"].value_counts().reset_index()
-        status_counts.columns = ["Consent Status", "Count"]
-        fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", title="Total Active vs Expired Consents")
-        fig_status.update_traces(textposition="outside")
-        fig_status.update_layout(xaxis_title="Status", yaxis_title="Number of Consents", plot_bgcolor="#f9f9ff", paper_bgcolor="#f9f9ff", title_x=0.5)
-        st.plotly_chart(fig_status, use_container_width=True)
-
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status"] == status_filter]
             st.dataframe(filtered_df.rename(columns={"__file_name__": "File Name"})[["File Name"] + [col for col in filtered_df.columns if col not in ["__file_name__", "Text Blob", "__file_bytes__", "GeoKey"]]])
-            csv_data = filtered_df.to_csv(index=False).encode("utf-8")
-            st.download_button("Download CSV", csv_data, "consents_summary.csv", "text/csv")
+
+            csv = filtered_df.rename(columns={"__file_name__": "File Name"})[["File Name"] + [col for col in filtered_df.columns if col not in ["__file_name__", "Text Blob", "__file_bytes__", "GeoKey"]]].to_csv(index=False).encode("utf-8")
+            st.download_button("Download CSV", csv, "consents_summary.csv", "text/csv")
 
         with st.expander("Consent Map", expanded=True):
             map_df = df.dropna(subset=["Latitude", "Longitude"])
             if not map_df.empty:
-                fig = px.scatter_mapbox(map_df, lat="Latitude", lon="Longitude", hover_name="Company Name", hover_data={"Company Name": True, "Address": True, "Consent Status": True, "Issue Date": True, "Expiry Date": True}, zoom=10, height=500, size_max=15, color_discrete_sequence=["blue"])
+                fig = px.scatter_mapbox(
+    map_df,
+    lat="Latitude",
+    lon="Longitude",
+    hover_name="Company Name",
+    hover_data={
+        "Company Name": True,
+        "Address": True,
+        "Consent Status": True,
+        "Issue Date": True,
+        "Expiry Date": True,
+        "AUP(OP) Triggers": True,
+        "Mitigation (Consent Conditions)": True,
+        "Reason for Consent": True
+    },
+    zoom=10,
+    height=500,
+    size_max=15,
+    color_discrete_sequence=["blue"]
+)
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
-                fig.update_traces(marker=dict(size=12, color="blue", opacity=0.8))
+                fig.update_traces(marker=dict(size=12, color="blue", opacity=0.8), text=map_df["Company Name"], textposition="top center")
                 st.plotly_chart(fig, use_container_width=True)
+                click_data = st.session_state.get("map_click", None)
+
+                click_data = st.query_params.get("map_click", None)
+
+                if click_data and "points" in click_data:
+                    clicked_info = click_data["points"][0]
+                    lon, lat = clicked_info.get("lon"), clicked_info.get("lat")
+                    matched = df[(df["Latitude"] == lat) & (df["Longitude"] == lon)]
+                    if not matched.empty:
+                        row = matched.iloc[0]
+                        with st.expander("📌 Selected Consent Details", expanded=True):
+                            st.markdown(f"**Company**: {row['Company Name']}")
+                            st.markdown(f"**Address**: {row['Address']}")
+                            st.markdown(f"**Status**: {row['Consent Status']} | **Expires**: {row['Expiry Date']}")
+                            st.markdown(f"**Triggers**: `{row['AUP(OP) Triggers']}`")
+                            st.markdown(f"**Mitigation**: {row['Mitigation (Consent Conditions)']}")
+                            st.markdown(f"**Reason**: {row['Reason for Consent']}")
+                            st.download_button("📄 Download PDF", data=row['__file_bytes__'], file_name=row['__file_name__'], mime="application/pdf")
+
+        with st.expander("Consent Status Chart", expanded=True):
+            chart_df = df["Consent Status"].value_counts().reset_index()
+            chart_df.columns = ["Status", "Count"]
+            fig = px.bar(chart_df, x="Status", y="Count", text="Count", color="Status")
+            st.plotly_chart(fig)
 
         with st.expander("Semantic Search Results", expanded=True):
             if query_input:
@@ -258,52 +238,21 @@ if uploaded_files:
                 for i, idx in enumerate(top_k):
                     row = df.iloc[idx.item()]
                     st.markdown(f"**{i+1}. {row['Company Name']} - {row['Address']}**")
-                    st.markdown(f"- **Triggers**: {row['AUP(OP) Triggers']}")
-                    st.markdown(f"- **Expires**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
-                    safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF  ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
+                    st.markdown(f"- **Triggers**: `{row['AUP(OP) Triggers']}`")
+                    st.markdown(f"- **Expires**: `{row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}`")
+                    st.download_button(
+                        f"📄 Download PDF ({row['__file_name__']})",
+                        data=row['__file_bytes__'],
+                        file_name=row['__file_name__'],
+                        mime="application/pdf",
+                        key=f"download_{i}"
+                    )
                     st.markdown("---")
+else:
+    st.info("📄 Please upload one or more PDF files to begin.")
 
-        with st.expander("Ask AI About Consents"):
-            st.markdown("Ask anything about air discharge consents: triggers, expiry, mitigation, or general trends.")
-            chat_input = st.text_area("Ask a question:", key="chat_input")
-            if st.button("Ask AI"):
-                if not chat_input.strip():
-                    st.warning("Please enter a question.")
-                else:
-                    with st.spinner("AI is thinking..."):
-                        try:
-                            context_sample = df[["Company Name", "Consent Status", "AUP(OP) Triggers", "Mitigation (Consent Conditions)", "Expiry Date"]].dropna().head(10).to_dict(orient="records")
-                            messages = [
-                                {"role": "system", "content": "You are a helpful assistant specialized in environmental compliance and industrial air discharge consents."},
-                                {"role": "user", "content": f"Data sample: {context_sample}\n\nQuestion: {chat_input}"}
-                            ]
-                            if openai.api_key:
-                                response = openai.ChatCompletion.create(
-                                    model="gpt-3.5-turbo",
-                                    messages=messages,
-                                    max_tokens=500,
-                                    temperature=0.7
-                                )
-                                answer = response["choices"][0]["message"]["content"]
-                            else:
-                                if "expired" in chat_input.lower():
-                                    count = df["Consent Status"].value_counts().get("Expired", 0)
-                                    answer = f"There are {count} expired consents currently."
-                                elif "trigger" in chat_input.lower():
-                                    top_triggers = df["AUP(OP) Triggers"].str.extractall(r'(E\d+\.\d+\.\d+)')[0].value_counts().head(3)
-                                    answer = f"The most common AUP triggers are: {', '.join(top_triggers.index)}."
-                                elif "mitigation" in chat_input.lower():
-                                    plans = df["Mitigation (Consent Conditions)"].dropna().str.split(", ").explode().value_counts().head(3)
-                                    answer = f"Frequent mitigation strategies include: {', '.join(plans.index)}."
-                                else:
-                                    answer = "AI assistant is offline (no API key). Try asking about expiry, triggers, or mitigation."
-                            st.success("Answer:")
-                            st.markdown(answer)
-                            log_ai_chat(chat_input, answer)
-                        except Exception as e:
-                            st.error(f"AI error: {e}")
-
-
+# ------------------------
+# Footer
+# ------------------------
 st.markdown("---")
-st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
+st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence Dashboard © 2025")
