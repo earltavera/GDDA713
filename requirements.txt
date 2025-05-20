@@ -16,9 +16,9 @@ plotly
 # OCR fallback (optional)
 pillow
 
-# Regex is built-in, no need to include it
-
+# Geospatial Tools
 geopy
 folium
 streamlit-folium
 
+# Regex is built-in, no need to include it
