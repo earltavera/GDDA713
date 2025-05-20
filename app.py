@@ -12,6 +12,7 @@ import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
+import base64
 
 # ------------------------
 # Streamlit Page Config & Style
@@ -77,7 +78,7 @@ def extract_metadata(text):
     except:
         expiry_date = None
 
-    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
+    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
     triggers_str = " ".join(dict.fromkeys(triggers))
 
     proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
@@ -92,7 +93,7 @@ def extract_metadata(text):
         "Address": address_str,
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
         "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown",
-                "AUP(OP) Triggers": triggers_str,
+        "AUP(OP) Triggers": triggers_str,
         "Reason for Consent": proposal_str,
         "Consent Conditions": ", ".join(conditions_numbers),
         "Mitigation (Consent Conditions)": ", ".join(managementplan_final),
