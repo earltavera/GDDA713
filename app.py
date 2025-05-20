@@ -206,7 +206,7 @@ if uploaded_files:
                     )
                     st.markdown("---")
 else:
-    st.info("📄 Please upload one or more PDF files to begin.")
+    st.info("📄 Please upload one or more PDF files on the sidebar to begin.")
 
 # ------------------------
 # Footer
