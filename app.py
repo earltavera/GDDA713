@@ -51,31 +51,34 @@ def get_auckland_weather():
         return None
 
 # Get current date and weather
+@st.cache_data(ttl=600)
+def get_auckland_weather():
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key:
+        return "Sunny, 18°C (offline mode)"  # Dummy fallback
+    url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={api_key}"
+    try:
+        response = requests.get(url)
+        data = response.json()
+        if data.get("cod") != 200:
+            return "Weather unavailable"
+        temp = data["main"]["temp"]
+        desc = data["weather"][0]["description"].title()
+        return f"{desc}, {temp:.1f}°C"
+    except:
+        return "Weather unavailable"
+        
+# Get current date and weather (with fallback)
 today = datetime.now().strftime("%A, %d %B %Y")
 weather = get_auckland_weather()
 
-# Display weather and date
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#f0f8ff;
                 border-radius:10px; margin-bottom:15px; font-weight:500;'>
-        📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather or "Weather unavailable"}</strong>
+        📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
 
-
-st.markdown("""
-    <style>
-    h1 { color: #2c6e91; text-align: center; font-size: 2.5em; }
-    .metric-label { font-weight: bold !important; color: #003366; }
-    .stDataFrame { background-color: #ffffff !important; }
-    .stPlotlyChart { background-color: #f9f9ff !important; padding: 1rem; border-radius: 10px; }
-    textarea[data-testid="stTextArea"] {
-        background-color: #f0f0f0 !important;
-        border-radius: 8px !important;
-        color: #333 !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
 
 st.markdown("""
     <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; background-color:#e6f0fa; padding:15px; border-radius:12px;'>
