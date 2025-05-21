@@ -7,26 +7,28 @@ pymupdf
 # Data handling
 pandas
 
-# Regex is built-in, no need to include it
-
-# Date/time handling
+# Date/time
 python-dateutil
 
-# Plotting and visualization
+# Plotting
 plotly
 
-# NLP / Semantic search
+# Semantic search
 sentence-transformers
 
-# Geocoding
+# Geolocation
 geopy
 
-# Map display
+# Map rendering
 folium
 streamlit-folium
 
-# Base64 encoding (built-in, no need to list)
-
-# Environment variable support (if used later)
-python-dotenv
+# OpenAI API
 openai
+
+# Optional: OCR fallback
+pillow
+pytesseract
+
+# Optional: Env var management
+python-dotenv
