@@ -226,12 +226,46 @@ if uploaded_files:
         col3.markdown(f"<h3 style='color:#ff9900'>{len(exp_soon)} Expiring in 90 Days</h3>", unsafe_allow_html=True)
 
         # Consent Status Chart
-        status_counts = df["Consent Status"].value_counts().reset_index()
-        status_counts.columns = ["Consent Status", "Count"]
-        fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", title="Total Active vs Expired Consents")
-        fig_status.update_traces(textposition="outside")
-        fig_status.update_layout(xaxis_title="Status", yaxis_title="Number of Consents", plot_bgcolor="#f9f9ff", paper_bgcolor="#f9f9ff", title_x=0.5)
-        st.plotly_chart(fig_status, use_container_width=True)
+        # Enhance Consent Status Classification
+df["Consent Status Enhanced"] = df["Consent Status"]
+df.loc[
+    (df["Consent Status"] == "Active") &
+    (df["Expiry Date"] > datetime.now()) &
+    (df["Expiry Date"] <= datetime.now() + timedelta(days=90)),
+    "Consent Status Enhanced"
+] = "Expiring in 90 Days"
+
+# Bar chart: Red for Expired, Blue for Active, Orange for Expiring Soon
+status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
+status_counts.columns = ["Consent Status", "Count"]
+
+color_map = {
+    "Expired": "red",
+    "Active": "blue",
+    "Expiring in 90 Days": "orange"
+}
+
+fig_status = px.bar(
+    status_counts,
+    x="Consent Status",
+    y="Count",
+    text="Count",
+    title="Consent Status Overview",
+    color="Consent Status",
+    color_discrete_map=color_map
+)
+
+fig_status.update_traces(textposition="outside")
+fig_status.update_layout(
+    xaxis_title="Status",
+    yaxis_title="Number of Consents",
+    plot_bgcolor="#f9f9ff",
+    paper_bgcolor="#f9f9ff",
+    title_x=0.5
+)
+
+st.plotly_chart(fig_status, use_container_width=True)
+
 
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
