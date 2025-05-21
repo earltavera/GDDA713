@@ -222,6 +222,7 @@ if uploaded_files:
                     color="Consent Status Enhanced",
                     color_discrete_map=color_map
                 )
+                fig.update_traces(marker=dict(size=16))
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
                 st.plotly_chart(fig, use_container_width=True)
 
