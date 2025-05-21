@@ -81,7 +81,7 @@ st.markdown(f"""
 
 
 st.markdown("""
-    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; background-color:#e6f0fa; padding:15px; border-radius:12px;'>
+    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; background-color:none; padding:15px; border-radius:12px;'>
         Auckland Air Discharge Consent Dashboard
     </h1>
 """, unsafe_allow_html=True)
@@ -172,12 +172,6 @@ def get_chat_log_as_csv():
         except pd.errors.EmptyDataError:
             return None
     return None
-
-csv_log_bytes = get_chat_log_as_csv()
-if csv_log_bytes:
-    st.download_button("\U0001F4C5 Download AI Chat Log CSV", csv_log_bytes, file_name="ai_chat_log.csv", mime="text/csv")
-else:
-    st.info("\U0001F4DD No chat logs available to download yet.")
 
 
 # ------------------------
