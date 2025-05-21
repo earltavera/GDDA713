@@ -113,6 +113,8 @@ def extract_metadata(text):
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
+import io
+
 def log_ai_chat(question, answer):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer}
@@ -122,6 +124,19 @@ def log_ai_chat(question, answer):
         if not file_exists:
             writer.writeheader()
         writer.writerow(log_entry)
+
+def get_chat_log_as_csv():
+    if os.path.exists("ai_chat_log.csv"):
+        df_log = pd.read_csv("ai_chat_log.csv")
+        output = io.StringIO()
+        df_log.to_csv(output, index=False)
+        return output.getvalue().encode("utf-8")
+    return None
+# Offer chat log download
+csv_log_bytes = get_chat_log_as_csv()
+if csv_log_bytes:
+    st.download_button("📥 Download AI Chat Log CSV", csv_log_bytes, file_name="ai_chat_log.csv", mime="text/csv")
+
 
 # ------------------------
 # Sidebar & Model Loader
