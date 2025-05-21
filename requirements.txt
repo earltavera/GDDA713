@@ -7,19 +7,25 @@ pymupdf
 # Data handling
 pandas
 
-# NLP search with BERT
-sentence-transformers
+# Regex is built-in, no need to include it
+
+# Date/time handling
+python-dateutil
 
 # Plotting and visualization
 plotly
 
-# OCR fallback (optional)
-pillow
+# NLP / Semantic search
+sentence-transformers
 
-# Geospatial Tools
+# Geocoding
 geopy
+
+# Map display
 folium
 streamlit-folium
 
-# Regex is built-in, no need to include it
+# Base64 encoding (built-in, no need to list)
 
+# Environment variable support (if used later)
+python-dotenv
