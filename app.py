@@ -73,7 +73,7 @@ today = datetime.now().strftime("%A, %d %B %Y")
 weather = get_auckland_weather()
 
 st.markdown(f"""
-    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#f0f8ff;
+    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
                 border-radius:10px; margin-bottom:15px; font-weight:500;'>
         📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
