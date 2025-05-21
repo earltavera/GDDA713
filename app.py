@@ -190,8 +190,20 @@ if uploaded_files:
         fig_status.update_layout(title="Consent Status Overview", title_x=0.5)
         st.plotly_chart(fig_status, use_container_width=True)
 
+        # Consent Table
+        with st.expander("Consent Table", expanded=True):
+            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
+            filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
+            display_df = filtered_df[[
+                "__file_name__", "Company Name", "Address", "Issue Date", "Expiry Date",
+                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
+            ]].rename(columns={"__file_name__": "File Name"})
+            st.dataframe(display_df)
+            csv = display_df.to_csv(index=False).encode("utf-8")
+            st.download_button("Download CSV", csv, "filtered_consents.csv", "text/csv")
+            
         # Consent Map
-        with st.expander("Consent Map", expanded=False):
+        with st.expander("Consent Map", expanded=True):
             map_df = df.dropna(subset=["Latitude", "Longitude"])
             if not map_df.empty:
                 fig = px.scatter_mapbox(
@@ -213,20 +225,9 @@ if uploaded_files:
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
                 st.plotly_chart(fig, use_container_width=True)
 
-        # Consent Table
-        with st.expander("Consent Table", expanded=False):
-            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
-            filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
-            display_df = filtered_df[[
-                "__file_name__", "Company Name", "Address", "Issue Date", "Expiry Date",
-                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
-            ]].rename(columns={"__file_name__": "File Name"})
-            st.dataframe(display_df)
-            csv = display_df.to_csv(index=False).encode("utf-8")
-            st.download_button("Download CSV", csv, "filtered_consents.csv", "text/csv")
-
+        
         # Semantic Search
-        with st.expander("Semantic Search Results", expanded=False):
+        with st.expander("Semantic Search Results", expanded=True):
             if query_input:
                 corpus = df["Text Blob"].tolist()
                 corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
@@ -243,7 +244,7 @@ if uploaded_files:
                     st.markdown("---")
 
         # Chatbot
-        with st.expander("Ask AI About Consents", expanded=False):
+        with st.expander("Ask AI About Consents", expanded=True):
             st.markdown("Ask anything about air discharge consents: triggers, expiry, mitigation, or general trends.")
             chat_input = st.text_area("Ask a question:", key="chat_input")
             if st.button("Ask AI"):
