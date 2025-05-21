@@ -212,12 +212,13 @@ if uploaded_files:
         st.plotly_chart(fig_status, use_container_width=True)
 
         # Consent Table
+         # Consent Table
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
             display_df = filtered_df[[
-                "__file_name__", "Company Name", "Address", "Issue Date", "Expiry Date",
-                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
+                "File Name", "Resource Consent Numbers", "Company Name", "Address", "Issued Date", "Expiry Date",
+                "Consent Status", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
             ]].rename(columns={"__file_name__": "File Name"})
             st.dataframe(display_df)
             csv = display_df.to_csv(index=False).encode("utf-8")
