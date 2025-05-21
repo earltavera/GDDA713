@@ -4,31 +4,30 @@ streamlit
 # PDF parsing
 pymupdf
 
-# Data handling
+# Data manipulation
 pandas
 
-# Date/time
+# Date/time handling
 python-dateutil
 
-# Plotting
-plotly
-
-# Semantic search
+# NLP and semantic search
 sentence-transformers
+torch
 
 # Geolocation
 geopy
 
-# Map rendering
+# Map visualization
+plotly
 folium
 streamlit-folium
 
-# OpenAI API
+# OpenAI API access
 openai
 
-# Optional: OCR fallback
+# Environment variable loading
+python-dotenv
+
+# Optional: fallback OCR if needed later
 pillow
 pytesseract
-
-# Optional: Env var management
-python-dotenv
