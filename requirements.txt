@@ -29,3 +29,4 @@ streamlit-folium
 
 # Environment variable support (if used later)
 python-dotenv
+openai
