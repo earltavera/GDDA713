@@ -226,7 +226,6 @@ if uploaded_files:
         col3.markdown(f"<h3 style='color:#ff9900'>{len(exp_soon)} Expiring in 90 Days</h3>", unsafe_allow_html=True)
 
         # Consent Status Chart
-        # Enhance Consent Status Classification
 df["Consent Status Enhanced"] = df["Consent Status"]
 df.loc[
     (df["Consent Status"] == "Active") &
