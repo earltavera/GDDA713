@@ -247,7 +247,7 @@ if uploaded_files:
         # Chatbot
         with st.expander("Ask AI About Consents", expanded=True):
             st.markdown("Ask anything about air discharge consents: (e.g. triggers, expiry, mitigation, or general trends)")
-            chat_input = st.text_area("Ask any query:", key="chat_input")
+            chat_input = st.text_area("Search any query:", key="chat_input")
             if st.button("Ask AI"):
                 if not chat_input.strip():
                     st.warning("Please enter any query.")
