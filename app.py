@@ -184,7 +184,7 @@ if uploaded_files:
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
         status_counts.columns = ["Consent Status", "Count"]
-        color_map = {"Expired": "red", "Active": "blue", "Expiring in 90 Days": "orange"}
+        color_map = {"Expired": "red", "Active": "blue", "Expiring in 90 Days": "green"}
         fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map)
         fig_status.update_traces(textposition="outside")
         fig_status.update_layout(title="Consent Status Overview", title_x=0.5)
@@ -222,7 +222,7 @@ if uploaded_files:
                     color="Consent Status Enhanced",
                     color_discrete_map=color_map
                 )
-                fig.update_traces(marker=dict(size=16))
+                fig.update_traces(marker=dict(size=12))
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
                 st.plotly_chart(fig, use_container_width=True)
 
