@@ -22,7 +22,7 @@ import csv
 # API Key Setup
 # ------------------------
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("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")
 
 # ------------------------
 # Streamlit Page Config & Style
