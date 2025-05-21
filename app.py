@@ -207,8 +207,8 @@ if uploaded_files:
 
         # Consent Table
         with st.expander("Consent Table", expanded=True):
-            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
-            filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
+            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
+            filtered_df = df if status_filter == "All" else df[df["Consent Status"] == status_filter]
             display_df = filtered_df[[
                 "__file_name__", "Company Name", "Address", "Issue Date", "Expiry Date",
                 "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
