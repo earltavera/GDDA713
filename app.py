@@ -31,23 +31,10 @@ st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout
 
 st.markdown("""
     <style>
-    h1 {
-        color: #2c6e91;
-        text-align: center;
-        font-size: 2.5em;
-    }
-    .metric-label {
-        font-weight: bold !important;
-        color: #003366;
-    }
-    .stDataFrame {
-        background-color: #ffffff !important;
-    }
-    .stPlotlyChart {
-        background-color: #f9f9ff !important;
-        padding: 1rem;
-        border-radius: 10px;
-    }
+    h1 { color: #2c6e91; text-align: center; font-size: 2.5em; }
+    .metric-label { font-weight: bold !important; color: #003366; }
+    .stDataFrame { background-color: #ffffff !important; }
+    .stPlotlyChart { background-color: #f9f9ff !important; padding: 1rem; border-radius: 10px; }
     textarea[data-testid="stTextArea"] {
         background-color: #f0f0f0 !important;
         border-radius: 8px !important;
@@ -100,7 +87,7 @@ def extract_metadata(text):
     except:
         expiry_date = None
 
-    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
+    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
     triggers_str = " ".join(dict.fromkeys(triggers))
 
     proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
@@ -137,40 +124,7 @@ def log_ai_chat(question, answer):
         writer.writerow(log_entry)
 
 # ------------------------
-# Map Coloring Logic for Expired Consents
-# ------------------------
-def get_marker_color(status):
-    return "red" if status == "Expired" else "blue"
-
-# ------------------------
-# Apply marker color to map_df before plotting with map style toggle
-# ------------------------
-if 'df' in locals():
-    with st.expander("Consent Map", expanded=True):
-        map_df = df.dropna(subset=["Latitude", "Longitude"])
-        if not map_df.empty:
-            map_df["MarkerColor"] = map_df["Consent Status"].apply(get_marker_color)
-            map_style = st.radio("Map Style", ["Street", "Satellite"], horizontal=True)
-            style = "open-street-map" if map_style == "Street" else "satellite-streets"
-
-            fig = px.scatter_mapbox(
-                map_df,
-                lat="Latitude",
-                lon="Longitude",
-                hover_name="Company Name",
-                hover_data={"Company Name": True, "Address": True, "Consent Status": True, "Issue Date": True, "Expiry Date": True},
-                zoom=10,
-                height=500,
-                color="MarkerColor",
-                color_discrete_map="identity"
-            )
-            fig.update_layout(mapbox_style=style, margin={"r":0,"t":0,"l":0,"b":0})
-            fig.update_traces(marker=dict(size=12, opacity=0.8))
-            st.plotly_chart(fig, use_container_width=True)
-
-
-# ------------------------
-# Sidebar and Upload Controls
+# Sidebar & Model Loader
 # ------------------------
 st.sidebar.title("Control Panel")
 model_name = st.sidebar.selectbox("Choose LLM model:", [
@@ -180,7 +134,7 @@ model_name = st.sidebar.selectbox("Choose LLM model:", [
     "intfloat/e5-base-v2"
 ])
 
-uploaded_files = st.sidebar.file_uploader("Please upload one or more PDF files to begin.", type=["pdf"], accept_multiple_files=True)
+uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
 query_input = st.sidebar.text_input("Semantic Search Query")
 
 @st.cache_resource
@@ -190,7 +144,7 @@ def load_model(name):
 model = load_model(model_name)
 
 # ------------------------
-# File Processing & Main Dashboard
+# File Processing & Dashboard
 # ------------------------
 if uploaded_files:
     all_data = []
@@ -209,79 +163,70 @@ if uploaded_files:
     if all_data:
         df = pd.DataFrame(all_data)
         df["GeoKey"] = df["Address"].str.lower().str.strip()
-        lat, lon = [], []
-        for address in df["GeoKey"]:
-            latitude, longitude = geocode_address(address)
-            lat.append(latitude)
-            lon.append(longitude)
-        df["Latitude"] = lat
-        df["Longitude"] = lon
+        df["Latitude"], df["Longitude"] = zip(*df["GeoKey"].apply(geocode_address))
         df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce', dayfirst=True)
 
+        df["Consent Status Enhanced"] = df["Consent Status"]
+        df.loc[
+            (df["Consent Status"] == "Active") &
+            (df["Expiry Date"] > datetime.now()) &
+            (df["Expiry Date"] <= datetime.now() + timedelta(days=90)),
+            "Consent Status Enhanced"
+        ] = "Expiring in 90 Days"
+
+        # Metrics
         st.subheader("Consent Summary Metrics")
         col1, col2, col3 = st.columns(3)
-        col1.markdown(f"<h3 style='color:#1f77b4'>{len(df)} Total Consents</h3>", unsafe_allow_html=True)
-        col2.markdown(f"<h3 style='color:#d62728'>{df['Consent Status'].value_counts().get('Expired', 0)} Expired</h3>", unsafe_allow_html=True)
-        exp_soon = df[(df["Expiry Date"] > datetime.now()) & (df["Expiry Date"] <= datetime.now() + timedelta(days=90))]
-        col3.markdown(f"<h3 style='color:#ff9900'>{len(exp_soon)} Expiring in 90 Days</h3>", unsafe_allow_html=True)
+        col1.metric("Total Consents", len(df))
+        col2.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
+        col3.metric("Expiring in 90 Days", (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum())
 
-        # Consent Status Chart
-df["Consent Status Enhanced"] = df["Consent Status"]
-df.loc[
-    (df["Consent Status"] == "Active") &
-    (df["Expiry Date"] > datetime.now()) &
-    (df["Expiry Date"] <= datetime.now() + timedelta(days=90)),
-    "Consent Status Enhanced"
-] = "Expiring in 90 Days"
+        # Status Chart
+        status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
+        status_counts.columns = ["Consent Status", "Count"]
+        color_map = {"Expired": "red", "Active": "blue", "Expiring in 90 Days": "orange"}
+        fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map)
+        fig_status.update_traces(textposition="outside")
+        fig_status.update_layout(title="Consent Status Overview", title_x=0.5)
+        st.plotly_chart(fig_status, use_container_width=True)
 
-# Bar chart: Red for Expired, Blue for Active, Orange for Expiring Soon
-status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
-status_counts.columns = ["Consent Status", "Count"]
-
-color_map = {
-    "Expired": "red",
-    "Active": "blue",
-    "Expiring in 90 Days": "orange"
-}
-
-fig_status = px.bar(
-    status_counts,
-    x="Consent Status",
-    y="Count",
-    text="Count",
-    title="Consent Status Overview",
-    color="Consent Status",
-    color_discrete_map=color_map
-)
-
-fig_status.update_traces(textposition="outside")
-fig_status.update_layout(
-    xaxis_title="Status",
-    yaxis_title="Number of Consents",
-    plot_bgcolor="#f9f9ff",
-    paper_bgcolor="#f9f9ff",
-    title_x=0.5
-)
-
-st.plotly_chart(fig_status, use_container_width=True)
-
-
-        with st.expander("Consent Table", expanded=True):
-            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status"].unique().tolist())
-            filtered_df = df if status_filter == "All" else df[df["Consent Status"] == status_filter]
-            st.dataframe(filtered_df.rename(columns={"__file_name__": "File Name"})[["File Name"] + [col for col in filtered_df.columns if col not in ["__file_name__", "Text Blob", "__file_bytes__", "GeoKey"]]])
-            csv_data = filtered_df.to_csv(index=False).encode("utf-8")
-            st.download_button("Download CSV", csv_data, "consents_summary.csv", "text/csv")
-
-        with st.expander("Consent Map", expanded=True):
+        # Consent Map
+        with st.expander("Consent Map", expanded=False):
             map_df = df.dropna(subset=["Latitude", "Longitude"])
             if not map_df.empty:
-                fig = px.scatter_mapbox(map_df, lat="Latitude", lon="Longitude", hover_name="Company Name", hover_data={"Company Name": True, "Address": True, "Consent Status": True, "Issue Date": True, "Expiry Date": True}, zoom=10, height=500, size_max=15, color_discrete_sequence=["blue"])
+                fig = px.scatter_mapbox(
+                    map_df,
+                    lat="Latitude",
+                    lon="Longitude",
+                    hover_name="Company Name",
+                    hover_data={
+                        "Address": True,
+                        "Consent Status Enhanced": True,
+                        "Issue Date": True,
+                        "Expiry Date": True
+                    },
+                    zoom=10,
+                    height=500,
+                    color="Consent Status Enhanced",
+                    color_discrete_map=color_map
+                )
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
-                fig.update_traces(marker=dict(size=12, color="blue", opacity=0.8))
                 st.plotly_chart(fig, use_container_width=True)
 
-        with st.expander("Semantic Search Results", expanded=True):
+        # Consent Table
+        with st.expander("Consent Table", expanded=False):
+            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
+            filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
+            display_df = filtered_df[[
+                "__file_name__", "Company Name", "Address", "Issue Date", "Expiry Date",
+                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
+            ]].rename(columns={"__file_name__": "File Name"})
+            st.dataframe(display_df)
+            csv = display_df.to_csv(index=False).encode("utf-8")
+            st.download_button("Download CSV", csv, "filtered_consents.csv", "text/csv")
+
+        # Semantic Search
+        with st.expander("Semantic Search Results", expanded=False):
             if query_input:
                 corpus = df["Text Blob"].tolist()
                 corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
@@ -292,12 +237,13 @@ st.plotly_chart(fig_status, use_container_width=True)
                     row = df.iloc[idx.item()]
                     st.markdown(f"**{i+1}. {row['Company Name']} - {row['Address']}**")
                     st.markdown(f"- **Triggers**: {row['AUP(OP) Triggers']}")
-                    st.markdown(f"- **Expires**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
+                    st.markdown(f"- **Expires**: {row['Expiry Date']}")
                     safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF  ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
+                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
                     st.markdown("---")
 
-        with st.expander("Ask AI About Consents"):
+        # Chatbot
+        with st.expander("Ask AI About Consents", expanded=False):
             st.markdown("Ask anything about air discharge consents: triggers, expiry, mitigation, or general trends.")
             chat_input = st.text_area("Ask a question:", key="chat_input")
             if st.button("Ask AI"):
@@ -320,23 +266,12 @@ st.plotly_chart(fig_status, use_container_width=True)
                                 )
                                 answer = response["choices"][0]["message"]["content"]
                             else:
-                                if "expired" in chat_input.lower():
-                                    count = df["Consent Status"].value_counts().get("Expired", 0)
-                                    answer = f"There are {count} expired consents currently."
-                                elif "trigger" in chat_input.lower():
-                                    top_triggers = df["AUP(OP) Triggers"].str.extractall(r'(E\d+\.\d+\.\d+)')[0].value_counts().head(3)
-                                    answer = f"The most common AUP triggers are: {', '.join(top_triggers.index)}."
-                                elif "mitigation" in chat_input.lower():
-                                    plans = df["Mitigation (Consent Conditions)"].dropna().str.split(", ").explode().value_counts().head(3)
-                                    answer = f"Frequent mitigation strategies include: {', '.join(plans.index)}."
-                                else:
-                                    answer = "AI assistant is offline (no API key). Try asking about expiry, triggers, or mitigation."
+                                answer = "AI assistant is offline (no API key). Try asking about expiry, triggers, or mitigation."
                             st.success("Answer:")
                             st.markdown(answer)
                             log_ai_chat(chat_input, answer)
                         except Exception as e:
                             st.error(f"AI error: {e}")
-
 
 st.markdown("---")
 st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
