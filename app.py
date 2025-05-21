@@ -17,12 +17,13 @@ import openai
 import os
 from dotenv import load_dotenv
 import csv
+import io
 
 # ------------------------
 # API Key Setup
 # ------------------------
 load_dotenv()
-openai.api_key = os.getenv("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")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # ------------------------
 # Streamlit Page Config & Style
@@ -113,8 +114,6 @@ def extract_metadata(text):
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
-import io
-
 def log_ai_chat(question, answer):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer}
@@ -127,15 +126,22 @@ def log_ai_chat(question, answer):
 
 def get_chat_log_as_csv():
     if os.path.exists("ai_chat_log.csv"):
-        df_log = pd.read_csv("ai_chat_log.csv")
-        output = io.StringIO()
-        df_log.to_csv(output, index=False)
-        return output.getvalue().encode("utf-8")
+        try:
+            df_log = pd.read_csv("ai_chat_log.csv")
+            if df_log.empty:
+                return None
+            output = io.StringIO()
+            df_log.to_csv(output, index=False)
+            return output.getvalue().encode("utf-8")
+        except pd.errors.EmptyDataError:
+            return None
     return None
-# Offer chat log download
+
 csv_log_bytes = get_chat_log_as_csv()
 if csv_log_bytes:
-    st.download_button("📥 Download AI Chat Log CSV", csv_log_bytes, file_name="ai_chat_log.csv", mime="text/csv")
+    st.download_button("\U0001F4C5 Download AI Chat Log CSV", csv_log_bytes, file_name="ai_chat_log.csv", mime="text/csv")
+else:
+    st.info("\U0001F4DD No chat logs available to download yet.")
 
 
 # ------------------------
