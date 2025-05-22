@@ -53,27 +53,29 @@ def get_auckland_weather():
         return "Weather unavailable"
 
 # ------------------------
-# Date, Time & Weather Banner
+# Date, Time & Weather Banner (Live Countdown)
 # ------------------------
-nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
-current_time = nz_time.strftime("%I:%M:%S %p")
 weather = get_auckland_weather()
-today = nz_time.strftime("%A, %d %B %Y")
-
-st.markdown(f"""
-    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
-      📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp;📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
-    </div>
-""", unsafe_allow_html=True)
-
-#---------------Title Bar-----------
-
 st.markdown("""
     <h1 style='color:#2c6e91; text-align:center; font-size:2.7em;'>
         Auckland Air Discharge Consent Dashboard
     </h1>
 """, unsafe_allow_html=True)
+
+with st.empty():
+    while True:
+        nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
+        today = nz_time.strftime("%A, %d %B %Y")
+        current_time = nz_time.strftime("%I:%M:%S %p")
+
+        st.markdown(f"""
+            <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
+                        border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
+            </div>
+        """, unsafe_allow_html=True)
+        time.sleep(1)
+
 
 # ------------------------
 # Utility Functions
