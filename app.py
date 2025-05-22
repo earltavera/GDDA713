@@ -68,11 +68,19 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
-        Auckland Air Discharge Consent Dashboard
-    </h1>
+    <link href='https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap' rel='stylesheet'>
+    <style>
+        .custom-title {
+            font-family: 'Montserrat', sans-serif;
+            color: #2c6e91;
+            text-align: center;
+            font-size: 2.7em;
+            margin-bottom: 0.5em;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
+st.markdown("<h1 class='custom-title'>Auckland Air Discharge Consent Dashboard</h1>", unsafe_allow_html=True)
 
 # ------------------------
 # Utility Functions
