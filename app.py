@@ -33,26 +33,6 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
 # ------------------------
-# Weather Function
-# ------------------------
-@st.cache_data(ttl=600)
-def get_auckland_weather():
-    api_key = os.getenv("OPENWEATHER_API_KEY")
-    if not api_key:
-        return "Sunny, 18°C (offline mode)"
-    url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={api_key}"
-    try:
-        response = requests.get(url)
-        data = response.json()
-        if data.get("cod") != 200:
-            return "Weather unavailable"
-        temp = data["main"]["temp"]
-        desc = data["weather"][0]["description"].title()
-        return f"{desc}, {temp:.1f}°C"
-    except:
-        return "Weather unavailable"
-
-# ------------------------
 # Date, Time & Weather Banner
 # ------------------------
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
@@ -164,7 +144,12 @@ def get_chat_log_as_csv():
 # ------------------------
 # Sidebar & Model Loader
 # ------------------------
-st.sidebar.title("Control Panel")
+st.sidebar.markdown("""
+    <h2 style='color:#2c6e91; font-family:Segoe UI, Roboto, sans-serif;'>
+        Control Panel
+    </h2>
+""", unsafe_allow_html=True)
+
 model_name = st.sidebar.selectbox("Choose LLM model:", [
     "all-MiniLM-L6-v2",
     "multi-qa-MiniLM-L6-cos-v1",
