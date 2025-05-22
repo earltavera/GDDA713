@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 import csv
 import io
 import requests
+import pytz
 
 # ------------------------
 # API Key Setup
@@ -52,18 +53,27 @@ def get_auckland_weather():
         return "Weather unavailable"
 
 # ------------------------
-# Date & Weather Banner
+# Date, Time & Weather Banner
 # ------------------------
-today = datetime.now().strftime("%A, %d %B %Y")
+nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
+today = nz_time.strftime("%A, %d %B %Y")
+current_time = nz_time.strftime("%I:%M %p")
 weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
-        📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
+        📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em;'>
+        Auckland Air Discharge Consent Dashboard
+    </h1>
+""", unsafe_allow_html=True)
+
+#---------------Title Bar-----------
 st.markdown("""
     <h1 style='color:#2c6e91; text-align:center; font-size:2.7em;'>
         Auckland Air Discharge Consent Dashboard
