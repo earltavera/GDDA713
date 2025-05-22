@@ -31,31 +31,14 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # ------------------------
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
-
-# Weather fetcher with caching
+# ------------------------
+# Weather Function
+# ------------------------
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
     if not api_key:
-        return None
-    url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={api_key}"
-    try:
-        response = requests.get(url)
-        data = response.json()
-        if data["cod"] != 200:
-            return None
-        temp = data["main"]["temp"]
-        weather_desc = data["weather"][0]["description"].title()
-        return f"{weather_desc}, {temp:.1f}°C"
-    except:
-        return None
-
-# Get current date and weather
-@st.cache_data(ttl=600)
-def get_auckland_weather():
-    api_key = os.getenv("OPENWEATHER_API_KEY")
-    if not api_key:
-        return "Sunny, 18°C (offline mode)"  # Dummy fallback
+        return "Sunny, 18°C (offline mode)"
     url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={api_key}"
     try:
         response = requests.get(url)
@@ -67,21 +50,22 @@ def get_auckland_weather():
         return f"{desc}, {temp:.1f}°C"
     except:
         return "Weather unavailable"
-        
-# Get current date and weather (with fallback)
+
+# ------------------------
+# Date & Weather Banner
+# ------------------------
 today = datetime.now().strftime("%A, %d %B %Y")
 weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                border-radius:10px; margin-bottom:15px; font-weight:500;'>
+                border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
 
-
 st.markdown("""
-    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; background-color:none; padding:15px; border-radius:12px;'>
+    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em;'>
         Auckland Air Discharge Consent Dashboard
     </h1>
 """, unsafe_allow_html=True)
