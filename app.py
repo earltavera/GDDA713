@@ -68,7 +68,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: 'Merriweather Sans', sans-serif;'>
+    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: 'Montserrat', sans-serif;'>
         Auckland Air Discharge Consent Dashboard
     </h1>
 """, unsafe_allow_html=True)
