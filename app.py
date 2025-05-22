@@ -57,7 +57,7 @@ def get_auckland_weather():
 # ------------------------
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
 today = nz_time.strftime("%A, %d %B %Y")
-current_time = nz_time.strftime("%I:%M:%S %p")
+current_time = nz_time.strftime("%I:%M:%p")
 weather = get_auckland_weather()
 
 st.markdown(f"""
