@@ -24,7 +24,6 @@ import pytz
 from openai import OpenAI
 client = OpenAI()
 
-
 # ------------------------
 # API Key Setup
 # ------------------------
@@ -92,6 +91,15 @@ def geocode_address(address):
     location = geocode(address)
     return (location.latitude, location.longitude) if location else (None, None)
 
+def parse_mixed_date(date_str):
+    formats = ["%d-%m-%Y", "%d/%m/%Y", "%d %B %Y", "%d %b %Y"]
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str.strip(), fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
 def extract_metadata(text):
     rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE)
     if not rc_matches:
@@ -101,19 +109,13 @@ def extract_metadata(text):
     company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
     address_str = "".join(dict.fromkeys(re.findall(r"Site address:\s*(.+?)(?=\s*Legal description)", text)))
 
-    matches_issue = re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})", text)
+    matches_issue = re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"Date:\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})", text)
     issue_str = "".join(dict.fromkeys(matches_issue))
-    try:
-        issue_date = datetime.strptime(issue_str, "%d %B %Y")
-    except:
-        issue_date = None
+    issue_date = parse_mixed_date(issue_str)
 
     matches_expiry = re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
     expiry_str = "".join(dict.fromkeys(matches_expiry))
-    try:
-        expiry_date = datetime.strptime(expiry_str, "%d %B %Y")
-    except:
-        expiry_date = None
+    expiry_date = parse_mixed_date(expiry_str)
 
     triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
     triggers_str = " ".join(dict.fromkeys(triggers))
@@ -164,7 +166,6 @@ def get_chat_log_as_csv():
             return None
     return None
 
-
 # ------------------------
 # Sidebar & Model Loader
 # ------------------------
@@ -211,6 +212,9 @@ if uploaded_files:
         df = pd.DataFrame(all_data)
         df["GeoKey"] = df["Address"].str.lower().str.strip()
         df["Latitude"], df["Longitude"] = zip(*df["GeoKey"].apply(geocode_address))
+
+        # Normalize dates after loading into DataFrame
+        df["Issue Date"] = pd.to_datetime(df["Issue Date"], errors='coerce', dayfirst=True)
         df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce', dayfirst=True)
 
         df["Consent Status Enhanced"] = df["Consent Status"]
@@ -224,128 +228,4 @@ if uploaded_files:
         # Metrics
         st.subheader("Consent Summary Metrics")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total Consents", len(df))
-        col2.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
-        col3.metric("Expiring in 90 Days", (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum())
-
-        # Status Chart
-        status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
-        status_counts.columns = ["Consent Status", "Count"]
-        color_map = {"Unknown": "gray", "Expired": "red", "Active": "green", "Expiring in 90 Days": "orange"}
-        fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map)
-        fig_status.update_traces(textposition="outside")
-        fig_status.update_layout(title="Consent Status Overview", title_x=0.5)
-        st.plotly_chart(fig_status, use_container_width=True)
-
-        # Consent Table
-    
-        with st.expander("Consent Table", expanded=True):
-            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
-            filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
-            display_df = filtered_df[[
-                "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
-                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
-            ]].rename(columns={
-                "__file_name__": "File Name",
-                "Consent Status Enhanced": "Consent Status"
-            })
-            st.dataframe(display_df)
-            csv = display_df.to_csv(index=False).encode("utf-8")
-            st.download_button("Download CSV", csv, "filtered_consents.csv", "text/csv")
-            
-        # Consent Map
-        with st.expander("Consent Map", expanded=True):
-            map_df = df.dropna(subset=["Latitude", "Longitude"])
-            if not map_df.empty:
-                fig = px.scatter_mapbox(
-                    map_df,
-                    lat="Latitude",
-                    lon="Longitude",
-                    hover_name="Company Name",
-                    hover_data={
-                        "Address": True,
-                        "Consent Status Enhanced": True,
-                        "Issue Date": True,
-                        "Expiry Date": True
-                    },
-                    zoom=10,
-                    height=500,
-                    color="Consent Status Enhanced",
-                    color_discrete_map=color_map
-                )
-                fig.update_traces(marker=dict(size=12))
-                fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
-                st.plotly_chart(fig, use_container_width=True)
-
-        
-        # Semantic Search
-        with st.expander("Semantic Search Results", expanded=True):
-            if query_input:
-                corpus = df["Text Blob"].tolist()
-                corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
-                query_embedding = model.encode(query_input, convert_to_tensor=True)
-                scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-                top_k = scores.argsort(descending=True)[:3]
-                for i, idx in enumerate(top_k):
-                    row = df.iloc[idx.item()]
-                    st.markdown(f"**{i+1}. {row['Company Name']} - {row['Address']}**")
-                    st.markdown(f"- **Triggers**: {row['AUP(OP) Triggers']}")
-                    st.markdown(f"- **Expires**: {row['Expiry Date']}")
-                    safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
-                    st.markdown("---")
-
-        # Chatbot
-with st.expander("Ask AI About Consents", expanded=True):
-    st.markdown("""
-        <div style="background-color:#ff8da1; padding:20px; border-radius:10px;">
-    """, unsafe_allow_html=True)
-
-    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
-    chat_input = st.text_area("Search any query:", key="chat_input")
-
-    if st.button("Ask AI"):
-        if not chat_input.strip():
-            st.warning("Please enter any query.")
-        else:
-            with st.spinner("AI is thinking..."):
-                try:
-                    context_sample = df[[
-                        "Company Name", "Consent Status", "AUP(OP) Triggers", 
-                        "Mitigation (Consent Conditions)", "Expiry Date"
-                    ]].dropna().head(10).to_dict(orient="records")
-
-                    messages = [
-                        {"role": "system", "content": "You are a helpful assistant specialized in environmental compliance and industrial air discharge consents. Use bullet points where possible and highlight key terms in bold."},
-                        {"role": "user", "content": f"Data sample: {context_sample}\n\nQuestion: {chat_input}"}
-                    ]
-
-                    response = client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=messages,
-                        max_tokens=500,
-                        temperature=0.7
-                    )
-                    answer_raw = response.choices[0].message.content
-                    answer = f"""\
-### 🧠 Answer from AI
-
-{answer_raw}
-"""
-                except Exception as e:
-                    answer = f"**AI error:** {e}"
-
-                st.markdown(answer, unsafe_allow_html=False)
-                log_ai_chat(chat_input, answer_raw)
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-
-st.markdown("---")
-st.markdown(
-    "<p style='text-align: center; color: orange; font-size: 0.9em;'>"
-    "Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025"
-    "</p>",
-    unsafe_allow_html=True
-)
+        col1.metric("Total Cons
