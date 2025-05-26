@@ -298,7 +298,7 @@ if uploaded_files:
         # Chatbot
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""
-        <div style="background-color:#f0f7f7; padding:20px; border-radius:10px;">
+        <div style="background-color:#ff8da1; padding:20px; border-radius:10px;">
     """, unsafe_allow_html=True)
 
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
