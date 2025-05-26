@@ -312,14 +312,14 @@ if uploaded_files:
                             ]
                 
                             if openai.api_key:
-                                response = openai.ChatCompletion.create(
+                                response = client.chat.completions.create(
                                     model="gpt-3.5-turbo",
                                     messages=messages,
                                     max_tokens=500,
                                     temperature=0.7
                                 )
-                                answer_raw = response["choices"][0]["message"]["content"]
-
+                                answer_raw = response.choices[0].message.content
+                                
             # Format for Markdown rendering
                                 answer = f"""\
 ### 🧠 Answer from AI
