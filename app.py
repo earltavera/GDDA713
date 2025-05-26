@@ -343,4 +343,9 @@ with st.expander("Ask AI About Consents", expanded=True):
 
 
 st.markdown("---")
-st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
+st.markdown(
+    "<p style='text-align: center; color: orange; font-size: 0.9em;'>"
+    "Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025"
+    "</p>",
+    unsafe_allow_html=True
+)
