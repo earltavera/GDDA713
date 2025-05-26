@@ -296,48 +296,50 @@ if uploaded_files:
                     st.markdown("---")
 
         # Chatbot
-        with st.expander("Ask AI About Consents", expanded=True):
-            st.markdown("Ask anything about air discharge consents: (e.g. triggers, expiry, mitigation, or general trends)")
-            chat_input = st.text_area("Search any query:", key="chat_input")
-            if st.button("Ask AI"):
-                if not chat_input.strip():
-                    st.warning("Please enter any query.")
-                else:
-                    with st.spinner("AI is thinking..."):
-                        try:
-                            context_sample = df[[
-                                "Company Name", "Consent Status", "AUP(OP) Triggers", 
-                                "Mitigation (Consent Conditions)", "Expiry Date"
-                            ]].dropna().head(10).to_dict(orient="records")
-                
-                            messages = [
-                                {"role": "system", "content": "You are a helpful assistant specialized in environmental compliance and industrial air discharge consents. Use bullet points where possible and highlight key terms in bold."},
-                                {"role": "user", "content": f"Data sample: {context_sample}\n\nQuestion: {chat_input}"}
-                            ]
-                
-                            if openai.api_key:
-                                response = client.chat.completions.create(
-                                    model="gpt-3.5-turbo",
-                                    messages=messages,
-                                    max_tokens=500,
-                                    temperature=0.7
-                                )
-                                answer_raw = response.choices[0].message.content
-                                
-            # Format for Markdown rendering
-                                answer = f"""\
+with st.expander("Ask AI About Consents", expanded=True):
+    st.markdown("""
+        <div style="background-color:#f0f7f7; padding:20px; border-radius:10px;">
+    """, unsafe_allow_html=True)
+
+    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
+    chat_input = st.text_area("Search any query:", key="chat_input")
+
+    if st.button("Ask AI"):
+        if not chat_input.strip():
+            st.warning("Please enter any query.")
+        else:
+            with st.spinner("AI is thinking..."):
+                try:
+                    context_sample = df[[
+                        "Company Name", "Consent Status", "AUP(OP) Triggers", 
+                        "Mitigation (Consent Conditions)", "Expiry Date"
+                    ]].dropna().head(10).to_dict(orient="records")
+
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant specialized in environmental compliance and industrial air discharge consents. Use bullet points where possible and highlight key terms in bold."},
+                        {"role": "user", "content": f"Data sample: {context_sample}\n\nQuestion: {chat_input}"}
+                    ]
+
+                    response = client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=messages,
+                        max_tokens=500,
+                        temperature=0.7
+                    )
+                    answer_raw = response.choices[0].message.content
+                    answer = f"""\
 ### 🧠 Answer from AI
 
 {answer_raw}
 """
-                            else:
-                                 answer = "**AI assistant is offline.** Try asking about expiry, triggers, or mitigation."
+                except Exception as e:
+                    answer = f"**AI error:** {e}"
 
-                            st.markdown(answer, unsafe_allow_html=False)
-                            log_ai_chat(chat_input, answer_raw)
+                st.markdown(answer, unsafe_allow_html=False)
+                log_ai_chat(chat_input, answer_raw)
 
-                        except Exception as e:
-                            st.error(f"AI error: {e}")
+    st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 st.markdown("---")
