@@ -19,20 +19,21 @@ import csv
 import io
 import requests
 import pytz
-from deepseek import ChatCompletion  # ✅ Use DeepSeek instead of OpenAI
+import openai  # ✅ Use OpenAI SDK pointed at DeepSeek API
 
 # ------------------------
 # API Key Setup
 # ------------------------
 load_dotenv()
-deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
+openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_base = os.getenv("OPENAI_API_BASE")  # ✅ DeepSeek API endpoint
 
 # ------------------------
 # Streamlit Page Config & Style
 # ------------------------
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
-# ... [Omitted: previous code remains unchanged] ...
+# [Rest of your code remains unchanged until the chatbot section]
 
 # Chatbot
 with st.expander("Ask AI About Consents", expanded=True):
@@ -55,8 +56,7 @@ with st.expander("Ask AI About Consents", expanded=True):
                         {"role": "user", "content": f"Data sample: {context_sample}\n\nQuestion: {chat_input}"}
                     ]
 
-                    response = ChatCompletion.create(
-                        api_key=deepseek_api_key,
+                    response = openai.ChatCompletion.create(
                         model="deepseek-chat",
                         messages=messages,
                         max_tokens=500,
