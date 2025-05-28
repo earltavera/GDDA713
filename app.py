@@ -208,7 +208,7 @@ with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
     chat_input = st.text_area("Search any query:", key="chat_input_ai")
 
-    if st.button("Ask AI"):
+    if st.button("Ask AI", key="ask_ai_button"):
         if not chat_input.strip():
             st.warning("Please enter a query.")
         else:
