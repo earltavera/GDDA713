@@ -350,7 +350,7 @@ chat_icon = "🤖"  # Chatbot icon for visual appeal
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
-    chat_input = st.text_area("Search any query:", key="chat_input_ai")
+    chat_input = st.text_area("Search any query:", key="chat_input_ai_unique")
 
     if st.button("Ask AI", key="ask_ai_button"):
         if not chat_input.strip():
