@@ -223,17 +223,21 @@ with st.expander("Ask AI About Consents", expanded=True):
                         ]].dropna().head(10).to_dict(orient="records")
 
                     response_text, model_used = ask_ai_with_fallback(chat_input, context_sample)
+                    if model_used == "Error":
+                        st.error(response_text)
+                        response_text = None
 
                     st.markdown(f"""
                     <h3 style='font-size:1.3em'>{chat_icon} Answer from AI <span style='color:#007bff'>(<strong>{model_used}</strong>)</span></h3>
                     <div style='padding-top:0.5em'>{response_text}</div>
                     """, unsafe_allow_html=True)
 
-                    if model_used != "Error":
+                    if response_text is not None:
                         log_ai_chat(chat_input, response_text)
                 except Exception as err:
                     st.error(f"AI failed: {err}")
     st.markdown("</div>", unsafe_allow_html=True)
+    
 # ------------------------
 # File Processing & Dashboard
 # ------------------------
