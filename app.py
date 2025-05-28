@@ -234,7 +234,6 @@ with st.expander("Ask AI About Consents", expanded=True):
                 except Exception as err:
                     st.error(f"AI failed: {err}")
     st.markdown("</div>", unsafe_allow_html=True)
-    
 # ------------------------
 # File Processing & Dashboard
 # ------------------------
