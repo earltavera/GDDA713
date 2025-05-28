@@ -1,6 +1,4 @@
-# --------------------------------------------
-# Auckland Air Discharge Consent Dashboard
-# --------------------------------------------
+# Auckland Air Discharge Consent Dashboard - Cleaned & Optimized
 
 import streamlit as st
 import pandas as pd
@@ -12,32 +10,25 @@ import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
-import base64
-import openai
 import os
 from dotenv import load_dotenv
 import csv
 import io
 import requests
 import pytz
-
 from openai import OpenAI
+
+# Initialize OpenAI Client
 client = OpenAI()
-
-# ------------------------
-# API Key Setup
-# ------------------------
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# ------------------------
-# Streamlit Page Config & Style
-# ------------------------
+# Streamlit Page Setup
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
-# ------------------------
+# ----------------
 # Weather Function
-# ------------------------
+# ----------------
+
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
@@ -54,10 +45,9 @@ def get_auckland_weather():
         return f"{desc}, {temp:.1f}°C"
     except:
         return "Weather unavailable"
-
-# ------------------------
-# Date, Time & Weather Banner
-# ------------------------
+# --------------------
+# Banner
+# --------------------
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
 today = nz_time.strftime("%A, %d %B %Y")
 current_time = nz_time.strftime("%I:%M %p")
@@ -76,9 +66,10 @@ st.markdown("""
     </h1>
 """, unsafe_allow_html=True)
 
-# ------------------------
+# --------------------
 # Utility Functions
-# ------------------------
+# --------------------
+
 def check_expiry(expiry_date):
     if expiry_date is None:
         return "Unknown"
@@ -101,27 +92,32 @@ def parse_mixed_date(date_str):
     return None
 
 def extract_metadata(text):
-    rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE)
-    if not rc_matches:
-        rc_matches = re.findall(r"RC[0-9]{5,}", text)
+    rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE) or re.findall(r"RC[0-9]{5,}", text)
     rc_str = "".join(dict.fromkeys(rc_matches))
 
     company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
     address_str = "".join(dict.fromkeys(re.findall(r"Site address:\s*(.+?)(?=\s*Legal description)", text)))
 
-    matches_issue = re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"Date:\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})", text)
-    issue_str = "".join(dict.fromkeys(matches_issue))
+    issue_str = "".join(dict.fromkeys(
+        re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) +
+        re.findall(r"Date:\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})", text)
+    ))
     issue_date = parse_mixed_date(issue_str)
 
-    matches_expiry = re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
-    expiry_str = "".join(dict.fromkeys(matches_expiry))
+    expiry_str = "".join(dict.fromkeys(
+        re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) +
+        re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
+    ))
     expiry_date = parse_mixed_date(expiry_str)
 
-    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
-    triggers_str = " ".join(dict.fromkeys(triggers))
+    triggers_str = " ".join(dict.fromkeys(
+        re.findall(r"E\d+\.\d+\.\d+", text) +
+        re.findall(r"E\d+\.\d+.", text) +
+        re.findall(r"NES:STO", text) +
+        re.findall(r"NES:AQ", text)
+    ))
 
     proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
-
     conditions_str = "".join(re.findall(r"(?<=Conditions).*?(?=Advice notes)", text, re.DOTALL))
     conditions_numbers = re.findall(r"^\d+(?=\.)", conditions_str, re.MULTILINE)
     managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in re.findall(r"(?i)\b(\w+)\sManagement Plan", conditions_str)]))
@@ -165,10 +161,11 @@ def get_chat_log_as_csv():
         except pd.errors.EmptyDataError:
             return None
     return None
-
-# ------------------------
+    
+# --------------------
 # Sidebar & Model Loader
-# ------------------------
+# --------------------
+
 st.sidebar.markdown("""
     <h2 style='color:#2c6e91; font-family:Segoe UI, Roboto, sans-serif;'>
         Control Panel
@@ -190,7 +187,6 @@ def load_model(name):
     return SentenceTransformer(name)
 
 model = load_model(model_name)
-
 # ------------------------
 # File Processing & Dashboard
 # ------------------------
