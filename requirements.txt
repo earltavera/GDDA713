@@ -1,36 +1,11 @@
-# Core framework
 streamlit
-
-# PDF parsing
-pymupdf
-
-# Data manipulation
 pandas
-
-# Date/time handling
-python-dateutil
-
-# NLP and semantic search
-sentence-transformers
-torch
-
-# Geolocation
-geopy
-
-# Map visualization
+PyMuPDF
 plotly
-folium
-streamlit-folium
-
-# OpenAI API access
-openai
-
-# Environment variable loading
+sentence-transformers
+geopy
 python-dotenv
-
-# Optional: fallback OCR if needed later
-pillow
-pytesseract
-
-#Gemini
+requests
+pytz
+openai
 google-generativeai
