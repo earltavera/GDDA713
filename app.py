@@ -1,4 +1,4 @@
-# Auckland Air Discharge Consent Dashboard - Cleaned & Optimized
+# Auckland Air Discharge Consent Dashboard - Cleaned & Optimized with Gemini Fallback
 
 import streamlit as st
 import pandas as pd
@@ -17,18 +17,17 @@ import io
 import requests
 import pytz
 from openai import OpenAI
+import google.generativeai as genai
 
-# Initialize OpenAI Client
-client = OpenAI()
+# Initialize Clients
 load_dotenv()
+client = OpenAI()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Streamlit Page Setup
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
-# ----------------
 # Weather Function
-# ----------------
-
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
@@ -45,9 +44,8 @@ def get_auckland_weather():
         return f"{desc}, {temp:.1f}°C"
     except:
         return "Weather unavailable"
-# --------------------
+
 # Banner
-# --------------------
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
 today = nz_time.strftime("%A, %d %B %Y")
 current_time = nz_time.strftime("%I:%M %p")
