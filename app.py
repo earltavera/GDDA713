@@ -327,7 +327,7 @@ if uploaded_files:
                         except Exception as e:
                             answer = f"**AI error:** {e}"
                         st.markdown(answer, unsafe_allow_html=False)
-                        log_ai_chat(chat_input, answer_raw)
+                        log_ai_chat(chat_input, response_text)
             st.markdown("</div>", unsafe_allow_html=True)
 
 # Footer
