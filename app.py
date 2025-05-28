@@ -1,4 +1,4 @@
-# Auckland Air Discharge Consent Dashboard - Cleaned & Optimized with Gemini Fallback
+# Auckland Air Discharge Consent Dashboard - Gemini Only Version with Model Selector
 
 import streamlit as st
 import pandas as pd
@@ -16,18 +16,22 @@ import csv
 import io
 import requests
 import pytz
-from openai import OpenAI
 import google.generativeai as genai
 
-# Initialize Clients
+# ------------------------
+# API Key Setup
+# ------------------------
 load_dotenv()
-client = OpenAI()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# Streamlit Page Setup
-st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
+# ------------------------
+# Streamlit Page Config
+# ------------------------
+st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="\U0001F1F3\U0001F1FF")
 
+# ------------------------
 # Weather Function
+# ------------------------
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
@@ -45,38 +49,9 @@ def get_auckland_weather():
     except:
         return "Weather unavailable"
 
-# Banner
-nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
-today = nz_time.strftime("%A, %d %B %Y")
-current_time = nz_time.strftime("%I:%M %p")
-weather = get_auckland_weather()
-
-st.markdown(f"""
-    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
-        📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong> &nbsp;&nbsp;&nbsp; 📍 <strong>Auckland</strong>
-    </div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
-        Auckland Air Discharge Consent Dashboard
-    </h1>
-""", unsafe_allow_html=True)
-
+# ------------------------
 # Utility Functions
-def check_expiry(expiry_date):
-    if expiry_date is None:
-        return "Unknown"
-    return "Expired" if expiry_date < datetime.now() else "Active"
-
-@st.cache_data(show_spinner=False)
-def geocode_address(address):
-    geolocator = Nominatim(user_agent="air_discharge_dashboard")
-    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-    location = geocode(address)
-    return (location.latitude, location.longitude) if location else (None, None)
-
+# ------------------------
 def parse_mixed_date(date_str):
     formats = ["%d-%m-%Y", "%d/%m/%Y", "%d %B %Y", "%d %b %Y"]
     for fmt in formats:
@@ -86,31 +61,35 @@ def parse_mixed_date(date_str):
             continue
     return None
 
+def check_expiry(expiry_date):
+    if expiry_date is None:
+        return "Unknown"
+    return "Expired" if expiry_date < datetime.now() else "Active"
+
+def geocode_address(address):
+    geolocator = Nominatim(user_agent="air_discharge_dashboard")
+    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+    location = geocode(address)
+    return (location.latitude, location.longitude) if location else (None, None)
+
 def extract_metadata(text):
     rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE) or re.findall(r"RC[0-9]{5,}", text)
     rc_str = "".join(dict.fromkeys(rc_matches))
-
     company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
     address_str = "".join(dict.fromkeys(re.findall(r"Site address:\s*(.+?)(?=\s*Legal description)", text)))
 
-    issue_str = "".join(dict.fromkeys(
-        re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) +
-        re.findall(r"Date:\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})", text)
-    ))
+    issue_str = "".join(dict.fromkeys(re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) +
+                                       re.findall(r"Date:\s*(\d{1,2}[/\\-]\d{1,2}[/\\-]\d{2,4})", text)))
     issue_date = parse_mixed_date(issue_str)
 
-    expiry_str = "".join(dict.fromkeys(
-        re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) +
-        re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
-    ))
+    expiry_str = "".join(dict.fromkeys(re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) +
+                                        re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)))
     expiry_date = parse_mixed_date(expiry_str)
 
-    triggers_str = " ".join(dict.fromkeys(
-        re.findall(r"E\d+\.\d+\.\d+", text) +
-        re.findall(r"E\d+\.\d+.", text) +
-        re.findall(r"NES:STO", text) +
-        re.findall(r"NES:AQ", text)
-    ))
+    triggers_str = " ".join(dict.fromkeys(re.findall(r"E\d+\.\d+\.\d+", text) +
+                                          re.findall(r"E\d+\.\d+.", text) +
+                                          re.findall(r"NES:STO", text) +
+                                          re.findall(r"NES:AQ", text)))
 
     proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
     conditions_str = "".join(re.findall(r"(?<=Conditions).*?(?=Advice notes)", text, re.DOTALL))
@@ -131,61 +110,108 @@ def extract_metadata(text):
         "Text Blob": text
     }
 
+def ask_ai_with_fallback(question, context_sample, model_name="gemini-pro"):
+    try:
+        prompt = f"""
+You are an expert assistant in environmental regulation. Summarize and extract key insights from the sample consent data and answer the user's question clearly.
+
+Instructions:
+- Use **bullet points** for multiple items
+- Highlight important terms in **bold**
+- If dates, rules (e.g., E14.1.1), or mitigation strategies are relevant, include them
+- Be concise and professional
+
+--- Sample Consent Data ---
+{context_sample}
+
+--- User Question ---
+{question}
+"""
+        gemini_model = genai.GenerativeModel(model_name)
+        response = gemini_model.generate_content(prompt)
+        return response.text, f"Gemini ({model_name})"
+    except Exception as e:
+        return f"Gemini AI failed: {e}", "Error"
+
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
-def log_ai_chat(question, answer):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer}
-    file_exists = os.path.isfile("ai_chat_log.csv")
-    with open("ai_chat_log.csv", mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Timestamp", "Question", "Answer"])
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(log_entry)
+def render_chatbot_section(uploaded_files, key_suffix="", gemini_model_name="gemini-pro"):
+    chat_icon = "🤖"
+    with st.expander("Ask AI About Consents", expanded=True):
+        st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
+        st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
 
-def get_chat_log_as_csv():
-    if os.path.exists("ai_chat_log.csv"):
-        try:
-            df_log = pd.read_csv("ai_chat_log.csv")
-            if df_log.empty:
-                return None
-            output = io.StringIO()
-            df_log.to_csv(output, index=False)
-            return output.getvalue().encode("utf-8")
-        except pd.errors.EmptyDataError:
-            return None
-    return None
+        chat_input = st.text_area("Search any query:", key=f"chat_input_ai_{key_suffix}")
 
-def ask_ai_with_fallback(question, context_sample):
-    try:
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant specializing in air discharge consent regulation."},
-            {"role": "user", "content": f"Data sample: {context_sample}\n\nQuestion: {question}"}
-        ]
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            max_tokens=500
-        )
-        return response.choices[0].message.content, "OpenAI"
-    except Exception as e:
-        try:
-            prompt = f"Context: {context_sample}\n\nQuestion: {question}"
-            gemini_model = genai.GenerativeModel("gemini-pro")
-            response = gemini_model.generate_content(prompt)
-            return response.text, "Gemini"
-        except Exception as e2:
-            return f"Error using both OpenAI and Gemini: {e} | {e2}", "Error"
+        if st.button("Ask AI", key=f"ask_ai_button_{key_suffix}"):
+            if not chat_input.strip():
+                st.warning("Please enter a query.")
+            else:
+                with st.spinner("AI is thinking..."):
+                    try:
+                        df_context = []
+                        if uploaded_files:
+                            for file in uploaded_files:
+                                file_bytes = file.read()
+                                with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+                                    text = doc[0].get_text()
+                                    metadata = extract_metadata(text)
+                                    metadata["__file_name__"] = file.name
+                                    metadata["__file_bytes__"] = file_bytes
+                                    df_context.append(metadata)
 
-# Sidebar & Model Loader
-st.sidebar.markdown("""
-    <h2 style='color:#2c6e91; font-family:Segoe UI, Roboto, sans-serif;'>
-        Control Panel
-    </h2>
-""", unsafe_allow_html=True)
+                        if not df_context:
+                            st.warning("No data found to build context for AI.")
+                            return
 
-model_name = st.sidebar.selectbox("Choose LLM model:", [
+                        df_context = pd.DataFrame(df_context)
+                        corpus = df_context["Text Blob"].tolist()
+                        corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
+                        query_embedding = model.encode(chat_input, convert_to_tensor=True)
+                        scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+                        top_k = scores.argsort(descending=True)[:3]
+                        top_matches = df_context.iloc[[i.item() for i in top_k]]
+
+                        context_sample = top_matches[[
+                            "Company Name", "Consent Status", "AUP(OP) Triggers",
+                            "Mitigation (Consent Conditions)", "Expiry Date"
+                        ]].dropna().to_dict(orient="records")
+
+                        response_text, model_used = ask_ai_with_fallback(chat_input, context_sample, model_name=gemini_model_name)
+
+                        if model_used == "Error":
+                            st.error(response_text)
+                            return
+
+                        st.markdown(f"""
+                            <h3 style='font-size:1.3em'>{chat_icon} Answer from AI <span style='color:#007bff'>(<strong>{model_used}</strong>)</span></h3>
+                            <div style='padding-top:0.5em'>{response_text}</div>
+                        """, unsafe_allow_html=True)
+
+                        st.markdown("---")
+                        st.subheader("📌 Related PDF Downloads")
+                        for i, (_, row) in enumerate(top_matches.iterrows(), 1):
+                            file_label = clean_surrogates(row['__file_name__'])
+                            st.markdown(f"**{i}. {row['Company Name']}** — *{row['Address']}*")
+                            st.download_button(
+                                label=f"📄 Download PDF: {file_label}",
+                                data=row["__file_bytes__"],
+                                file_name=file_label,
+                                mime="application/pdf",
+                                key=f"download_chat_{key_suffix}_{i}"
+                            )
+                            st.markdown("---")
+
+                    except Exception as err:
+                        st.error(f"AI failed: {err}")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# ------------------------
+# Sidebar Controls
+# ------------------------
+st.sidebar.title("Control Panel")
+model_name = st.sidebar.selectbox("Embedding Model", [
     "all-MiniLM-L6-v2",
     "multi-qa-MiniLM-L6-cos-v1",
     "BAAI/bge-base-en-v1.5",
@@ -195,196 +221,44 @@ model_name = st.sidebar.selectbox("Choose LLM model:", [
 uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
 query_input = st.sidebar.text_input("Semantic Search Query")
 
+# Gemini model selector
+gemini_model_name = st.sidebar.selectbox("Choose Gemini Model:", ["gemini-pro", "gemini-1.5-pro"], index=1)
+
 @st.cache_resource
 def load_model(name):
     return SentenceTransformer(name)
 
 model = load_model(model_name)
 
-# Chatbot Section
-chat_icon = "🤖"  # Chatbot icon for visual appeal
-with st.expander("Ask AI About Consents", expanded=True):
-    st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
-    chat_input = st.text_area("Search any query:", key="chat_input_ai")
+# ------------------------
+# Top Banner
+# ------------------------
+nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
+today = nz_time.strftime("%A, %d %B %Y")
+current_time = nz_time.strftime("%I:%M %p")
+weather = get_auckland_weather()
 
-    if st.button("Ask AI", key="ask_ai_button"):
-        if not chat_input.strip():
-            st.warning("Please enter a query.")
-        else:
-            with st.spinner("AI is thinking..."):
-                try:
-                    context_sample = []
-                    if uploaded_files:
-                        context_sample = pd.DataFrame([extract_metadata(fitz.open(stream=file.read(), filetype="pdf").get_page_text(0)) for file in uploaded_files])
-                        context_sample = context_sample[[
-                            "Company Name", "Consent Status", "AUP(OP) Triggers",
-                            "Mitigation (Consent Conditions)", "Expiry Date"
-                        ]].dropna().head(10).to_dict(orient="records")
+st.markdown(f"""
+    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
+                border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+        🗓️ <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong> &nbsp;&nbsp;&nbsp; 📍 <strong>Auckland</strong>
+    </div>
+""", unsafe_allow_html=True)
 
-                    response_text, model_used = ask_ai_with_fallback(chat_input, context_sample)
-                    if model_used == "Error":
-                        st.error(response_text)
-                        response_text = None
-
-                    if response_text is not None:
-                        st.markdown(f"""
-                        <h3 style='font-size:1.3em'>{chat_icon} Answer from AI <span style='color:#007bff'>(<strong>{model_used}</strong>)</span></h3>
-                        <div style='padding-top:0.5em'>{response_text}</div>
-                        """, unsafe_allow_html=True)
-
-                    if response_text is not None:
-                        if response_text is not None:
-                            log_ai_chat(chat_input, response_text)
-                except Exception as err:
-                    st.error(f"AI failed: {err}")
-    st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("""
+    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
+        Auckland Air Discharge Consent Dashboard
+    </h1>
+""", unsafe_allow_html=True)
 
 # ------------------------
-# File Processing & Dashboard
+# Chatbot Interface
 # ------------------------
-if uploaded_files:
-    all_data = []
-    for file in uploaded_files:
-        try:
-            file_bytes = file.read()
-            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-                text = "\n".join(page.get_text() for page in doc)
-            data = extract_metadata(text)
-            data["__file_name__"] = file.name
-            data["__file_bytes__"] = file_bytes
-            all_data.append(data)
-        except Exception as e:
-            st.error(f"Error processing {file.name}: {e}")
+render_chatbot_section(uploaded_files, key_suffix="main", gemini_model_name=gemini_model_name)
 
-    if all_data:
-        df = pd.DataFrame(all_data)
-        df["GeoKey"] = df["Address"].str.lower().str.strip()
-        df["Latitude"], df["Longitude"] = zip(*df["GeoKey"].apply(geocode_address))
-
-        # Normalize dates after loading into DataFrame
-        df["Issue Date"] = pd.to_datetime(df["Issue Date"], errors='coerce', dayfirst=True)
-        df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce', dayfirst=True)
-
-        df["Consent Status Enhanced"] = df["Consent Status"]
-        df.loc[
-            (df["Consent Status"] == "Active") &
-            (df["Expiry Date"] > datetime.now()) &
-            (df["Expiry Date"] <= datetime.now() + timedelta(days=90)),
-            "Consent Status Enhanced"
-        ] = "Expiring in 90 Days"
-
-        # Metrics
-        st.subheader("Consent Summary Metrics")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Consents", len(df))
-        col2.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
-        col3.metric("Expiring in 90 Days", (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum())
-
-        # Status Chart
-        status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
-        status_counts.columns = ["Consent Status", "Count"]
-        color_map = {"Unknown": "gray", "Expired": "red", "Active": "green", "Expiring in 90 Days": "orange"}
-        fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map)
-        fig_status.update_traces(textposition="outside")
-        fig_status.update_layout(title="Consent Status Overview", title_x=0.5)
-        st.plotly_chart(fig_status, use_container_width=True)
-
-        # Consent Table
-        with st.expander("Consent Table", expanded=True):
-            status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
-            filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
-            display_df = filtered_df[[
-                "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
-                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
-            ]].rename(columns={
-                "__file_name__": "File Name",
-                "Consent Status Enhanced": "Consent Status"
-            })
-            st.dataframe(display_df)
-            csv = display_df.to_csv(index=False).encode("utf-8")
-            st.download_button("Download CSV", csv, "filtered_consents.csv", "text/csv")
-
-        # Consent Map
-        with st.expander("Consent Map", expanded=True):
-            map_df = df.dropna(subset=["Latitude", "Longitude"])
-            if not map_df.empty:
-                fig = px.scatter_mapbox(
-                    map_df,
-                    lat="Latitude",
-                    lon="Longitude",
-                    hover_name="Company Name",
-                    hover_data={
-                        "Address": True,
-                        "Consent Status Enhanced": True,
-                        "Issue Date": True,
-                        "Expiry Date": True
-                    },
-                    zoom=10,
-                    height=500,
-                    color="Consent Status Enhanced",
-                    color_discrete_map=color_map
-                )
-                fig.update_traces(marker=dict(size=12))
-                fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
-                st.plotly_chart(fig, use_container_width=True)
-
-        # Semantic Search
-        with st.expander("Semantic Search Results", expanded=True):
-            if query_input:
-                corpus = df["Text Blob"].tolist()
-                corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
-                query_embedding = model.encode(query_input, convert_to_tensor=True)
-                scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-                top_k = scores.argsort(descending=True)[:3]
-                for i, idx in enumerate(top_k):
-                    row = df.iloc[idx.item()]
-                    st.markdown(f"**{i+1}. {row['Company Name']} - {row['Address']}**")
-                    st.markdown(f"- **Triggers**: {row['AUP(OP) Triggers']}")
-                    st.markdown(f"- **Expires**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}**")
-                    safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
-                    st.markdown("---")
-# Chatbot Section
-chat_icon = "🤖"  # Chatbot icon for visual appeal
-with st.expander("Ask AI About Consents", expanded=True):
-    st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
-    chat_input = st.text_area("Search any query:", key="chat_input_ai_unique")
-
-    if st.button("Ask AI", key="ask_ai_button_unique"):
-        if not chat_input.strip():
-            st.warning("Please enter a query.")
-        else:
-            with st.spinner("AI is thinking..."):
-                try:
-                    context_sample = []
-                    if uploaded_files:
-                        context_sample = pd.DataFrame([extract_metadata(fitz.open(stream=file.read(), filetype="pdf").get_page_text(0)) for file in uploaded_files])
-                        context_sample = context_sample[[
-                            "Company Name", "Consent Status", "AUP(OP) Triggers",
-                            "Mitigation (Consent Conditions)", "Expiry Date"
-                        ]].dropna().head(10).to_dict(orient="records")
-
-                    response_text, model_used = ask_ai_with_fallback(chat_input, context_sample)
-                    if model_used == "Error":
-                        st.error(response_text)
-                        response_text = None
-
-                    if response_text is not None:
-                        st.markdown(f"""
-                        <h3 style='font-size:1.3em'>{chat_icon} Answer from AI <span style='color:#007bff'>(<strong>{model_used}</strong>)</span></h3>
-                        <div style='padding-top:0.5em'>{response_text}</div>
-                        """, unsafe_allow_html=True)
-
-                    if response_text is not None:
-                        if response_text is not None:
-                            log_ai_chat(chat_input, response_text)
-                except Exception as err:
-                    st.error(f"AI failed: {err}")
-    st.markdown("</div>", unsafe_allow_html=True)
-
+# ------------------------
 # Footer
+# ------------------------
 st.markdown("---")
 st.markdown(
     "<p style='text-align: center; color: orange; font-size: 0.9em;'>"
