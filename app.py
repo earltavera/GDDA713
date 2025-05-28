@@ -1,4 +1,3 @@
-
 # Auckland Air Discharge Consent Dashboard - Cleaned & Optimized with Gemini Fallback
 
 import streamlit as st
@@ -235,7 +234,8 @@ with st.expander("Ask AI About Consents", expanded=True):
                         """, unsafe_allow_html=True)
 
                     if response_text is not None:
-                        log_ai_chat(chat_input, response_text)
+                        if response_text is not None:
+                            log_ai_chat(chat_input, response_text)
                 except Exception as err:
                     st.error(f"AI failed: {err}")
     st.markdown("</div>", unsafe_allow_html=True)
