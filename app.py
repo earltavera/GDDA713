@@ -352,7 +352,7 @@ with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
     chat_input = st.text_area("Search any query:", key="chat_input_ai_unique")
 
-    if st.button("Ask AI", key="ask_ai_button"):
+    if st.button("Ask AI", key="ask_ai_button_unique"):
         if not chat_input.strip():
             st.warning("Please enter a query.")
         else:
@@ -383,8 +383,6 @@ with st.expander("Ask AI About Consents", expanded=True):
                 except Exception as err:
                     st.error(f"AI failed: {err}")
     st.markdown("</div>", unsafe_allow_html=True)
-
-       
 
 # Footer
 st.markdown("---")
