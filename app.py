@@ -345,6 +345,44 @@ if uploaded_files:
                     safe_filename = clean_surrogates(row['__file_name__'])
                     st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
                     st.markdown("---")
+# Chatbot Section
+chat_icon = "🤖"  # Chatbot icon for visual appeal
+with st.expander("Ask AI About Consents", expanded=True):
+    st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
+    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
+    chat_input = st.text_area("Search any query:", key="chat_input_ai")
+
+    if st.button("Ask AI", key="ask_ai_button"):
+        if not chat_input.strip():
+            st.warning("Please enter a query.")
+        else:
+            with st.spinner("AI is thinking..."):
+                try:
+                    context_sample = []
+                    if uploaded_files:
+                        context_sample = pd.DataFrame([extract_metadata(fitz.open(stream=file.read(), filetype="pdf").get_page_text(0)) for file in uploaded_files])
+                        context_sample = context_sample[[
+                            "Company Name", "Consent Status", "AUP(OP) Triggers",
+                            "Mitigation (Consent Conditions)", "Expiry Date"
+                        ]].dropna().head(10).to_dict(orient="records")
+
+                    response_text, model_used = ask_ai_with_fallback(chat_input, context_sample)
+                    if model_used == "Error":
+                        st.error(response_text)
+                        response_text = None
+
+                    if response_text is not None:
+                        st.markdown(f"""
+                        <h3 style='font-size:1.3em'>{chat_icon} Answer from AI <span style='color:#007bff'>(<strong>{model_used}</strong>)</span></h3>
+                        <div style='padding-top:0.5em'>{response_text}</div>
+                        """, unsafe_allow_html=True)
+
+                    if response_text is not None:
+                        if response_text is not None:
+                            log_ai_chat(chat_input, response_text)
+                except Exception as err:
+                    st.error(f"AI failed: {err}")
+    st.markdown("</div>", unsafe_allow_html=True)
 
        
 
