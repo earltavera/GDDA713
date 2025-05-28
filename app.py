@@ -1,4 +1,4 @@
-# Auckland Air Discharge Consent Dashboard - Cleaned & Optimized
+# Auckland Air Discharge Consent Dashboard - Cleaned & Optimized with Gemini Fallback
 
 import streamlit as st
 import pandas as pd
@@ -17,18 +17,17 @@ import io
 import requests
 import pytz
 from openai import OpenAI
+import google.generativeai as genai
 
-# Initialize OpenAI Client
-client = OpenAI()
+# Initialize Clients
 load_dotenv()
+client = OpenAI()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Streamlit Page Setup
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
-# ----------------
 # Weather Function
-# ----------------
-
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
@@ -45,9 +44,8 @@ def get_auckland_weather():
         return f"{desc}, {temp:.1f}°C"
     except:
         return "Weather unavailable"
-# --------------------
+
 # Banner
-# --------------------
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
 today = nz_time.strftime("%A, %d %B %Y")
 current_time = nz_time.strftime("%I:%M %p")
@@ -66,10 +64,7 @@ st.markdown("""
     </h1>
 """, unsafe_allow_html=True)
 
-# --------------------
 # Utility Functions
-# --------------------
-
 def check_expiry(expiry_date):
     if expiry_date is None:
         return "Unknown"
@@ -161,11 +156,29 @@ def get_chat_log_as_csv():
         except pd.errors.EmptyDataError:
             return None
     return None
-    
-# --------------------
-# Sidebar & Model Loader
-# --------------------
 
+def ask_ai_with_fallback(question, context_sample):
+    try:
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant specializing in air discharge consent regulation."},
+            {"role": "user", "content": f"Data sample: {context_sample}\n\nQuestion: {question}"}
+        ]
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=500
+        )
+        return response.choices[0].message.content, "OpenAI"
+    except Exception as e:
+        try:
+            prompt = f"Context: {context_sample}\n\nQuestion: {question}"
+            gemini_model = genai.GenerativeModel("gemini-pro")
+            response = gemini_model.generate_content(prompt)
+            return response.text, "Gemini"
+        except Exception as e2:
+            return f"Error using both OpenAI and Gemini: {e} | {e2}", "Error"
+
+# Sidebar & Model Loader
 st.sidebar.markdown("""
     <h2 style='color:#2c6e91; font-family:Segoe UI, Roboto, sans-serif;'>
         Control Panel
@@ -187,6 +200,39 @@ def load_model(name):
     return SentenceTransformer(name)
 
 model = load_model(model_name)
+
+# Chatbot Section
+chat_icon = "🤖"  # Chatbot icon for visual appeal
+with st.expander("Ask AI About Consents", expanded=True):
+    st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
+    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
+    chat_input = st.text_area("Search any query:", key="chat_input")
+
+    if st.button("Ask AI"):
+        if not chat_input.strip():
+            st.warning("Please enter a query.")
+        else:
+            with st.spinner("AI is thinking..."):
+                try:
+                    context_sample = []
+                    if uploaded_files:
+                        context_sample = pd.DataFrame([extract_metadata(fitz.open(stream=file.read(), filetype="pdf").get_page_text(0)) for file in uploaded_files])
+                        context_sample = context_sample[[
+                            "Company Name", "Consent Status", "AUP(OP) Triggers",
+                            "Mitigation (Consent Conditions)", "Expiry Date"
+                        ]].dropna().head(10).to_dict(orient="records")
+
+                    response_text, model_used = ask_ai_with_fallback(chat_input, context_sample)
+
+                    st.markdown(f"""
+                    <h3 style='font-size:1.3em'>{chat_icon} Answer from AI <span style='color:#007bff'>(<strong>{model_used}</strong>)</span></h3>
+                    <div style='padding-top:0.5em'>{response_text}</div>
+                    """, unsafe_allow_html=True)
+
+                    log_ai_chat(chat_input, response_text)
+                except Exception as err:
+                    st.error(f"AI failed: {err}")
+    st.markdown("</div>", unsafe_allow_html=True)
 # ------------------------
 # File Processing & Dashboard
 # ------------------------
