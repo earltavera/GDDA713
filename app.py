@@ -274,22 +274,66 @@ if uploaded_files:
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
                 st.plotly_chart(fig, use_container_width=True)
 
-        # Semantic Search
-        with st.expander("Semantic Search Results", expanded=True):
-            if query_input:
-                corpus = df["Text Blob"].tolist()
-                corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
-                query_embedding = model.encode(query_input, convert_to_tensor=True)
-                scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-                top_k = scores.argsort(descending=True)[:3]
-                for i, idx in enumerate(top_k):
-                    row = df.iloc[idx.item()]
-                    st.markdown(f"**{i+1}. {row['Company Name']} - {row['Address']}**")
-                    st.markdown(f"- **Triggers**: {row['AUP(OP) Triggers']}")
-                    st.markdown(f"- **Expires**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}**")
-                    safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
-                    st.markdown("---")
+        # Enhanced Semantic Search Section
+with st.expander("Semantic Search Results", expanded=True):
+    if query_input:
+        st.info("Running enhanced semantic + structured search...")
+        def normalize(text):
+            return re.sub(r"\s+", " ", str(text).lower())
+
+        # Combine structured fields for better embedding
+        corpus = (
+            df["Company Name"].fillna("") + " | " +
+            df["Address"].fillna("") + " | " +
+            df["AUP(OP) Triggers"].fillna("") + " | " +
+            df["Mitigation (Consent Conditions)"].fillna("") + " | " +
+            df["Reason for Consent"].fillna("") + " | " +
+            df["Consent Conditions"].fillna("") + " | " +
+            df["Resource Consent Numbers"].fillna("") + " | " +
+            df["Text Blob"].fillna("")
+        ).apply(normalize).tolist()
+
+        query_input_norm = normalize(query_input)
+        corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
+        query_embedding = model.encode(query_input_norm, convert_to_tensor=True)
+
+        # Dot-product if E5/BGE model
+        if "e5" in model_name or "bge" in model_name:
+            scores = query_embedding @ corpus_embeddings.T
+        else:
+            scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+
+        top_k = scores.argsort(descending=True)[:5]
+
+        # Fallback keyword matching logic
+        keyword_matches = df[
+            df["Address"].str.contains(query_input, case=False, na=False) |
+            df["Resource Consent Numbers"].str.contains(query_input, case=False, na=False) |
+            df["Reason for Consent"].str.contains(query_input, case=False, na=False)
+        ]
+
+        if top_k is not None and any(scores[top_k] > 0.3):
+            st.success("Top semantic results:")
+            for i, idx in enumerate(top_k):
+                row = df.iloc[idx.item()]
+                st.markdown(f"**{i+1}. {row['Company Name']}**")
+                st.markdown(f"- 📍 **Address**: {row['Address']}")
+                st.markdown(f"- 🔢 **Consent Number**: {row['Resource Consent Numbers']}")
+                st.markdown(f"- 📜 **Reason**: {row['Reason for Consent']}")
+                st.markdown(f"- ⏳ **Expiry**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
+                st.markdown("---")
+
+        elif not keyword_matches.empty:
+            st.info("Showing keyword-based results:")
+            for i, row in keyword_matches.head(5).iterrows():
+                st.markdown(f"**{row['Company Name']}**")
+                st.markdown(f"- 📍 **Address**: {row['Address']}")
+                st.markdown(f"- 🔢 **Consent Number**: {row['Resource Consent Numbers']}")
+                st.markdown(f"- ⏳ **Expiry**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
+                st.markdown("---")
+        else:
+            st.warning("No strong semantic or keyword matches found.")
+
 
         # Chatbot
         with st.expander("Ask AI About Consents", expanded=True):
