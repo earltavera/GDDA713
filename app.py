@@ -137,12 +137,14 @@ def extract_metadata(text):
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
-def log_ai_chat(question, answer):
+def log_ai_chat(question, answer_raw):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer}
-    file_exists = os.path.isfile("ai_chat_log.csv")
-    with open("ai_chat_log.csv", mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Timestamp", "Question", "Answer"])
+    file_path = "ai_chat_log.csv"
+    file_exists = os.path.isfile(file_path)
+
+    with open(file_path, mode="a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=["Timestamp", "Question", "Answer"])
         if not file_exists:
             writer.writeheader()
         writer.writerow(log_entry)
@@ -247,8 +249,8 @@ if uploaded_files:
                 "Consent Status Enhanced": "Consent Status"
             })
             st.dataframe(display_df)
-            csv = display_df.to_csv(index=False).encode("utf-8")
-            st.download_button("Download CSV", csv, "filtered_consents.csv", "text/csv")
+            csv_data = display_df.to_csv(index=False).encode("utf-8")
+            st.download_button("Download CSV", csv_data, "filtered_consents.csv", "text/csv")
 
         # Consent Map
         with st.expander("Consent Map", expanded=True):
