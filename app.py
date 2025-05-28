@@ -278,10 +278,10 @@ if uploaded_files:
 with st.expander("Semantic Search Results", expanded=True):
     if query_input:
         st.info("Running enhanced semantic + structured search...")
+
         def normalize(text):
             return re.sub(r"\s+", " ", str(text).lower())
 
-        # Combine structured fields for better embedding
         corpus = (
             df["Company Name"].fillna("") + " | " +
             df["Address"].fillna("") + " | " +
@@ -297,7 +297,6 @@ with st.expander("Semantic Search Results", expanded=True):
         corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
         query_embedding = model.encode(query_input_norm, convert_to_tensor=True)
 
-        # Dot-product if E5/BGE model
         if "e5" in model_name or "bge" in model_name:
             scores = query_embedding @ corpus_embeddings.T
         else:
@@ -305,7 +304,6 @@ with st.expander("Semantic Search Results", expanded=True):
 
         top_k = scores.argsort(descending=True)[:5]
 
-        # Fallback keyword matching logic
         keyword_matches = df[
             df["Address"].str.contains(query_input, case=False, na=False) |
             df["Resource Consent Numbers"].str.contains(query_input, case=False, na=False) |
@@ -321,6 +319,14 @@ with st.expander("Semantic Search Results", expanded=True):
                 st.markdown(f"- 🔢 **Consent Number**: {row['Resource Consent Numbers']}")
                 st.markdown(f"- 📜 **Reason**: {row['Reason for Consent']}")
                 st.markdown(f"- ⏳ **Expiry**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
+                safe_filename = clean_surrogates(row['__file_name__'])
+                st.download_button(
+                    label=f"📄 Download PDF: {safe_filename}",
+                    data=row['__file_bytes__'],
+                    file_name=safe_filename,
+                    mime="application/pdf",
+                    key=f"download_semantic_{i}"
+                )
                 st.markdown("---")
 
         elif not keyword_matches.empty:
@@ -330,6 +336,14 @@ with st.expander("Semantic Search Results", expanded=True):
                 st.markdown(f"- 📍 **Address**: {row['Address']}")
                 st.markdown(f"- 🔢 **Consent Number**: {row['Resource Consent Numbers']}")
                 st.markdown(f"- ⏳ **Expiry**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
+                safe_filename = clean_surrogates(row['__file_name__'])
+                st.download_button(
+                    label=f"📄 Download PDF: {safe_filename}",
+                    data=row['__file_bytes__'],
+                    file_name=safe_filename,
+                    mime="application/pdf",
+                    key=f"download_keyword_{i}"
+                )
                 st.markdown("---")
         else:
             st.warning("No strong semantic or keyword matches found.")
