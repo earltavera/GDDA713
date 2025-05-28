@@ -227,10 +227,11 @@ with st.expander("Ask AI About Consents", expanded=True):
                         st.error(response_text)
                         response_text = None
 
-                    st.markdown(f"""
-                    <h3 style='font-size:1.3em'>{chat_icon} Answer from AI <span style='color:#007bff'>(<strong>{model_used}</strong>)</span></h3>
-                    <div style='padding-top:0.5em'>{response_text}</div>
-                    """, unsafe_allow_html=True)
+                    if response_text is not None:
+                        st.markdown(f"""
+                        <h3 style='font-size:1.3em'>{chat_icon} Answer from AI <span style='color:#007bff'>(<strong>{model_used}</strong>)</span></h3>
+                        <div style='padding-top:0.5em'>{response_text}</div>
+                        """, unsafe_allow_html=True)
 
                     if response_text is not None:
                         log_ai_chat(chat_input, response_text)
