@@ -1,4 +1,7 @@
-# Auckland Air Discharge Consent Dashboard - Cleaned & Optimized with Gemini Fallback
+# Auckland Air Discharge Consent Dashboard - Complete with Gemini, OpenAI, and Groq Chatbot
+
+import streamlit as st
+st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
 import pandas as pd
 import pymupdf
@@ -25,17 +28,14 @@ client = OpenAI()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 groq_api_key = os.getenv("GROQ_API_KEY")
 
-# Streamlit Page Setup
-st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
-
 # Weather Function
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
     if not api_key:
         return "Sunny, 18°C (offline mode)"
-    url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={api_key}"
     try:
+        url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={api_key}"
         response = requests.get(url)
         data = response.json()
         if data.get("cod") != 200:
@@ -45,6 +45,7 @@ def get_auckland_weather():
         return f"{desc}, {temp:.1f}°C"
     except:
         return "Weather unavailable"
+
 
 # Banner
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
