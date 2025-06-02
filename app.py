@@ -360,7 +360,7 @@ with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "Groq"], horizontal=True)
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq"], horizontal=True)
     chat_input = st.text_area("Search any query:", key="chat_input")
 
     if st.button("Ask AI"):
@@ -369,12 +369,19 @@ with st.expander("Ask AI About Consents", expanded=True):
         else:
             with st.spinner("AI is thinking..."):
                 try:
-                    context_sample = [
-                        {"Company Name": "ABC Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1", 
-                         "Mitigation (Consent Conditions)": "Dust Management Plan", "Expiry Date": "2025-12-31"},
-                        {"Company Name": "XYZ Corp", "Consent Status": "Expired", "AUP(OP) Triggers": "E14.2.3", 
-                         "Mitigation (Consent Conditions)": "Odour Management Plan", "Expiry Date": "2023-07-01"},
-                    ]
+                    # Use actual context from uploaded PDF/CSV in the real app
+                    if "df" in locals():
+                        context_sample = df[[
+                            "Company Name", "Consent Status", "AUP(OP) Triggers",
+                            "Mitigation (Consent Conditions)", "Expiry Date"
+                        ]].dropna().head(5).to_dict(orient="records")
+                    else:
+                        context_sample = [
+                            {"Company Name": "ABC Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1", 
+                             "Mitigation (Consent Conditions)": "Dust Management Plan", "Expiry Date": "2025-12-31"},
+                            {"Company Name": "XYZ Corp", "Consent Status": "Expired", "AUP(OP) Triggers": "E14.2.3", 
+                             "Mitigation (Consent Conditions)": "Odour Management Plan", "Expiry Date": "2023-07-01"},
+                        ]
 
                     user_query = f"""
 Use the following air discharge consent data to answer the user query.
@@ -388,15 +395,26 @@ Query: {chat_input}
 
 Please provide your answer in bullet points.
 """
+
                     if llm_provider == "Gemini":
                         response = genai.generate_text(model="gemini-pro", prompt=user_query)
                         answer_raw = response.result
+                    elif llm_provider == "OpenAI":
+                        messages = [
+                            {"role": "system", "content": "You are a helpful assistant for environmental consents."},
+                            {"role": "user", "content": user_query}
+                        ]
+                        response = client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=messages,
+                            max_tokens=500,
+                            temperature=0.7
+                        )
+                        answer_raw = response.choices[0].message.content
                     elif llm_provider == "Groq":
-                        if not groq_api_key:
-                            raise ValueError("Missing GROQ_API_KEY")
-                        llm = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
-                        result = llm.invoke(user_query)
-                        answer_raw = result.content if hasattr(result, 'content') else result
+                        chat = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
+                        result = chat.invoke(user_query)
+                        answer_raw = result.content if hasattr(result, 'content') else str(result)
 
                     answer = f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}"
                 except Exception as e:
