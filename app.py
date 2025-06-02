@@ -19,10 +19,11 @@ import pytz
 from openai import OpenAI
 import google.generativeai as genai
 
-# Initialize Clients
+# Load Environment Variables
 load_dotenv()
 client = OpenAI()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+groq_api_key = os.getenv("GROQ_API_KEY")
 
 # Streamlit Page Setup
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
