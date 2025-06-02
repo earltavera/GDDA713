@@ -1,6 +1,5 @@
 # Auckland Air Discharge Consent Dashboard - Cleaned & Optimized with Gemini Fallback
 
-import streamlit as st
 import pandas as pd
 import pymupdf
 fitz = pymupdf
@@ -369,7 +368,6 @@ with st.expander("Ask AI About Consents", expanded=True):
         else:
             with st.spinner("AI is thinking..."):
                 try:
-                    # Use actual context from uploaded PDF/CSV in the real app
                     if "df" in locals():
                         context_sample = df[[
                             "Company Name", "Consent Status", "AUP(OP) Triggers",
@@ -397,8 +395,9 @@ Please provide your answer in bullet points.
 """
 
                     if llm_provider == "Gemini":
-                        response = genai.generate_text(model="gemini-pro", prompt=user_query)
-                        answer_raw = response.result
+                        model = genai.GenerativeModel("gemini-pro")
+                        response = model.generate_content(user_query)
+                        answer_raw = response.text
                     elif llm_provider == "OpenAI":
                         messages = [
                             {"role": "system", "content": "You are a helpful assistant for environmental consents."},
