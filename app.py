@@ -24,9 +24,9 @@ from langchain_groq import ChatGroq
 
 # Load Environment Variables
 load_dotenv()
+groq_api_key = os.getenv("GROQ_API_KEY")
 client = OpenAI()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-groq_api_key = os.getenv("GROQ_API_KEY")
 
 # Weather Function
 @st.cache_data(ttl=600)
