@@ -18,6 +18,7 @@ import requests
 import pytz
 from openai import OpenAI
 import google.generativeai as genai
+from langchain_groq import ChatGroq
 
 # Load Environment Variables
 load_dotenv()
