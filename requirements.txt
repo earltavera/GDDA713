@@ -9,3 +9,5 @@ requests
 pytz
 openai
 google-generativeai
+langchain-groq>=0.0.1
+
