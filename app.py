@@ -353,13 +353,12 @@ with st.expander("Semantic Search Results", expanded=True):
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-
 st.markdown("### 🤖 Ask AI About Consents")
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI"], horizontal=True)
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "Groq"], horizontal=True)
     chat_input = st.text_area("Search any query:", key="chat_input")
 
     if st.button("Ask AI"):
@@ -387,22 +386,15 @@ Query: {chat_input}
 
 Please provide your answer in bullet points.
 """
-
                     if llm_provider == "Gemini":
                         response = genai.generate_text(model="gemini-pro", prompt=user_query)
                         answer_raw = response.result
-                    elif llm_provider == "OpenAI":
-                        messages = [
-                            {"role": "system", "content": "You are a helpful assistant for environmental consents."},
-                            {"role": "user", "content": user_query}
-                        ]
-                        response = client.chat.completions.create(
-                            model="gpt-3.5-turbo",
-                            messages=messages,
-                            max_tokens=500,
-                            temperature=0.7
-                        )
-                        answer_raw = response.choices[0].message.content
+                    elif llm_provider == "Groq":
+                        if not groq_api_key:
+                            raise ValueError("Missing GROQ_API_KEY")
+                        llm = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
+                        result = llm.invoke(user_query)
+                        answer_raw = result.content if hasattr(result, 'content') else result
 
                     answer = f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}"
                 except Exception as e:
