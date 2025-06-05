@@ -381,12 +381,12 @@ with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq"], horizontal=True)
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq", "HuggingFace"], horizontal=True)
     chat_input = st.text_area("Search any query:", key="chat_input")
 
     if st.button("Ask AI"):
         if not chat_input.strip():
-            st.warning("Please enter any query.")
+            st.warning("Please enter a query.")
         else:
             with st.spinner("AI is thinking..."):
                 try:
@@ -396,12 +396,7 @@ with st.expander("Ask AI About Consents", expanded=True):
                             "Mitigation (Consent Conditions)", "Expiry Date"
                         ]].dropna().head(5).to_dict(orient="records")
                     else:
-                        context_sample = [
-                            {"Company Name": "ABC Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1", 
-                             "Mitigation (Consent Conditions)": "Dust Management Plan", "Expiry Date": "2025-12-31"},
-                            {"Company Name": "XYZ Corp", "Consent Status": "Expired", "AUP(OP) Triggers": "E14.2.3", 
-                             "Mitigation (Consent Conditions)": "Odour Management Plan", "Expiry Date": "2023-07-01"},
-                        ]
+                        context_sample = [{"Company Name": "ABC Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1", "Mitigation (Consent Conditions)": "Dust Management Plan", "Expiry Date": "2025-12-31"}]
 
                     user_query = f"""
 Use the following air discharge consent data to answer the user query.
@@ -440,11 +435,14 @@ Please provide your answer in bullet points.
                             {"role": "user", "content": user_query}
                         ])
                         answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                    elif llm_provider == "HuggingFace":
+                        hf_prompt = f"Answer this environmental compliance query based on the sample data: {user_query}"
+                        hf_result = hf_chatbot(hf_prompt, max_length=512, do_sample=False)
+                        answer_raw = hf_result[0]['generated_text']
 
-                    answer = f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}"
+                    st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
                 except Exception as e:
-                    answer = f"**AI error:** {e}"
-                st.markdown(answer, unsafe_allow_html=False)
+                    st.error(f"AI error: {e}")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Footer
@@ -453,5 +451,4 @@ st.markdown(
     "<p style='text-align: center; color: orange; font-size: 0.9em;'>"
     "Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025"
     "</p>",
-    unsafe_allow_html=True
-)
+    unsafe_allow_html=True)
