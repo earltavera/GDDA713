@@ -46,6 +46,27 @@ def get_auckland_weather():
     except:
         return "Weather unavailable"
 
+# File Processing with OCR Fallback
+if 'uploaded_files' in locals() and uploaded_files:
+    all_data = []
+    for file in uploaded_files:
+        try:
+            file_bytes = file.read()
+            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+                text = "\n".join(page.get_text() for page in doc)
+
+            if not text.strip():
+                st.warning(f"{file.name} appears to be image-based. Using OCR...")
+                images = convert_from_bytes(file_bytes)
+                text = "\n".join(pytesseract.image_to_string(img) for img in images)
+
+            data = extract_metadata(text)
+            data["__file_name__"] = file.name
+            data["__file_bytes__"] = file_bytes
+            all_data.append(data)
+        except Exception as e:
+            st.error(f"Error processing {file.name}: {e}")
+
 
 # Banner
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
