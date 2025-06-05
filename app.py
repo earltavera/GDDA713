@@ -434,9 +434,13 @@ Please provide your answer in bullet points.
                         answer_raw = response.choices[0].message.content
                     elif llm_provider == "Groq":
                         chat = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
-                        result = chat.invoke(user_query)
-                        answer_raw = result.content if hasattr(result, 'content') else str(result)
-
+                        system_message = "You are an environmental compliance assistant. Answer based only on the provided data."
+                        groq_response = chat.invoke([
+                            {"role": "system", "content": system_message},
+                             {"role": "user", "content": user_query}
+                        ])
+                        
+answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
                     answer = f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}"
                 except Exception as e:
                     answer = f"**AI error:** {e}"
