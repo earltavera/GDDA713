@@ -437,10 +437,10 @@ Please provide your answer in bullet points.
                         system_message = "You are an environmental compliance assistant. Answer based only on the provided data."
                         groq_response = chat.invoke([
                             {"role": "system", "content": system_message},
-                             {"role": "user", "content": user_query}
+                            {"role": "user", "content": user_query}
                         ])
-                        
-answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                        answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+
                     answer = f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}"
                 except Exception as e:
                     answer = f"**AI error:** {e}"
