@@ -153,7 +153,7 @@ def extract_metadata(text):
         r"expires on (\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
         r"expire on (\d{1,2}/\d{1,2}/\d{4})",
         r"expire ([A-Za-z](\d{1,}) years)",
-        r"expires [(\d{1,} years [A-Za-z]+[.?1])"
+       r"expires (\d{1,} years [A-Za-z]+\.)",
     ]
     expiry_str = "".join(dict.fromkeys([match for pat in expiry_patterns for match in re.findall(pat, text, re.IGNORECASE)]))
     expiry_date = parse_mixed_date(expiry_str)
