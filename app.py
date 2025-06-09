@@ -114,43 +114,43 @@ def parse_mixed_date(date_str):
 
 def extract_metadata(text):
     # RC number
-    rc_matches = re.findall(r"Application number[:\s]*(.+?)(?=\s*Applicant)|Application numbers[:\s]*(.+?)(?=\s*Applicant)|Application number\(s\)[:\s]*(.+?)(?=\s*Applicant)", text, re.IGNORECASE) or re.findall(r"RC[0-9]{5,}", text)
+    rc_matches = re.findall(r"Application number[:\\s]*(.+?)(?=\\s*Applicant)|Application numbers[:\\s]*(.+?)(?=\\s*Applicant)|Application number\\(s\\)[:\\s]*(.+?)(?=\\s*Applicant)", text, re.IGNORECASE) or re.findall(r"RC[0-9]{5,}", text)
     rc_flat = [item for sublist in rc_matches for item in sublist if item]
     rc_str = "".join(dict.fromkeys(rc_flat))
 
     # Company name
-    company_matches = re.findall(r"Applicant[:']?\s*(.+?)(?=\s*Site address)", text, re.IGNORECASE)
+    company_matches = re.findall(r"Applicant[:']?\\s*(.+?)(?=\\s*Site address)", text, re.IGNORECASE)
     company_str = "".join(dict.fromkeys(company_matches))
 
     # Address
-    address_matches = re.findall(r"Site address[:\s]*(.+?)(?=\s*Legal description)", text, re.IGNORECASE)
+    address_matches = re.findall(r"Site address[:\\s]*(.+?)(?=\\s*Legal description)", text, re.IGNORECASE)
     address_str = "".join(dict.fromkeys(address_matches))
 
     # Issue date
-    issue_matches = re.findall(r"Date[:\s]*(\d{1,2} [A-Za-z]+ \d{4}|\d{1,2}/\d{1,2}/\d{2,4}|\d{2}/\d{2}/\d{2}|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})", text)
+    issue_matches = re.findall(r"Date[:\\s]*(\\d{1,2} [A-Za-z]+ \\d{4}|\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d{2}/\\d{2}/\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+[A-Za-z]+\\s+\\d{4})", text)
     issue_str = "".join(dict.fromkeys(issue_matches))
     issue_date = parse_mixed_date(issue_str)
 
     # Expiry date
-    expiry_matches = re.findall(r"expire[s]? on (\d{1,2} [A-Za-z]+ \d{4}|\d{1,2}/\d{1,2}/\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})", text, re.IGNORECASE)
+    expiry_matches = re.findall(r"expire[s]? on (\\d{1,2} [A-Za-z]+ \\d{4}|\\d{1,2}/\\d{1,2}/\\d{4}|\\d{1,2}(?:st|nd|rd|th)?\\s+[A-Za-z]+\\s+\\d{4})", text, re.IGNORECASE)
     expiry_str = "".join(dict.fromkeys(expiry_matches))
     expiry_date = parse_mixed_date(expiry_str)
 
     # Triggers
-    triggers_raw = re.findall(r"E14\.\d+\.\d+|E14\.\d+\.|NES:STO|NES:AQ", text)
+    triggers_raw = re.findall(r"E14\\.\\d+\\.\\d+|E14\\.\\d+\\.|NES:STO|NES:AQ", text)
     triggers_str = " ".join(dict.fromkeys(triggers_raw))
 
     # Proposal
-    proposal_match = re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL)
+    proposal_match = re.findall(r"Proposal\\s*:\\s*(.+?)(?=\\n[A-Z]|\\.)", text, re.DOTALL)
     proposal_str = " ".join(proposal_match)
 
     # Conditions
-    conditions_match = re.findall(r"(?<=Conditions).*?(?=Advice notes)|(?<=Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)", text, re.DOTALL)
+    conditions_match = re.findall(r"(Conditions.*?)Advice notes", text, re.DOTALL | re.IGNORECASE)
     conditions_str = " ".join(dict.fromkeys(conditions_match))
-    conditions_numbers = re.findall(r"^\d+(?=\.)", conditions_str, re.MULTILINE)
-
+    conditions_numbers = re.findall(r"^\\d+(?=\\.)", conditions_str, re.MULTILINE)
+    
     # Management Plans
-    managementplan_raw = re.findall(r"(?i)\b(\w+)\sManagement Plan", conditions_str)
+    managementplan_raw = re.findall(r"(?i)\\b(\\w+)\\sManagement Plan", conditions_str)
     managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in managementplan_raw]))
 
     return {
@@ -166,6 +166,17 @@ def extract_metadata(text):
         "Consent Status": check_expiry(expiry_date),
         "Text Blob": text
     }
+
+st.title("Auckland Air Discharge Consent Dashboard")
+st.markdown("This version includes fixed regex patterns to avoid look-behind errors.")
+
+uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
+if uploaded_file:
+    file_bytes = uploaded_file.read()
+    with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+        text = "\\n".join(page.get_text() for page in doc)
+    metadata = extract_metadata(text)
+    st.json(metadata)
 
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
