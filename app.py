@@ -21,6 +21,8 @@ import pytz
 from openai import OpenAI
 import google.generativeai as genai
 from langchain_groq import ChatGroq
+from air_discharge_regex_patterns import extract_metadata
+
 
 # Load Environment Variables
 load_dotenv()
