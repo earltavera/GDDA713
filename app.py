@@ -113,35 +113,45 @@ def parse_mixed_date(date_str):
     return None
 
 def extract_metadata(text):
-    rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE) or re.findall(r"RC[0-9]{5,}", text)
-    rc_str = "".join(dict.fromkeys(rc_matches))
+    # RC number
+    rc_matches = re.findall(r"Application number[:\s]*(.+?)(?=\s*Applicant)|Application numbers[:\s]*(.+?)(?=\s*Applicant)|Application number\(s\)[:\s]*(.+?)(?=\s*Applicant)", text, re.IGNORECASE) or re.findall(r"RC[0-9]{5,}", text)
+    rc_flat = [item for sublist in rc_matches for item in sublist if item]
+    rc_str = "".join(dict.fromkeys(rc_flat))
 
-    company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
-    address_str = "".join(dict.fromkeys(re.findall(r"Site address:\s*(.+?)(?=\s*Legal description)", text)))
+    # Company name
+    company_matches = re.findall(r"Applicant[:']?\s*(.+?)(?=\s*Site address)", text, re.IGNORECASE)
+    company_str = "".join(dict.fromkeys(company_matches))
 
-    issue_str = "".join(dict.fromkeys(
-        re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) +
-        re.findall(r"Date:\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})", text)
-    ))
+    # Address
+    address_matches = re.findall(r"Site address[:\s]*(.+?)(?=\s*Legal description)", text, re.IGNORECASE)
+    address_str = "".join(dict.fromkeys(address_matches))
+
+    # Issue date
+    issue_matches = re.findall(r"Date[:\s]*(\d{1,2} [A-Za-z]+ \d{4}|\d{1,2}/\d{1,2}/\d{2,4}|\d{2}/\d{2}/\d{2}|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})", text)
+    issue_str = "".join(dict.fromkeys(issue_matches))
     issue_date = parse_mixed_date(issue_str)
 
-    expiry_str = "".join(dict.fromkeys(
-        re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) +
-        re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
-    ))
+    # Expiry date
+    expiry_matches = re.findall(r"expire[s]? on (\d{1,2} [A-Za-z]+ \d{4}|\d{1,2}/\d{1,2}/\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})", text, re.IGNORECASE)
+    expiry_str = "".join(dict.fromkeys(expiry_matches))
     expiry_date = parse_mixed_date(expiry_str)
 
-    triggers_str = " ".join(dict.fromkeys(
-        re.findall(r"E\d+\.\d+\.\d+", text) +
-        re.findall(r"E\d+\.\d+.", text) +
-        re.findall(r"NES:STO", text) +
-        re.findall(r"NES:AQ", text)
-    ))
+    # Triggers
+    triggers_raw = re.findall(r"E14\.\d+\.\d+|E14\.\d+\.|NES:STO|NES:AQ", text)
+    triggers_str = " ".join(dict.fromkeys(triggers_raw))
 
-    proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
-    conditions_str = "".join(re.findall(r"(?<=Conditions).*?(?=Advice notes)", text, re.DOTALL))
+    # Proposal
+    proposal_match = re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL)
+    proposal_str = " ".join(proposal_match)
+
+    # Conditions
+    conditions_match = re.findall(r"(?<=Conditions).*?(?=Advice notes)|(?<=Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)", text, re.DOTALL)
+    conditions_str = " ".join(dict.fromkeys(conditions_match))
     conditions_numbers = re.findall(r"^\d+(?=\.)", conditions_str, re.MULTILINE)
-    managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in re.findall(r"(?i)\b(\w+)\sManagement Plan", conditions_str)]))
+
+    # Management Plans
+    managementplan_raw = re.findall(r"(?i)\b(\w+)\sManagement Plan", conditions_str)
+    managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in managementplan_raw]))
 
     return {
         "Resource Consent Numbers": rc_str,
