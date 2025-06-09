@@ -12,3 +12,5 @@ google-generativeai
 langchain-groq>=0.0.1
 pytesseract
 pdf2image
+langchain-groq
+
