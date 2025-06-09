@@ -113,7 +113,13 @@ def parse_mixed_date(date_str):
             continue
     return None
 
+def check_expiry(expiry_date):
+    if expiry_date is None:
+        return "Unknown"
+    return "Expired" if expiry_date < datetime.now() else "Active"
+
 def extract_metadata(text):
+    # RC Numbers
     rc_patterns = [
         r"Application number:\s*(.+?)(?=\s*Applicant)",
         r"Application numbers:\s*(.+?)(?=\s*Applicant)",
@@ -122,16 +128,19 @@ def extract_metadata(text):
     ]
     rc_str = "".join(dict.fromkeys([match for pat in rc_patterns for match in re.findall(pat, text, re.IGNORECASE)]))
 
+    # Company Name
     company_patterns = [
         r"Applicant:\s*(.+?)(?=\s*Site address)",
         r"Applicant's name:\s*(.+?)(?=\s*Site address)"
     ]
     company_str = "".join(dict.fromkeys([match for pat in company_patterns for match in re.findall(pat, text, re.IGNORECASE)]))
 
+    # Address
     address_pattern = r"Site address:\s*(.+?)(?=\s*Legal description)"
     address_match = re.findall(address_pattern, text, re.IGNORECASE)
     address_str = "".join(dict.fromkeys(address_match))
 
+    # Issue Date
     issue_date_patterns = [
         r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
@@ -142,6 +151,7 @@ def extract_metadata(text):
     issue_str = "".join(dict.fromkeys([match for pat in issue_date_patterns for match in re.findall(pat, text)]))
     issue_date = parse_mixed_date(issue_str)
 
+    # Expiry Date
     expiry_patterns = [
         r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
         r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
@@ -152,12 +162,13 @@ def extract_metadata(text):
         r"expires (\d{1,} months [A-Za-z])+[.?!]",
         r"expires on (\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
         r"expire on (\d{1,2}/\d{1,2}/\d{4})",
-        r"expire ([A-Za-z](\d{1,}) years)",
-       r"expires (\d{1,} years [A-Za-z]+\.)",
+        r"expire ([A-Za-z]\d{1,} years)",
+        r"expires (\d{1,} years [A-Za-z]+\.)"
     ]
     expiry_str = "".join(dict.fromkeys([match for pat in expiry_patterns for match in re.findall(pat, text, re.IGNORECASE)]))
     expiry_date = parse_mixed_date(expiry_str)
 
+    # AUP Triggers
     trigger_patterns = [
         r"(E14\.\d+\.\d+)",
         r"(E14\.\d+\.)",
@@ -166,23 +177,26 @@ def extract_metadata(text):
     ]
     triggers_str = " ".join(dict.fromkeys([match for pat in trigger_patterns for match in re.findall(pat, text)]))
 
+    # Proposal
     proposal_pattern = r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
     proposal_match = re.findall(proposal_pattern, text, re.DOTALL)
     proposal_str = " ".join(dict.fromkeys(proposal_match))
 
+    # Conditions (replace lookbehinds with capturing logic)
     conditions_patterns = [
-        r"(?<=Conditions).*?(?=Advice notes)",
-        r"(?<=Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?<=Air Quality conditions).*?(?=Wastewater Discharge conditions)",
-        r"(?<=Air Discharge Permit Conditions).*?(?=E. Definitions)",
-        r"(?<=Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?<=Specific Air Discharge Conditions).*?(?=Advice notes)",
-        r"(?<=AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)"
+        r"Conditions(.*?)Advice notes",
+        r"Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b(.*?)(?=Advice notes)",
+        r"Air Quality conditions(.*?)(?=Wastewater Discharge conditions)",
+        r"Air Discharge Permit Conditions(.*?)(?=E. Definitions)",
+        r"Air discharge - DIS\d{5,}(?:-\w+)?\b(.*?)(?=Advice notes)",
+        r"Specific conditions - DIS\d{5,}(?:-\w+)?\b(.*?)(?=Advice notes)",
+        r"Specific Air Discharge Conditions(.*?)(?=Advice notes)",
+        r"AIR QUALITY - ROCK CRUSHER(.*?)(?=GROUNDWATER)"
     ]
     conditions_str = " ".join(dict.fromkeys([match for pat in conditions_patterns for match in re.findall(pat, text, re.DOTALL | re.IGNORECASE)]))
     conditions_numbers = re.findall(r"^\d+(?=\.)", conditions_str, re.MULTILINE)
 
+    # Management Plans
     managementplan_raw = r"(?i)\b(\w+)\sManagement Plan"
     management_plan = re.findall(managementplan_raw, conditions_str)
     managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in management_plan]))
@@ -200,6 +214,7 @@ def extract_metadata(text):
         "Consent Status": check_expiry(expiry_date),
         "Text Blob": text
     }
+    
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
