@@ -112,51 +112,124 @@ def parse_mixed_date(date_str):
             continue
     return None
 
-def extract_metadata(text):
-    rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE) or re.findall(r"RC[0-9]{5,}", text)
-    rc_str = "".join(dict.fromkeys(rc_matches))
+# RC number patterns
+rc_raw = [
+    r"Application number:\s*(.+?)(?=\s*Applicant)",
+    r"Application numbers:\s*(.+)(?=\s*Applicant)",
+    r"Application number(s):\s*(.+)(?=\s*Applicant)"
+]
+rc= "".join(dict.fromkeys(rc_raw))
 
-    company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
-    address_str = "".join(dict.fromkeys(re.findall(r"Site address:\s*(.+?)(?=\s*Legal description)", text)))
+# Company name patterns
+company_raw = [
+    r"Applicant:\s*(.+?)(?=\s*Site address)",
+    r"Applicant's name:\s*(.+?)(?=\s*Site address)"
+]
+company= "".join(dict.fromkeys(company_raw))
 
-    issue_str = "".join(dict.fromkeys(
-        re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) +
-        re.findall(r"Date:\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})", text)
-    ))
-    issue_date = parse_mixed_date(issue_str)
+# Address patterns
+address_raw = r"Site address:\s*(.+?)(?=\s*Legal description)"
+address = "".join(dict.fromkeys(address_raw))
 
-    expiry_str = "".join(dict.fromkeys(
-        re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) +
-        re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
-    ))
-    expiry_date = parse_mixed_date(expiry_str)
+# Issue date patterns
+issue_date_raw = [
+    r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
+    r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
+    r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
+    r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)"
+]
+issue_date_raw1 = r"(\b\d{2}/\d{2}/\d{2}\b)"
 
-    triggers_str = " ".join(dict.fromkeys(
-        re.findall(r"E\d+\.\d+\.\d+", text) +
-        re.findall(r"E\d+\.\d+.", text) +
-        re.findall(r"NES:STO", text) +
-        re.findall(r"NES:AQ", text)
-    ))
+issue_date_str= "".join(dict.fromkeys(issue_date_raw))
+issue_date_str1 = "".join(dict.fromkeys(issue_date_raw1))
 
-    proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
-    conditions_str = "".join(re.findall(r"(?<=Conditions).*?(?=Advice notes)", text, re.DOTALL))
-    conditions_numbers = re.findall(r"^\d+(?=\.)", conditions_str, re.MULTILINE)
-    managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in re.findall(r"(?i)\b(\w+)\sManagement Plan", conditions_str)]))
+# AUP triggers
+trigger_raw= [
+    r"(E14\.\d+\.\d+)",
+    r"(E14\.\d+\.)",
+    r"(NES:STO)",
+    r"(NES:AQ)"
+]
+AUP_triggers = " ".join(dict.fromkeys(trigger_raw))
 
-    return {
-        "Resource Consent Numbers": rc_str,
-        "Company Name": company_str,
-        "Address": address_str,
-        "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown",
-        "AUP(OP) Triggers": triggers_str,
-        "Reason for Consent": proposal_str,
-        "Consent Conditions": ", ".join(conditions_numbers),
-        "Mitigation (Consent Conditions)": ", ".join(managementplan_final),
-        "Consent Status": check_expiry(expiry_date),
-        "Text Blob": text
-    }
+# Reason
+proposal_raw =r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
+proposal = "".join(dict.fromkeys(proposal_raw))
 
+# Conditions
+conditions_raw = [
+    r"(?<=Conditions).*?(?=Advice notes)",
+    r"(?<=Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
+    r"(?<=Air Quality conditions).*?(?=Wastewater Discharge conditions)",
+    r"(?<=Air Discharge Permit Conditions).*?(?=E. Definitions)",
+    r"(?<=Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
+    r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+    r"(?<=Conditions Specific to air quality).*?(?=Advice notes)",
+    r"(?<=Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
+    r"(?<=Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Consolidated conditions of consent as amended).*?(?=Advice notes)",
+    r"(?<=Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)",
+    r"(?<=Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)",
+    r"(?<=DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
+    r"(?<=Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+    r"(?<=Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
+    r"(?<=Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)",
+    r"(?<=SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)",
+    r"(?<=Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)",
+    r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
+    r"(?<=Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)",
+    r"(?<=Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
+    r"(?<=Specific Air Discharge Conditions).*?(?=Advice notes)",
+    r"(?<=Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Air Discharge Limits).*?(?= Acoustic Conditions)",
+    r"(?<=Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)",
+    r"(?<=Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
+    r"(?<=Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+    r"(?<=Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+    r"(?<=Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
+    r"(?<=Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+    r"(?<=Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+    r"(?<=DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision",
+    r"(?<=DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=).*?(?=SUB\d{5,}\b) - Subdivision",
+    r"(?<=Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
+    r"(?<=AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)"
+    ]
+
+conditions_raw1= r"(?<=Conditions).*?(?=Advice notes)"
+
+conditions =" ".join(dict.fromkeys(conditions_raw))
+conditions1 =" ".join(dict.fromkeys(conditions_raw1))
+
+#Consent Expiry
+expiry_raw= [
+    r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
+    r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
+    r"expires (\d{1,2} [A-Za-z]+ \d{4})",
+    r"expire (\d{1,2} [A-Za-z]+\d{4})",
+    r"(\d{1,} years) from the date of commencement",
+    r"DIS\d{5,}(?:-w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
+    r"expires (\d{1,} months [A-Za-z])+[.?!]",
+    r"expires on (\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+    r"expire on (\d{1,2}/\d{1,2}/\d{4})",
+    r"expire ([A-Za-z](\d{1,}) years)",
+    r"expires [(\d{1,} years [A-Za-z]+[.?1])",
+]
+expiry = "".join(dict.fromkeys(expiry_raw))
+
+# Management Plans
+managementplan_raw = r"(?i)\b(\w+)\sManagement Plan"
+management_plan = re.findall(managementplan_raw, conditions, re.DOTALL) #extracting Management Plans from conditions
+managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in management_plan]))
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
