@@ -22,13 +22,20 @@ from openai import OpenAI
 import google.generativeai as genai
 from langchain_groq import ChatGroq
 
+# >>> OPTIONAL: OCR Imports <<<
+# from pdf2image import convert_from_bytes
+# import pytesseract
+# If using pytesseract, you might need to set the path if it's not in your PATH:
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' # Example for Windows
+# >>> END OCR Imports <<<
+
 # Load Environment Variables
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
 client = OpenAI()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# Weather Function
+# Weather Function - Good, already cached
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
@@ -45,47 +52,6 @@ def get_auckland_weather():
         return f"{desc}, {temp:.1f}°C"
     except:
         return "Weather unavailable"
-
-# File Processing with OCR Fallback
-if 'uploaded_files' in locals() and uploaded_files:
-    all_data = []
-    for file in uploaded_files:
-        try:
-            file_bytes = file.read()
-            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-                text = "\n".join(page.get_text() for page in doc)
-
-            if not text.strip():
-                st.warning(f"{file.name} appears to be image-based. Using OCR...")
-                images = convert_from_bytes(file_bytes)
-                text = "\n".join(pytesseract.image_to_string(img) for img in images)
-
-            data = extract_metadata(text)
-            data["__file_name__"] = file.name
-            data["__file_bytes__"] = file_bytes
-            all_data.append(data)
-        except Exception as e:
-            st.error(f"Error processing {file.name}: {e}")
-
-
-# Banner
-nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
-today = nz_time.strftime("%A, %d %B %Y")
-current_time = nz_time.strftime("%I:%M %p")
-weather = get_auckland_weather()
-
-st.markdown(f"""
-    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
-        📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong> &nbsp;&nbsp;&nbsp; 📍 <strong>Auckland</strong>
-    </div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
-        Auckland Air Discharge Consent Dashboard
-    </h1>
-""", unsafe_allow_html=True)
 
 # --------------------
 # Utility Functions
@@ -113,7 +79,7 @@ def parse_mixed_date(date_str):
     return None
 
 def extract_metadata(text):
-    # RC number patterns
+    # Your existing extract_metadata logic here (it's already well-defined)
     rc_raw = [
         r"Application number:\s*(.+?)(?=\s*Applicant)",
         r"Application numbers:\s*(.+)(?=\s*Applicant)",
@@ -125,7 +91,6 @@ def extract_metadata(text):
         rc_matches += re.findall(pattern, text, re.IGNORECASE)
     rc_str = "".join(dict.fromkeys(rc_matches))
 
-    # Company name patterns
     company_raw = [
         r"Applicant:\s*(.+?)(?=\s*Site address)",
         r"Applicant's name:\s*(.+?)(?=\s*Site address)"
@@ -135,12 +100,10 @@ def extract_metadata(text):
         company_matches += re.findall(pattern, text)
     company_str = "".join(dict.fromkeys(company_matches))
 
-    # Address pattern
     address_raw = r"Site address:\s*(.+?)(?=\s*Legal description)"
     address_matches = re.findall(address_raw, text)
     address_str = "".join(dict.fromkeys(address_matches))
 
-    # Issue date patterns
     issue_date_raw = [
         r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
@@ -153,7 +116,6 @@ def extract_metadata(text):
     issue_str = "".join(dict.fromkeys(issue_matches))
     issue_date = parse_mixed_date(issue_str)
 
-    # Expiry date patterns
     expiry_raw= [
     r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
     r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
@@ -173,7 +135,6 @@ def extract_metadata(text):
     expiry_str = "".join(dict.fromkeys(expiry_matches))
     expiry_date = parse_mixed_date(expiry_str)
 
-    # AUP triggers
     trigger_raw = [
         r"(E14\.\d+\.\d+)",
         r"(E14\.\d+\.)",
@@ -185,12 +146,10 @@ def extract_metadata(text):
         trigger_matches += re.findall(pattern, text)
     triggers_str = " ".join(dict.fromkeys(trigger_matches))
 
-    # Proposal
     proposal_raw = r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
     proposal_matches = re.findall(proposal_raw, text, re.DOTALL)
     proposal_str = " ".join(proposal_matches)
 
-    # Consent Conditions
     conditions_raw = [
     r"Conditions(.*?)(?=Advice notes)",
     r"Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b(.*?)(?=Specific conditions -)",
@@ -267,7 +226,7 @@ def clean_surrogates(text):
 
 def log_ai_chat(question, answer_raw):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer}
+    log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer_raw} # Changed 'answer' to 'answer_raw'
     file_path = "ai_chat_log.csv"
     file_exists = os.path.isfile(file_path)
 
@@ -290,6 +249,27 @@ def get_chat_log_as_csv():
             return None
     return None
     
+# --------------------
+# Banner
+# --------------------
+nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
+today = nz_time.strftime("%A, %d %B %Y")
+current_time = nz_time.strftime("%I:%M %p")
+weather = get_auckland_weather()
+
+st.markdown(f"""
+    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
+                border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+        📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong> &nbsp;&nbsp;&nbsp; 📍 <strong>Auckland</strong>
+    </div>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
+        Auckland Air Discharge Consent Dashboard
+    </h1>
+""", unsafe_allow_html=True)
+
 # --------------------
 # Sidebar & Model Loader
 # --------------------
@@ -315,22 +295,14 @@ def load_model(name):
     return SentenceTransformer(name)
 
 model = load_model(model_name)
+
 # ------------------------
 # File Processing & Dashboard
 # ------------------------
+# >>> Use the cached function here <<<
 if uploaded_files:
-    all_data = []
-    for file in uploaded_files:
-        try:
-            file_bytes = file.read()
-            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-                text = "\n".join(page.get_text() for page in doc)
-            data = extract_metadata(text)
-            data["__file_name__"] = file.name
-            data["__file_bytes__"] = file_bytes
-            all_data.append(data)
-        except Exception as e:
-            st.error(f"Error processing {file.name}: {e}")
+    # This call will only run if uploaded_files object changes or if Streamlit's cache needs revalidation
+    all_data = process_uploaded_pdfs(uploaded_files)
 
     if all_data:
         df = pd.DataFrame(all_data)
@@ -405,78 +377,82 @@ if uploaded_files:
                 st.plotly_chart(fig, use_container_width=True)
 
         # Enhanced Semantic Search Section
-with st.expander("Semantic Search Results", expanded=True):
-    if query_input:
-        st.info("Running enhanced semantic + structured search...")
+        with st.expander("Semantic Search Results", expanded=True):
+            if query_input:
+                st.info("Running enhanced semantic + structured search...")
 
-        def normalize(text):
-            return re.sub(r"\s+", " ", str(text).lower())
+                def normalize(text):
+                    return re.sub(r"\s+", " ", str(text).lower())
 
-        corpus = (
-            df["Company Name"].fillna("") + " | " +
-            df["Address"].fillna("") + " | " +
-            df["AUP(OP) Triggers"].fillna("") + " | " +
-            df["Mitigation (Consent Conditions)"].fillna("") + " | " +
-            df["Reason for Consent"].fillna("") + " | " +
-            df["Consent Conditions"].fillna("") + " | " +
-            df["Resource Consent Numbers"].fillna("") + " | " +
-            df["Text Blob"].fillna("")
-        ).apply(normalize).tolist()
+                corpus = (
+                    df["Company Name"].fillna("") + " | " +
+                    df["Address"].fillna("") + " | " +
+                    df["AUP(OP) Triggers"].fillna("") + " | " +
+                    df["Mitigation (Consent Conditions)"].fillna("") + " | " +
+                    df["Reason for Consent"].fillna("") + " | " +
+                    df["Consent Conditions"].fillna("") + " | " +
+                    df["Resource Consent Numbers"].fillna("") + " | " +
+                    df["Text Blob"].fillna("")
+                ).apply(normalize).tolist()
 
-        query_input_norm = normalize(query_input)
-        corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
-        query_embedding = model.encode(query_input_norm, convert_to_tensor=True)
+                query_input_norm = normalize(query_input)
+                corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
+                query_embedding = model.encode(query_input_norm, convert_to_tensor=True)
 
-        if "e5" in model_name or "bge" in model_name:
-            scores = query_embedding @ corpus_embeddings.T
-        else:
-            scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+                if "e5" in model_name or "bge" in model_name:
+                    scores = query_embedding @ corpus_embeddings.T
+                else:
+                    scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
 
-        top_k = scores.argsort(descending=True)[:5]
+                top_k = scores.argsort(descending=True)[:5]
 
-        keyword_matches = df[
-            df["Address"].str.contains(query_input, case=False, na=False) |
-            df["Resource Consent Numbers"].str.contains(query_input, case=False, na=False) |
-            df["Reason for Consent"].str.contains(query_input, case=False, na=False)
-        ]
+                keyword_matches = df[
+                    df["Address"].str.contains(query_input, case=False, na=False) |
+                    df["Resource Consent Numbers"].str.contains(query_input, case=False, na=False) |
+                    df["Reason for Consent"].str.contains(query_input, case=False, na=False)
+                ]
 
-        if top_k is not None and any(scores[top_k] > 0.3):
-            st.success("Top semantic results:")
-            for i, idx in enumerate(top_k):
-                row = df.iloc[idx.item()]
-                st.markdown(f"**{i+1}. {row['Company Name']}**")
-                st.markdown(f"- 📍 **Address**: {row['Address']}")
-                st.markdown(f"- 🔢 **Consent Number**: {row['Resource Consent Numbers']}")
-                st.markdown(f"- 📜 **Reason**: {row['Reason for Consent']}")
-                st.markdown(f"- ⏳ **Expiry**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
-                safe_filename = clean_surrogates(row['__file_name__'])
-                st.download_button(
-                    label=f"📄 Download PDF: {safe_filename}",
-                    data=row['__file_bytes__'],
-                    file_name=safe_filename,
-                    mime="application/pdf",
-                    key=f"download_semantic_{i}"
-                )
-                st.markdown("---")
+                if top_k is not None and any(scores[top_k] > 0.3):
+                    st.success("Top semantic results:")
+                    for i, idx in enumerate(top_k):
+                        row = df.iloc[idx.item()]
+                        st.markdown(f"**{i+1}. {row['Company Name']}**")
+                        st.markdown(f"- 📍 **Address**: {row['Address']}")
+                        st.markdown(f"- 🔢 **Consent Number**: {row['Resource Consent Numbers']}")
+                        st.markdown(f"- 📜 **Reason**: {row['Reason for Consent']}")
+                        st.markdown(f"- ⏳ **Expiry**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
+                        safe_filename = clean_surrogates(row['__file_name__'])
+                        st.download_button(
+                            label=f"📄 Download PDF: {safe_filename}",
+                            data=row['__file_bytes__'],
+                            file_name=safe_filename,
+                            mime="application/pdf",
+                            key=f"download_semantic_{i}"
+                        )
+                        st.markdown("---")
 
-        elif not keyword_matches.empty:
-            st.info("Showing keyword-based results:")
-            for i, row in keyword_matches.head(5).iterrows():
-                st.markdown(f"**{row['Company Name']}**")
-                st.markdown(f"- 📍 **Address**: {row['Address']}")
-                st.markdown(f"- 🔢 **Consent Number**: {row['Resource Consent Numbers']}")
-                st.markdown(f"- ⏳ **Expiry**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
-                safe_filename = clean_surrogates(row['__file_name__'])
-                st.download_button(
-                    label=f"📄 Download PDF: {safe_filename}",
-                    data=row['__file_bytes__'],
-                    file_name=safe_filename,
-                    mime="application/pdf",
-                    key=f"download_keyword_{i}"
-                )
-                st.markdown("---")
-        else:
-            st.warning("No strong semantic or keyword matches found.")
+                elif not keyword_matches.empty:
+                    st.info("Showing keyword-based results:")
+                    for i, row in keyword_matches.head(5).iterrows():
+                        st.markdown(f"**{row['Company Name']}**")
+                        st.markdown(f"- 📍 **Address**: {row['Address']}")
+                        st.markdown(f"- 🔢 **Consent Number**: {row['Resource Consent Numbers']}")
+                        st.markdown(f"- ⏳ **Expiry**: {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notnull(row['Expiry Date']) else 'Unknown'}")
+                        safe_filename = clean_surrogates(row['__file_name__'])
+                        st.download_button(
+                            label=f"📄 Download PDF: {safe_filename}",
+                            data=row['__file_bytes__'],
+                            file_name=safe_filename,
+                            mime="application/pdf",
+                            key=f"download_keyword_{i}"
+                        )
+                        st.markdown("---")
+                else:
+                    st.warning("No strong semantic or keyword matches found.")
+    else:
+        st.warning("No data extracted from the uploaded PDF(s). Please check the file content.")
+elif not uploaded_files:
+    st.info("Please upload PDF files in the sidebar to get started.")
 
 # ----------------------------
 # Ask AI About Consents Chatbot
@@ -495,7 +471,8 @@ with st.expander("Ask AI About Consents", expanded=True):
         else:
             with st.spinner("AI is thinking..."):
                 try:
-                    if "df" in locals():
+                    # Ensure df exists if files were uploaded, otherwise provide default context
+                    if 'df' in locals() and not df.empty:
                         context_sample = df[[
                             "Company Name", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Expiry Date"
@@ -515,6 +492,8 @@ Query: {chat_input}
 
 Please provide your answer in bullet points.
 """
+
+                    answer_raw = "No response from AI." # Default answer
 
                     if llm_provider == "Gemini":
                         model = genai.GenerativeModel("gemini-pro")
@@ -541,11 +520,22 @@ Please provide your answer in bullet points.
                         ])
                         answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
                     elif llm_provider == "HuggingFace":
-                        hf_prompt = f"Answer this environmental compliance query based on the sample data: {user_query}"
-                        hf_result = hf_chatbot(hf_prompt, max_length=512, do_sample=False)
-                        answer_raw = hf_result[0]['generated_text']
+                        # You need to define hf_chatbot or integrate HuggingFace in a similar way
+                        # For example, using the inference API or a local model
+                        # For a simple example:
+                        # from transformers import pipeline
+                        # hf_chatbot = pipeline("text-generation", model="distilbert/distilgpt2")
+                        # hf_prompt = f"Answer this environmental compliance query based on the sample data: {user_query}"
+                        # hf_result = hf_chatbot(hf_prompt, max_length=512, do_sample=False)
+                        # answer_raw = hf_result[0]['generated_text']
+                        st.error("HuggingFace model not implemented or configured.")
+                        answer_raw = "HuggingFace model not configured."
+
 
                     st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
+                    # Log the chat after a successful response
+                    log_ai_chat(chat_input, answer_raw)
+
                 except Exception as e:
                     st.error(f"AI error: {e}")
     st.markdown("</div>", unsafe_allow_html=True)
