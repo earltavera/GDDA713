@@ -2,7 +2,7 @@ streamlit
 pandas
 PyMuPDF
 plotly
-sentence-transformers
+sentence-transformers==2.2.2  # Pin to a very stable version
 geopy
 python-dotenv
 requests
@@ -12,6 +12,5 @@ google-generativeai
 langchain-groq>=0.0.1
 pytesseract
 pdf2image
-langchain-groq
-
-
+torch==1.13.1  # Pin to a stable torch version for Python 3.9
+# Add other dependencies you might have if not listed above
