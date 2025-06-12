@@ -2,7 +2,7 @@ streamlit
 pandas
 PyMuPDF
 plotly
-geopy                      # Keep geopy without version, or try geopy==2.4.1 if that fails.
+geopy==2.4.1                # Keep geopy without version, or try geopy==2.4.1 if that fails.
 python-dotenv
 requests
 pytz
