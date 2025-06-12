@@ -1,4 +1,3 @@
-
 # Auckland Air Discharge Consent Dashboard - Complete with Gemini, OpenAI, and Groq Chatbot
 
 import streamlit as st
@@ -113,46 +112,49 @@ def parse_mixed_date(date_str):
             continue
     return None
 
-def check_expiry(expiry_date):
-    if expiry_date is None:
-        return "Unknown"
-    return "Expired" if expiry_date < datetime.now() else "Active"
-
 def extract_metadata(text):
-    # RC Numbers
-    rc_patterns = [
+    # RC number patterns
+    rc_raw = [
         r"Application number:\s*(.+?)(?=\s*Applicant)",
-        r"Application numbers:\s*(.+?)(?=\s*Applicant)",
-        r"Application number\(s\):\s*(.+?)(?=\s*Applicant)",
+        r"Application numbers:\s*(.+)(?=\s*Applicant)",
+        r"Application number\(s\):\s*(.+)(?=\s*Applicant)",
         r"RC[0-9]{5,}"
     ]
-    rc_str = "".join(dict.fromkeys([match for pat in rc_patterns for match in re.findall(pat, text, re.IGNORECASE)]))
+    rc_matches = []
+    for pattern in rc_raw:
+        rc_matches += re.findall(pattern, text, re.IGNORECASE)
+    rc_str = "".join(dict.fromkeys(rc_matches))
 
-    # Company Name
-    company_patterns = [
+    # Company name patterns
+    company_raw = [
         r"Applicant:\s*(.+?)(?=\s*Site address)",
         r"Applicant's name:\s*(.+?)(?=\s*Site address)"
     ]
-    company_str = "".join(dict.fromkeys([match for pat in company_patterns for match in re.findall(pat, text, re.IGNORECASE)]))
+    company_matches = []
+    for pattern in company_raw:
+        company_matches += re.findall(pattern, text)
+    company_str = "".join(dict.fromkeys(company_matches))
 
-    # Address
-    address_pattern = r"Site address:\s*(.+?)(?=\s*Legal description)"
-    address_match = re.findall(address_pattern, text, re.IGNORECASE)
-    address_str = "".join(dict.fromkeys(address_match))
+    # Address pattern
+    address_raw = r"Site address:\s*(.+?)(?=\s*Legal description)"
+    address_matches = re.findall(address_raw, text)
+    address_str = "".join(dict.fromkeys(address_matches))
 
-    # Issue Date
-    issue_date_patterns = [
+    # Issue date patterns
+    issue_date_raw = [
         r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
         r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
-        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
-        r"(\b\d{2}/\d{2}/\d{2}\b)"
+        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)"
     ]
-    issue_str = "".join(dict.fromkeys([match for pat in issue_date_patterns for match in re.findall(pat, text)]))
+    issue_matches = []
+    for pattern in issue_date_raw:
+        issue_matches += re.findall(pattern, text)
+    issue_str = "".join(dict.fromkeys(issue_matches))
     issue_date = parse_mixed_date(issue_str)
 
-    # Expiry Date
-    expiry_patterns = [
+    # Expiry date patterns
+    expiry_raw = [
         r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
         r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
         r"expires (\d{1,2} [A-Za-z]+ \d{4})",
@@ -162,43 +164,87 @@ def extract_metadata(text):
         r"expires (\d{1,} months [A-Za-z])+[.?!]",
         r"expires on (\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
         r"expire on (\d{1,2}/\d{1,2}/\d{4})",
-        r"expire ([A-Za-z]\d{1,} years)",
-        r"expires (\d{1,} years [A-Za-z]+\.)"
+        r"expire ([A-Za-z](\d{1,}) years)",
+        r"expires [(\d{1,} years [A-Za-z]+[.?1])"
     ]
-    expiry_str = "".join(dict.fromkeys([match for pat in expiry_patterns for match in re.findall(pat, text, re.IGNORECASE)]))
+    expiry_matches = []
+    for pattern in expiry_raw:
+        expiry_matches += re.findall(pattern, text)
+    expiry_str = "".join(dict.fromkeys(expiry_matches))
     expiry_date = parse_mixed_date(expiry_str)
 
-    # AUP Triggers
-    trigger_patterns = [
+    # AUP triggers
+    trigger_raw = [
         r"(E14\.\d+\.\d+)",
         r"(E14\.\d+\.)",
         r"(NES:STO)",
         r"(NES:AQ)"
     ]
-    triggers_str = " ".join(dict.fromkeys([match for pat in trigger_patterns for match in re.findall(pat, text)]))
+    trigger_matches = []
+    for pattern in trigger_raw:
+        trigger_matches += re.findall(pattern, text)
+    triggers_str = " ".join(dict.fromkeys(trigger_matches))
 
     # Proposal
-    proposal_pattern = r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
-    proposal_match = re.findall(proposal_pattern, text, re.DOTALL)
-    proposal_str = " ".join(dict.fromkeys(proposal_match))
+    proposal_raw = r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
+    proposal_matches = re.findall(proposal_raw, text, re.DOTALL)
+    proposal_str = " ".join(proposal_matches)
 
-    # Conditions (replace lookbehinds with capturing logic)
-    conditions_patterns = [
-        r"Conditions(.*?)Advice notes",
-        r"Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b(.*?)(?=Advice notes)",
-        r"Air Quality conditions(.*?)(?=Wastewater Discharge conditions)",
-        r"Air Discharge Permit Conditions(.*?)(?=E. Definitions)",
-        r"Air discharge - DIS\d{5,}(?:-\w+)?\b(.*?)(?=Advice notes)",
-        r"Specific conditions - DIS\d{5,}(?:-\w+)?\b(.*?)(?=Advice notes)",
-        r"Specific Air Discharge Conditions(.*?)(?=Advice notes)",
-        r"AIR QUALITY - ROCK CRUSHER(.*?)(?=GROUNDWATER)"
+    # Consent Conditions
+    conditions_raw = [
+        r"(?<=Conditions).*?(?=Advice notes)",
+        r"(?<=Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
+        r"(?<=Air Quality conditions).*?(?=Wastewater Discharge conditions)",
+        r"(?<=Air Discharge Permit Conditions).*?(?=E. Definitions)",
+        r"(?<=Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
+        r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?<=Conditions Specific to air quality).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?<=Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)",
+        r"(?<=Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)",
+        r"(?<=DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
+        r"(?<=Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?<=Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
+        r"(?<=Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)",
+        r"(?<=SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)",
+        r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)",
+        r"(?<=Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?<=Specific Air Discharge Conditions).*?(?=Advice notes)",
+        r"(?<=Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Air Discharge Limits).*?(?= Acoustic Conditions)",
+        r"(?<=Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)",
+        r"(?<=Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
+        r"(?<=Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?<=Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?<=Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
+        r"(?<=Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?<=Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?<=DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?<=Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
+        r"(?<=AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)"
     ]
-    conditions_str = " ".join(dict.fromkeys([match for pat in conditions_patterns for match in re.findall(pat, text, re.DOTALL | re.IGNORECASE)]))
+    conditions_matches = []
+    for pattern in conditions_raw:
+        conditions_matches += re.findall(pattern, text, re.DOTALL)
+    conditions_str = " ".join(conditions_matches)
     conditions_numbers = re.findall(r"^\d+(?=\.)", conditions_str, re.MULTILINE)
 
-    # Management Plans
-    managementplan_raw = r"(?i)\b(\w+)\sManagement Plan"
-    management_plan = re.findall(managementplan_raw, conditions_str)
+    management_plan = re.findall(r"(?i)\b(\w+)\sManagement Plan", conditions_str)
     managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in management_plan]))
 
     return {
@@ -214,7 +260,8 @@ def extract_metadata(text):
         "Consent Status": check_expiry(expiry_date),
         "Text Blob": text
     }
-    
+
+
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
