@@ -1,4 +1,4 @@
-# Auckland Air Discharge Consent Dashboard - Complete with Gemini, OpenAI, and Groq Chatbot
+# Auckland Air Discharge Consent Dashboard - Complete with Gemini, OpenAI, and Groq Chatbot + Data Cleaning
 
 import streamlit as st
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
@@ -25,13 +25,18 @@ from pdf2image import convert_from_bytes
 import pytesseract
 
 
+# --------------------
 # Load Environment Variables
+# --------------------
+
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
 client = OpenAI()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
+# --------------------
 # Weather Function
+# --------------------
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
@@ -73,6 +78,10 @@ def parse_mixed_date(date_str):
         except (ValueError, TypeError):
             continue
     return None
+    
+# --------------------
+# Data Cleaning
+# --------------------
 
 def extract_metadata(text):
     # RC number patterns
@@ -251,7 +260,10 @@ def get_chat_log_as_csv():
             return None
     return None
 
+# --------------------
 # --- PDF Processing Function (Cached for Performance) ---
+# --------------------
+
 @st.cache_data(show_spinner="Processing PDF(s)... This might take a moment.", persist=True)
 def process_uploaded_pdfs(uploaded_files_list):
     """
@@ -294,6 +306,7 @@ def process_uploaded_pdfs(uploaded_files_list):
 # --------------------
 # Banner
 # --------------------
+
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
 today = nz_time.strftime("%A, %d %B %Y")
 current_time = nz_time.strftime("%I:%M %p")
@@ -498,7 +511,7 @@ elif not uploaded_files:
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-st.markdown("### 🤖 Ask AI About Consents")
+st.markdown("###💡 Ask AI About Consents")
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
@@ -579,8 +592,10 @@ Please provide your answer in bullet points.
                 except Exception as e:
                     st.error(f"AI error: {e}")
     st.markdown("</div>", unsafe_allow_html=True)
-
+    
+# --------------------
 # Footer
+# --------------------
 st.markdown("---")
 st.markdown(
     "<p style='text-align: center; color: orange; font-size: 0.9em;'>"
