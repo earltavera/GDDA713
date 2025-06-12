@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timedelta
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
-from geopy.geocoders import Nominatim
+from geopy.geolocators import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import os
 from dotenv import load_dotenv
@@ -229,7 +229,7 @@ def extract_metadata(text):
         "Consent Conditions": ", ".join(conditions_numbers),
         "Mitigation (Consent Conditions)": ", ".join(managementplan_final),
         "Consent Status": check_expiry(expiry_date),
-        "Text Blob": text
+        "Text Blob": text # Keep text blob for debugging
     }
 
 def clean_surrogates(text):
@@ -359,7 +359,18 @@ if uploaded_files:
     all_data = process_uploaded_pdfs(uploaded_files)
 
     if all_data:
-        df = pd.DataFrame(all_data)
+        # Create a copy of all_data to store the full extracted data for debugging
+        # This prevents modifying the main df when adding debugging fields temporarily
+        # and ensures the original fields are passed to other sections.
+        df_for_display = pd.DataFrame(all_data)
+
+        # Drop '__file_bytes__' before display if you don't need it in the main table
+        # (It's used for download buttons, so keep it in 'all_data' if you need it later)
+        if '__file_bytes__' in df_for_display.columns:
+            df_for_display = df_for_display.drop(columns=['__file_bytes__'])
+
+        # --- Standard DataFrame Processing ---
+        df = pd.DataFrame(all_data) # Re-create df for main operations to ensure consistency
         df["GeoKey"] = df["Address"].str.lower().str.strip()
         df["Latitude"], df["Longitude"] = zip(*df["GeoKey"].apply(geocode_address))
 
@@ -374,6 +385,8 @@ if uploaded_files:
             (df["Expiry Date"] <= datetime.now() + timedelta(days=90)),
             "Consent Status Enhanced"
         ] = "Expiring in 90 Days"
+        # --- End Standard DataFrame Processing ---
+
 
         # Metrics
         st.subheader("Consent Summary Metrics")
@@ -393,8 +406,11 @@ if uploaded_files:
 
         # Consent Table
         with st.expander("Consent Table", expanded=True):
+            st.info("💡 **Debugging Tip:** Click 'Debug: View Raw Text & Data' below each row to inspect extracted text and data for missing fields.")
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
+            
+            # Prepare DataFrame for display and CSV export
             display_df = filtered_df[[
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
                 "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
@@ -402,9 +418,31 @@ if uploaded_files:
                 "__file_name__": "File Name",
                 "Consent Status Enhanced": "Consent Status"
             })
-            st.dataframe(display_df)
+            
+            # Display the DataFrame
+            # Iterate through rows to add individual expanders for debugging
+            for index, row in display_df.iterrows():
+                st.dataframe(pd.DataFrame([row])) # Display each row in a small dataframe for clear separation
+                
+                with st.expander(f"Debug: View Raw Text & Data for {row['File Name']}", expanded=False):
+                    # Get the original data entry from all_data to show full text blob
+                    original_entry = next((item for item in all_data if item['__file_name__'] == row['File Name']), None)
+                    if original_entry:
+                        st.markdown("**Extracted Text Blob:**")
+                        st.text_area(f"Full Text for {row['File Name']}", original_entry.get('Text Blob', 'No text extracted'), height=300)
+                        
+                        st.markdown("**Raw Extracted Data:**")
+                        # Create a dictionary for display, excluding large text blob and file bytes
+                        debug_data = {k: v for k, v in original_entry.items() if k not in ['Text Blob', '__file_bytes__']}
+                        st.json(debug_data)
+                    else:
+                        st.info("Original data entry not found for debugging.")
+                st.markdown("---") # Separator between entries
+
+            # CSV Download Button (for the filtered display_df)
             csv_data = display_df.to_csv(index=False).encode("utf-8")
             st.download_button("Download CSV", csv_data, "filtered_consents.csv", "text/csv")
+
 
         # Consent Map
         with st.expander("Consent Map", expanded=True):
