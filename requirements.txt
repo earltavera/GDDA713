@@ -2,7 +2,7 @@ streamlit
 pandas
 PyMuPDF
 plotly
-geopy==2.4.1                # Keep geopy without version, or try geopy==2.4.1 if that fails.
+geopy==2.4.1                 # Keep this, it installed correctly based on logs
 python-dotenv
 requests
 pytz
@@ -11,7 +11,9 @@ google-generativeai
 langchain-groq>=0.0.1
 pytesseract
 pdf2image
-torch==2.1.0               # Explicitly set torch to 2.1.0 or higher
-transformers==4.35.2       # Pin transformers to a version compatible with torch 2.1
-sentence-transformers==2.2.2 # Keep this version, it's generally stable
-huggingface_hub==0.19.0    # Pin huggingface_hub to a version compatible with older transformers/s-t
+# Pin these core ML libraries to compatible versions for Python 3.9
+# These specific versions have a good track record together:
+torch==2.0.1+cpu              # Use a torch 2.x version with CPU only for Streamlit Cloud (avoids CUDA dependency issues)
+transformers==4.28.1          # Compatible with torch 2.0.1
+sentence-transformers==2.2.2  # This should now work well with transformers 4.28.1
+huggingface_hub==0.13.4       # This version is known to work with transformers 4.28.1
