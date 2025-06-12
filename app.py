@@ -223,7 +223,6 @@ def extract_metadata(text):
         "Text Blob": text
     }
 
-
 def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
@@ -494,7 +493,7 @@ if uploaded_files:
     else:
         st.warning("No data extracted from the uploaded PDF(s). Please check the file content.")
 elif not uploaded_files:
-    st.info("Please upload PDF files in the sidebar to get started.")
+    st.info("<----Please upload PDF files in the sidebar to get started.")
 
 # ----------------------------
 # Ask AI About Consents Chatbot
