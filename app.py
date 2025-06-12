@@ -21,17 +21,9 @@ import pytz
 from openai import OpenAI
 import google.generativeai as genai
 from langchain_groq import ChatGroq
+from pdf2image import convert_from_bytes
+import pytesseract
 
-# >>> OPTIONAL: OCR Imports <<<
-# Uncomment the lines below if you intend to use OCR for image-based PDFs.
-# Remember to install 'pdf2image' and 'pytesseract' libraries (pip install pdf2image pytesseract)
-# and the Tesseract-OCR engine on your system (e.g., brew install tesseract for macOS,
-# sudo apt-get install tesseract-ocr for Linux, or download installer for Windows).
-# from pdf2image import convert_from_bytes
-# import pytesseract
-# If Tesseract-OCR is not in your system's PATH, you might need to specify its location:
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' # Example for Windows
-# >>> END OCR Imports <<<
 
 # Load Environment Variables
 load_dotenv()
