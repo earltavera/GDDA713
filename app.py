@@ -65,10 +65,17 @@ def check_expiry(expiry_date):
 
 @st.cache_data(show_spinner=False)
 def geocode_address(address):
-    geolocator = Nominatim(user_agent="air_discharge_dashboard")
+    # Increased timeout from 1 to 10 seconds for Nominatim requests
+    geolocator = Nominatim(user_agent="air_discharge_dashboard", timeout=10)
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-    location = geocode(address)
-    return (location.latitude, location.longitude) if location else (None, None)
+    try:
+        location = geocode(address)
+        return (location.latitude, location.longitude) if location else (None, None)
+    except Exception as e:
+        # It's good to log or display this, but allowing the app to continue
+        # if geocoding fails for some addresses.
+        st.warning(f"Geocoding failed for '{address}': {e}. Skipping this address for map.")
+        return (None, None)
 
 def parse_mixed_date(date_str):
     formats = ["%d-%m-%Y", "%d/%m/%Y", "%d %B %Y", "%d %b %Y"]
