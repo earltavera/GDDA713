@@ -2,8 +2,7 @@ streamlit
 pandas
 PyMuPDF
 plotly
-sentence-transformers==2.2.2  # Keep this pinned
-geopy
+geopy                      # Keep geopy without version, or try geopy==2.4.1 if that fails.
 python-dotenv
 requests
 pytz
@@ -12,5 +11,7 @@ google-generativeai
 langchain-groq>=0.0.1
 pytesseract
 pdf2image
-torch==1.13.1  # Keep this pinned for Python 3.9
-huggingface_hub==0.20.3 # Add this line, or a later stable version
+torch==2.1.0               # Explicitly set torch to 2.1.0 or higher
+transformers==4.35.2       # Pin transformers to a version compatible with torch 2.1
+sentence-transformers==2.2.2 # Keep this version, it's generally stable
+huggingface_hub==0.19.0    # Pin huggingface_hub to a version compatible with older transformers/s-t
