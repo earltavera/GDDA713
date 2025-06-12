@@ -23,9 +23,13 @@ import google.generativeai as genai
 from langchain_groq import ChatGroq
 
 # >>> OPTIONAL: OCR Imports <<<
+# Uncomment the lines below if you intend to use OCR for image-based PDFs.
+# Remember to install 'pdf2image' and 'pytesseract' libraries (pip install pdf2image pytesseract)
+# and the Tesseract-OCR engine on your system (e.g., brew install tesseract for macOS,
+# sudo apt-get install tesseract-ocr for Linux, or download installer for Windows).
 # from pdf2image import convert_from_bytes
 # import pytesseract
-# If using pytesseract, you might need to set the path if it's not in your PATH:
+# If Tesseract-OCR is not in your system's PATH, you might need to specify its location:
 # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' # Example for Windows
 # >>> END OCR Imports <<<
 
@@ -35,7 +39,7 @@ groq_api_key = os.getenv("GROQ_API_KEY")
 client = OpenAI()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# Weather Function - Good, already cached
+# Weather Function
 @st.cache_data(ttl=600)
 def get_auckland_weather():
     api_key = os.getenv("OPENWEATHER_API_KEY")
@@ -79,7 +83,7 @@ def parse_mixed_date(date_str):
     return None
 
 def extract_metadata(text):
-    # Your existing extract_metadata logic here (it's already well-defined)
+    # RC number patterns
     rc_raw = [
         r"Application number:\s*(.+?)(?=\s*Applicant)",
         r"Application numbers:\s*(.+)(?=\s*Applicant)",
@@ -91,6 +95,7 @@ def extract_metadata(text):
         rc_matches += re.findall(pattern, text, re.IGNORECASE)
     rc_str = "".join(dict.fromkeys(rc_matches))
 
+    # Company name patterns
     company_raw = [
         r"Applicant:\s*(.+?)(?=\s*Site address)",
         r"Applicant's name:\s*(.+?)(?=\s*Site address)"
@@ -100,10 +105,12 @@ def extract_metadata(text):
         company_matches += re.findall(pattern, text)
     company_str = "".join(dict.fromkeys(company_matches))
 
+    # Address pattern
     address_raw = r"Site address:\s*(.+?)(?=\s*Legal description)"
     address_matches = re.findall(address_raw, text)
     address_str = "".join(dict.fromkeys(address_matches))
 
+    # Issue date patterns
     issue_date_raw = [
         r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
@@ -116,6 +123,7 @@ def extract_metadata(text):
     issue_str = "".join(dict.fromkeys(issue_matches))
     issue_date = parse_mixed_date(issue_str)
 
+    # Expiry date patterns
     expiry_raw= [
     r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
     r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
@@ -135,6 +143,7 @@ def extract_metadata(text):
     expiry_str = "".join(dict.fromkeys(expiry_matches))
     expiry_date = parse_mixed_date(expiry_str)
 
+    # AUP triggers
     trigger_raw = [
         r"(E14\.\d+\.\d+)",
         r"(E14\.\d+\.)",
@@ -146,10 +155,12 @@ def extract_metadata(text):
         trigger_matches += re.findall(pattern, text)
     triggers_str = " ".join(dict.fromkeys(trigger_matches))
 
+    # Proposal
     proposal_raw = r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
     proposal_matches = re.findall(proposal_raw, text, re.DOTALL)
     proposal_str = " ".join(proposal_matches)
 
+    # Consent Conditions
     conditions_raw = [
     r"Conditions(.*?)(?=Advice notes)",
     r"Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b(.*?)(?=Specific conditions -)",
@@ -226,7 +237,7 @@ def clean_surrogates(text):
 
 def log_ai_chat(question, answer_raw):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer_raw} # Changed 'answer' to 'answer_raw'
+    log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer_raw}
     file_path = "ai_chat_log.csv"
     file_exists = os.path.isfile(file_path)
 
@@ -248,7 +259,47 @@ def get_chat_log_as_csv():
         except pd.errors.EmptyDataError:
             return None
     return None
-    
+
+# --- PDF Processing Function (Cached for Performance) ---
+@st.cache_data(show_spinner="Processing PDF(s)... This might take a moment.", persist=True)
+def process_uploaded_pdfs(uploaded_files_list):
+    """
+    Processes a list of uploaded PDF files, extracts metadata, and returns a list of dictionaries.
+    This function is cached to prevent re-processing the same files on every Streamlit rerun.
+    """
+    all_data = []
+    for file in uploaded_files_list:
+        try:
+            # .getvalue() is used here as st.cache_data requires hashable inputs,
+            # and file.read() consumes the buffer.
+            file_bytes = file.getvalue()
+            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+                text = "\n".join(page.get_text() for page in doc)
+
+            # OCR Fallback (if OCR libraries are imported)
+            if not text.strip():
+                # Check if OCR imports are actually available before trying to use them
+                if 'convert_from_bytes' in globals() and 'pytesseract' in globals():
+                    st.warning(f"{file.name} appears to be image-based. Attempting OCR...")
+                    try:
+                        images = convert_from_bytes(file_bytes)
+                        text = "\n".join(pytesseract.image_to_string(img) for img in images)
+                        if not text.strip():
+                            st.error(f"OCR failed to extract text from {file.name}.")
+                    except Exception as ocr_e:
+                        st.error(f"OCR processing failed for {file.name}: {ocr_e}")
+                        text = "" # Ensure text is empty if OCR fails
+                else:
+                    st.warning(f"{file.name} appears to be image-based, but OCR libraries are not imported/configured. Text extraction might be incomplete.")
+
+            data = extract_metadata(text)
+            data["__file_name__"] = file.name
+            data["__file_bytes__"] = file_bytes # Store bytes for later download
+            all_data.append(data)
+        except Exception as e:
+            st.error(f"Error processing {file.name}: {e}")
+    return all_data
+
 # --------------------
 # Banner
 # --------------------
@@ -297,11 +348,10 @@ def load_model(name):
 model = load_model(model_name)
 
 # ------------------------
-# File Processing & Dashboard
+# File Processing & Dashboard Display
 # ------------------------
-# >>> Use the cached function here <<<
 if uploaded_files:
-    # This call will only run if uploaded_files object changes or if Streamlit's cache needs revalidation
+    # Call the cached function to process PDFs
     all_data = process_uploaded_pdfs(uploaded_files)
 
     if all_data:
@@ -396,8 +446,8 @@ if uploaded_files:
                 ).apply(normalize).tolist()
 
                 query_input_norm = normalize(query_input)
-                corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
-                query_embedding = model.encode(query_input_norm, convert_to_tensor=True)
+                corpus_embeddings = model.encode(query_input_norm, convert_to_tensor=True) # Changed from query_embedding
+                query_embedding = model.encode(query_input_norm, convert_to_tensor=True) # Defined query_embedding for clarity
 
                 if "e5" in model_name or "bge" in model_name:
                     scores = query_embedding @ corpus_embeddings.T
@@ -520,15 +570,14 @@ Please provide your answer in bullet points.
                         ])
                         answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
                     elif llm_provider == "HuggingFace":
-                        # You need to define hf_chatbot or integrate HuggingFace in a similar way
-                        # For example, using the inference API or a local model
-                        # For a simple example:
+                        # HuggingFace integration requires a model setup (e.g., using transformers pipeline or inference API)
+                        # This part is a placeholder. You'd need to implement the actual call to a HuggingFace model.
+                        # Example (requires 'transformers' library):
                         # from transformers import pipeline
-                        # hf_chatbot = pipeline("text-generation", model="distilbert/distilgpt2")
-                        # hf_prompt = f"Answer this environmental compliance query based on the sample data: {user_query}"
-                        # hf_result = hf_chatbot(hf_prompt, max_length=512, do_sample=False)
-                        # answer_raw = hf_result[0]['generated_text']
-                        st.error("HuggingFace model not implemented or configured.")
+                        # hf_pipeline = pipeline("text-generation", model="distilgpt2") # Replace with your chosen model
+                        # hf_result = hf_pipeline(user_query, max_length=500, do_sample=True, top_k=50, top_p=0.95)[0]['generated_text']
+                        # answer_raw = hf_result
+                        st.error("HuggingFace model integration is a placeholder. Please configure it properly.")
                         answer_raw = "HuggingFace model not configured."
 
 
