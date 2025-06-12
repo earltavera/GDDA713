@@ -154,19 +154,19 @@ def extract_metadata(text):
     issue_date = parse_mixed_date(issue_str)
 
     # Expiry date patterns
-    expiry_raw = [
-        r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expires (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expire (\d{1,2} [A-Za-z]+\d{4})",
-        r"(\d{1,} years) from the date of commencement",
-        r"DIS\d{5,}(?:-w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
-        r"expires (\d{1,} months [A-Za-z])+[.?!]",
-        r"expires on (\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
-        r"expire on (\d{1,2}/\d{1,2}/\d{4})",
-        r"expire ([A-Za-z](\d{1,}) years)",
-        r"expires [(\d{1,} years [A-Za-z]+[.?1])"
-    ]
+    expiry_raw= [
+    r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
+    r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
+    r"expires (\d{1,2} [A-Za-z]+ \d{4})",
+    r"expire (\d{1,2} [A-Za-z]+\d{4})",
+    r"(\d{1,} years) from the date of commencement",
+    r"DIS\d{5,}(?:-\w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
+    r"expires (\d{1,} months [A-Za-z]+)[.?!]",
+    r"expires on (\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+    r"expire on (\d{1,2}/\d{1,2}/\d{4})",
+    r"expire ([A-Za-z]+\s\d{1,} years)",
+    r"expires (\d{1,} years [A-Za-z]+[.?1])"
+]
     expiry_matches = []
     for pattern in expiry_raw:
         expiry_matches += re.findall(pattern, text)
