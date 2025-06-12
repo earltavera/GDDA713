@@ -450,8 +450,8 @@ if uploaded_files:
                 ).apply(normalize).tolist()
 
                 query_input_norm = normalize(query_input)
-                corpus_embeddings = model.encode(query_input_norm, convert_to_tensor=True) # Changed from query_embedding
-                query_embedding = model.encode(query_input_norm, convert_to_tensor=True) # Defined query_embedding for clarity
+                corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
+                query_embedding = model.encode(query_input_norm, convert_to_tensor=True)
 
                 if "e5" in model_name or "bge" in model_name:
                     scores = query_embedding @ corpus_embeddings.T
@@ -528,23 +528,44 @@ with st.expander("Ask AI About Consents", expanded=True):
                     # Ensure df exists if files were uploaded, otherwise provide default context
                     if 'df' in locals() and not df.empty:
                         context_sample = df[[
-                            "Company Name", "Consent Status", "AUP(OP) Triggers",
-                            "Mitigation (Consent Conditions)", "Expiry Date"
-                        ]].dropna().head(5).to_dict(orient="records")
+                            "__file_name__",
+                            "Resource Consent Numbers",
+                            "Company Name",
+                            "Address",
+                            "Issue Date",
+                            "Expiry Date",
+                            "Consent Status",
+                            "AUP(OP) Triggers",
+                            "Reason for Consent",
+                            "Consent Conditions",
+                            "Mitigation (Consent Conditions)"
+                        ]].dropna(how='all').head(5).to_dict(orient="records") # Added .dropna(how='all') to prevent empty dicts
                     else:
-                        context_sample = [{"Company Name": "ABC Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1", "Mitigation (Consent Conditions)": "Dust Management Plan", "Expiry Date": "2025-12-31"}]
+                        context_sample = [{
+                            "__file_name__": "Sample Consent.pdf",
+                            "Resource Consent Numbers": "RC12345",
+                            "Company Name": "ABC Ltd",
+                            "Address": "123 Example St, Auckland",
+                            "Issue Date": "2023-01-01",
+                            "Expiry Date": "2025-12-31",
+                            "Consent Status": "Active",
+                            "AUP(OP) Triggers": "E14.1.1",
+                            "Reason for Consent": "Discharge of contaminants to air from a boiler.",
+                            "Consent Conditions": "1. Emission limits, 2. Monitoring requirements.",
+                            "Mitigation (Consent Conditions)": "Dust Management Plan"
+                        }]
 
                     user_query = f"""
-Use the following air discharge consent data to answer the user query.
+You are an environmental compliance assistant. Your task is to answer questions based *only* on the provided air discharge consent data. Do not make up information. If the answer is not in the provided data, state that you cannot answer based on the given information.
 
 ---
-Sample Data:
+Sample Data (JSON array of consent records):
 {context_sample}
 
 ---
-Query: {chat_input}
+User Query: {chat_input}
 
-Please provide your answer in bullet points.
+Please provide your answer in bullet points, referencing specific consent details where relevant.
 """
 
                     answer_raw = "No response from AI." # Default answer
@@ -555,7 +576,7 @@ Please provide your answer in bullet points.
                         answer_raw = response.text
                     elif llm_provider == "OpenAI":
                         messages = [
-                            {"role": "system", "content": "You are a helpful assistant for environmental consents."},
+                            {"role": "system", "content": "You are a helpful assistant for environmental consents. Answer based only on the provided data."},
                             {"role": "user", "content": user_query}
                         ]
                         response = client.chat.completions.create(
@@ -576,11 +597,6 @@ Please provide your answer in bullet points.
                     elif llm_provider == "HuggingFace":
                         # HuggingFace integration requires a model setup (e.g., using transformers pipeline or inference API)
                         # This part is a placeholder. You'd need to implement the actual call to a HuggingFace model.
-                        # Example (requires 'transformers' library):
-                        # from transformers import pipeline
-                        # hf_pipeline = pipeline("text-generation", model="distilgpt2") # Replace with your chosen model
-                        # hf_result = hf_pipeline(user_query, max_length=500, do_sample=True, top_k=50, top_p=0.95)[0]['generated_text']
-                        # answer_raw = hf_result
                         st.error("HuggingFace model integration is a placeholder. Please configure it properly.")
                         answer_raw = "HuggingFace model not configured."
 
