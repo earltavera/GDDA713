@@ -4,11 +4,11 @@ PyMuPDF
 plotly
 
 # Pinned versions for stability on Streamlit Cloud
-torch==2.1.2
-torchvision==0.16.2
-transformers==4.35.2
-sentence-transformers==2.2.2
-huggingface-hub==0.19.4
+torch
+torchvision
+transformers
+sentence-transformers
+huggingface-hub
 
 geopy
 python-dotenv
