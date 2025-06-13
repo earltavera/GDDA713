@@ -6,7 +6,7 @@ st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout
 import pandas as pd
 import pymupdf
 fitz = pymupdf
-import re
+import regex as re
 from datetime import datetime, timedelta
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
