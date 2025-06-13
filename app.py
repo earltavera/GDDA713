@@ -1,7 +1,3 @@
-# --------------------------------------------
-# Auckland Air Discharge Consent Dashboard
-# --------------------------------------------
-
 import streamlit as st
 import pandas as pd
 import pymupdf
@@ -13,22 +9,34 @@ from sentence_transformers import SentenceTransformer, util
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import base64
-# import openai  # Comment out or remove this line
 import os
 from dotenv import load_dotenv
 import csv
 import io
 import requests
 import pytz
-from groq import Groq # Import the Groq library
+
+# --- LLM Specific Imports ---
+import google.generativeai as genai # For Gemini
+from openai import OpenAI # For OpenAI (new client)
+from langchain_groq import ChatGroq # For Groq (Langchain integration)
+from langchain_core.messages import SystemMessage, HumanMessage # Needed for Langchain messages
+# --- End LLM Specific Imports ---
 
 # ------------------------
 # API Key Setup
 # ------------------------
 load_dotenv()
-# openai.api_key = os.getenv("OPENAI_API_KEY") # Comment out or remove this line
+openai_api_key = os.getenv("OPENAI_API_KEY") # Get OpenAI API key
 groq_api_key = os.getenv("GROQ_API_KEY") # Get Groq API key
-groq_client = Groq(api_key=groq_api_key) # Initialize Groq client
+google_api_key = os.getenv("GOOGLE_API_KEY") # Get Google API key for Gemini
+
+# Initialize clients (only if API keys are available)
+client = OpenAI(api_key=openai_api_key) if openai_api_key else None
+# For Groq, ChatGroq is initialized inside the conditional block for the provider choice.
+if google_api_key:
+    genai.configure(api_key=google_api_key)
+model_genai = genai.GenerativeModel("gemini-pro") if google_api_key else None
 
 # ------------------------
 # Streamlit Page Config & Style
@@ -46,14 +54,17 @@ def get_auckland_weather():
     url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={api_key}"
     try:
         response = requests.get(url)
+        response.raise_for_status() # Raise an exception for HTTP errors
         data = response.json()
         if data.get("cod") != 200:
             return "Weather unavailable"
         temp = data["main"]["temp"]
         desc = data["weather"][0]["description"].title()
         return f"{desc}, {temp:.1f}°C"
-    except:
-        return "Weather unavailable"
+    except requests.exceptions.RequestException:
+        return "Weather unavailable (network error)"
+    except Exception: # Catch other potential errors during JSON parsing, etc.
+        return "Weather unavailable (data error)"
 
 # ------------------------
 # Date, Time & Weather Banner
@@ -89,8 +100,12 @@ def check_expiry(expiry_date):
 def geocode_address(address):
     geolocator = Nominatim(user_agent="air_discharge_dashboard")
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-    location = geocode(address)
-    return (location.latitude, location.longitude) if location else (None, None)
+    try:
+        location = geocode(address)
+        return (location.latitude, location.longitude) if location else (None, None)
+    except Exception as e:
+        st.warning(f"Geocoding failed for '{address}': {e}")
+        return (None, None)
 
 def extract_metadata(text):
     rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE)
@@ -105,14 +120,14 @@ def extract_metadata(text):
     issue_str = "".join(dict.fromkeys(matches_issue))
     try:
         issue_date = datetime.strptime(issue_str, "%d %B %Y")
-    except:
+    except ValueError: # More specific exception for date parsing
         issue_date = None
 
     matches_expiry = re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
     expiry_str = "".join(dict.fromkeys(matches_expiry))
     try:
         expiry_date = datetime.strptime(expiry_str, "%d %B %Y")
-    except:
+    except ValueError: # More specific exception for date parsing
         expiry_date = None
 
     triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
@@ -145,11 +160,15 @@ def log_ai_chat(question, answer):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer}
     file_exists = os.path.isfile("ai_chat_log.csv")
-    with open("ai_chat_log.csv", mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Timestamp", "Question", "Answer"])
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(log_entry)
+    try:
+        with open("ai_chat_log.csv", mode="a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Timestamp", "Question", "Answer"])
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(log_entry)
+    except Exception as e:
+        st.error(f"Error logging chat history: {e}")
+
 
 def get_chat_log_as_csv():
     if os.path.exists("ai_chat_log.csv"):
@@ -161,6 +180,9 @@ def get_chat_log_as_csv():
             df_log.to_csv(output, index=False)
             return output.getvalue().encode("utf-8")
         except pd.errors.EmptyDataError:
+            return None
+        except Exception as e:
+            st.error(f"Error reading chat log: {e}")
             return None
     return None
 
@@ -189,6 +211,9 @@ def load_model(name):
     return SentenceTransformer(name)
 
 model = load_model(model_name)
+
+# Initialize df outside the if block to ensure it always exists
+df = pd.DataFrame()
 
 # ------------------------
 # File Processing & Dashboard
@@ -238,7 +263,6 @@ if uploaded_files:
         st.plotly_chart(fig_status, use_container_width=True)
 
         # Consent Table
-        
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
@@ -250,8 +274,8 @@ if uploaded_files:
                 "Consent Status Enhanced": "Consent Status"
             })
             st.dataframe(display_df)
-            csv = display_df.to_csv(index=False).encode("utf-8")
-            st.download_button("Download CSV", csv, "filtered_consents.csv", "text/csv")
+            csv_output = display_df.to_csv(index=False).encode("utf-8")
+            st.download_button("Download CSV", csv_output, "filtered_consents.csv", "text/csv")
             
         # Consent Map
         with st.expander("Consent Map", expanded=True):
@@ -276,7 +300,6 @@ if uploaded_files:
                 fig.update_traces(marker=dict(size=12))
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
                 st.plotly_chart(fig, use_container_width=True)
-
         
         # Semantic Search
         with st.expander("Semantic Search Results", expanded=True):
@@ -298,7 +321,7 @@ if uploaded_files:
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-st.markdown("### 🤖 Ask AI About Consents")
+# Removed redundant st.markdown("### 🤖 Ask AI About Consents")
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
@@ -306,23 +329,28 @@ with st.expander("Ask AI About Consents", expanded=True):
     llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq", "HuggingFace"], horizontal=True)
     chat_input = st.text_area("Search any query:", key="chat_input")
 
+    # Moved the closing div here
+    st.markdown("</div>", unsafe_allow_html=True)
+
     if st.button("Ask AI"):
         if not chat_input.strip():
             st.warning("Please enter a query.")
         else:
             with st.spinner("AI is thinking..."):
                 try:
-                    if "df" in locals() and not df.empty:
+                    # Check if df is populated or use fallback
+                    if not df.empty:
                         context_sample = df[[
                             "Company Name", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Expiry Date"
                         ]].dropna().head(5).to_dict(orient="records")
                     else:
-                        st.warning("No documents uploaded. AI is answering with general knowledge.")
-                        context_sample = [{"Company Name": "ABC Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1", "Mitigation (Consent Conditions)": "Dust Management Plan", "Expiry Date": "2025-12-31"}]
+                        st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
+                        context_sample = [{"Company Name": "Default Sample Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Expiry Date": "2025-12-31"}]
 
                     user_query = f"""
 Use the following air discharge consent data to answer the user query.
+If the information is not explicitly available in the provided data, state that you cannot find it within the current dashboard's uploaded documents.
 
 ---
 Sample Data:
@@ -331,49 +359,64 @@ Sample Data:
 ---
 Query: {chat_input}
 
-Please provide your answer in bullet points.
+Please provide your answer in bullet points, maintaining a helpful and professional tone.
 """
                     answer_raw = ""
                     if llm_provider == "Gemini":
-                        model_genai = genai.GenerativeModel("gemini-pro")
-                        response = model_genai.generate_content(user_query)
-                        answer_raw = response.text
+                        if model_genai:
+                            response = model_genai.generate_content(user_query)
+                            answer_raw = response.text
+                        else:
+                            answer_raw = "Gemini AI is offline (Google API key not found)."
                     elif llm_provider == "OpenAI":
-                        messages = [
-                            {"role": "system", "content": "You are a helpful assistant for environmental consents."},
-                            {"role": "user", "content": user_query}
-                        ]
-                        response = client.chat.completions.create(
-                            model="gpt-3.5-turbo",
-                            messages=messages,
-                            max_tokens=500,
-                            temperature=0.7
-                        )
-                        answer_raw = response.choices[0].message.content
+                        if client:
+                            messages = [
+                                {"role": "system", "content": "You are a helpful assistant for environmental consents. Answer based only on the provided data or state if the information is not available."},
+                                {"role": "user", "content": user_query}
+                            ]
+                            response = client.chat.completions.create(
+                                model="gpt-3.5-turbo", # You can choose other OpenAI models
+                                messages=messages,
+                                max_tokens=500,
+                                temperature=0.7
+                            )
+                            answer_raw = response.choices[0].message.content
+                        else:
+                            answer_raw = "OpenAI AI is offline (OpenAI API key not found)."
                     elif llm_provider == "Groq":
-                        chat = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
-                        system_message = "You are an environmental compliance assistant. Answer based only on the provided data."
-                        groq_response = chat.invoke([
-                            {"role": "system", "content": system_message},
-                            {"role": "user", "content": user_query}
-                        ])
-                        answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                        if groq_api_key:
+                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Or "llama3-8b-8192" or "mixtral-8x7b-32768"
+                            groq_response = chat_groq.invoke([
+                                SystemMessage(content="You are an environmental compliance assistant. Answer based only on the provided data or state if the information is not available."),
+                                HumanMessage(content=user_query)
+                            ])
+                            answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                        else:
+                            answer_raw = "Groq AI is offline (Groq API key not found)."
                     elif llm_provider == "HuggingFace":
-                        # The hf_chatbot function was not defined, so this section is disabled.
-                        # You would need to implement the model loading and pipeline for this to work.
-                        # For example: from transformers import pipeline
-                        # hf_chatbot = pipeline("text-generation", model="some-model")
                         st.warning("HuggingFace provider is not implemented in this version.")
                         answer_raw = "This AI provider is currently unavailable."
 
                     st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
-                    # ADDED LOGGING CALL
-                    if answer_raw and "unavailable" not in answer_raw:
+                    
+                    if answer_raw and "unavailable" not in answer_raw and "offline" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
 
                 except Exception as e:
-                    st.error(f"AI error: {e}")
-    st.markdown("</div>", unsafe_allow_html=True)
+                    st.error(f"AI interaction error: {e}")
+
+    # Section for downloading chat history
+    chat_log_csv = get_chat_log_as_csv()
+    if chat_log_csv:
+        st.download_button(
+            label="Download Chat History (CSV)",
+            data=chat_log_csv,
+            file_name="ai_chat_history.csv",
+            mime="text/csv",
+            help="Download a CSV file containing all past AI chat interactions."
+        )
+    else:
+        st.info("No chat history available yet.")
 
 st.markdown("---")
 st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
