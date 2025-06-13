@@ -2,7 +2,10 @@ streamlit
 pandas
 PyMuPDF
 plotly
-sentence-transformers
+# Pinned versions for stability on Streamlit Cloud
+torch==2.1.2
+torchvision==0.16.2
+sentence-transformers==2.2.2
 geopy
 python-dotenv
 requests
