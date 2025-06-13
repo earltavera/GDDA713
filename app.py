@@ -13,19 +13,22 @@ from sentence_transformers import SentenceTransformer, util
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import base64
-import openai
+# import openai  # Comment out or remove this line
 import os
 from dotenv import load_dotenv
 import csv
 import io
 import requests
 import pytz
+from groq import Groq # Import the Groq library
 
 # ------------------------
 # API Key Setup
 # ------------------------
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# openai.api_key = os.getenv("OPENAI_API_KEY") # Comment out or remove this line
+groq_api_key = os.getenv("GROQ_API_KEY") # Get Groq API key
+groq_client = Groq(api_key=groq_api_key) # Initialize Groq client
 
 # ------------------------
 # Streamlit Page Config & Style
@@ -235,7 +238,7 @@ if uploaded_files:
         st.plotly_chart(fig_status, use_container_width=True)
 
         # Consent Table
-    
+        
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
@@ -304,24 +307,28 @@ if uploaded_files:
                         try:
                             context_sample = df[["Company Name", "Consent Status", "AUP(OP) Triggers", "Mitigation (Consent Conditions)", "Expiry Date"]].dropna().head(10).to_dict(orient="records")
                             messages = [
-                                {"role": "system", "content": "You are a helpful assistant specialized in environmental compliance and industrial air discharge consents."},
-                                {"role": "user", "content": f"Data sample: {context_sample}\n\nQuestion: {chat_input}"}
+                                {"role": "system", "content": "You are a helpful assistant specialized in environmental compliance and industrial air discharge consents. Always provide answers based on the provided dashboard data, such as company names, consent statuses, triggers, mitigation, and expiry dates. If the information isn't available in the data, state that gracefully."},
+                                {"role": "user", "content": f"Here is a sample of the available data from the dashboard: {context_sample}\n\nBased on this data or the general functionality of the Auckland Air Discharge Consent Dashboard, please answer the following question: {chat_input}"}
                             ]
-                            if openai.api_key:
-                                response = openai.ChatCompletion.create(
-                                    model="gpt-3.5-turbo",
+                            
+                            # Use Groq API
+                            if groq_api_key:
+                                response = groq_client.chat.completions.create(
+                                    model="llama3-8b-8192", # You can choose other Groq models like "mixtral-8x7b-32768" or "gemma-7b-it"
                                     messages=messages,
                                     max_tokens=500,
-                                    temperature=0.7
+                                    temperature=0.7,
+                                    stream=False # Set to True for streaming responses
                                 )
-                                answer = response["choices"][0]["message"]["content"]
+                                answer = response.choices[0].message.content
                             else:
-                                answer = "AI assistant is offline (no API key). Try asking about expiry, triggers, or mitigation."
+                                answer = "AI assistant is offline (Groq API key not found). Please ensure your GROQ_API_KEY is set in the .env file."
+                            
                             st.success("Answer:")
                             st.markdown(answer)
                             log_ai_chat(chat_input, answer)
                         except Exception as e:
-                            st.error(f"AI error: {e}")
+                            st.error(f"AI error: {e}. Please ensure your Groq API key is valid and you have an active internet connection.")
 
 st.markdown("---")
 st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
