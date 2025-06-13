@@ -322,7 +322,7 @@ if uploaded_files:
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-
+# Removed redundant st.markdown("### 🤖 Ask AI About Consents")
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
@@ -342,35 +342,49 @@ with st.expander("Ask AI About Consents", expanded=True):
                     # Check if df is populated or use fallback
                     if not df.empty:
                         # Convert DataFrame subset to list of dictionaries, ensuring Timestamps are formatted as strings
-                        context_sample = df[[
+                        # IMPORTANT: Removed .head(5) to pass ALL data to the LLM for more accurate queries.
+                        context_sample_df = df[[
                             "Company Name", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Expiry Date"
-                        ]].dropna().head(5).copy() # Use .copy() to avoid SettingWithCopyWarning
+                        ]].dropna().copy() # Use .copy() to avoid SettingWithCopyWarning
                         
                         # Convert 'Expiry Date' column to string format for JSON serialization
-                        context_sample['Expiry Date'] = context_sample['Expiry Date'].dt.strftime('%Y-%m-%d')
-                        context_sample_list = context_sample.to_dict(orient="records")
+                        # Ensure 'Issue Date' is also converted if it's part of context_sample_df at any point
+                        for col in ['Expiry Date', 'Issue Date']: # Also convert 'Issue Date' if it's there
+                            if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
+                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d')
+                                
+                        context_sample_list = context_sample_df.to_dict(orient="records")
 
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
                         context_sample_list = [{"Company Name": "Default Sample Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Expiry Date": "2025-12-31"}]
 
                     # Convert context_sample_list to a JSON string for better LLM parsing
-                    context_sample_json = json.dumps(context_sample_list, indent=2)
+                    # Add a check to prevent sending excessively large data if df is very large
+                    if len(context_sample_json) > 100000: # Adjust this limit as needed for your LLM context window
+                        st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
+                        context_sample_json = json.dumps(context_sample_list[:10], indent=2) # Send only first 10 entries if too large
+                    else:
+                        context_sample_json = json.dumps(context_sample_list, indent=2)
 
                     user_query = f"""
-You are an expert assistant for Auckland Air Discharge Consents. Your primary goal is to answer user queries accurately based *only* on the 'Sample Data' provided below.
+You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions exclusively and precisely using the "Provided Data" below.
 
-If a piece of information is not present in the 'Sample Data', you *must* state that you cannot find it within the current dashboard's uploaded documents. Do not use external knowledge or make assumptions.
+Crucial Directives:
+1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Data'. Do not introduce any external knowledge, assumptions, or speculative content.
+2.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or inferred from the 'Provided Data', you *must* explicitly state: "I cannot find that information within the currently uploaded documents."
+3.  **Concise Format:** Present your answer in clear, concise bullet points.
+4.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
 
 ---
-Sample Data (JSON format):
+Provided Data (JSON format):
 {context_sample_json}
 
 ---
 User Query: {chat_input}
 
-Please provide your answer in concise bullet points, maintaining a helpful, professional, and data-driven tone.
+Answer:
 """
                     answer_raw = ""
                     if llm_provider == "Gemini":
@@ -408,8 +422,9 @@ Please provide your answer in concise bullet points, maintaining a helpful, prof
                         st.warning("HuggingFace provider is not implemented in this version.")
                         answer_raw = "This AI provider is currently unavailable."
 
-                    st.markdown(f"### 🖥️ Answer from {llm_provider} AI\n\n{answer_raw}")
+                    st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
                     
+                    # Only log successful, non-error/non-offline responses
                     if answer_raw and "unavailable" not in answer_raw and "offline" not in answer_raw and "cannot find it" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
 
