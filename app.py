@@ -22,7 +22,7 @@ import google.generativeai as genai
 from langchain_groq import ChatGroq
 
 # --- Load Environment Variables ---
-# Ensures API keys are loaded from a .env file for security
+
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
 # The OpenAI client will automatically look for the OPENAI_API_KEY environment variable
@@ -197,7 +197,7 @@ if not st.session_state.df.empty:
     # Status Chart
     status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
     status_counts.columns = ["Consent Status", "Count"]
-    color_map = {"Unknown": "gray", "Expired": "red", "Active": "green", "Expiring in 90 Days": "orange"}
+    color_map = {"Unknown": "gray", "Expired": "red", "Active": "light green", "Expiring in 90 Days": "orange"}
     fig_status = px.bar(status_counts, x="Consent Status", y="Count", text_auto=True, title="Consent Status Overview", color="Consent Status", color_discrete_map=color_map)
     fig_status.update_layout(title_x=0.5)
     st.plotly_chart(fig_status, use_container_width=True)
@@ -209,7 +209,7 @@ if not st.session_state.df.empty:
         filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
         
         display_columns = {
-            "__file_name__": "Source File", "Resource Consent Numbers": "Consent No.", "Company Name": "Company", "Address": "Site Address",
+            "__file_name__": "File Name", "Resource Consent Numbers": "Consent No.", "Company Name": "Company", "Address": "Site Address",
             "Issue Date": "Issued", "Expiry Date": "Expires", "Consent Status Enhanced": "Status",
             "Reason for Consent": "Consent Reason", "Mitigation Plans": "Mitigation Plans",
             "Number of Conditions": "Conditions", "AUP(OP) Triggers": "AUP Triggers"
