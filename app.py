@@ -295,40 +295,85 @@ if uploaded_files:
                     st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
                     st.markdown("---")
 
-        # Chatbot
-        with st.expander("Ask AI About Consents", expanded=True):
-            st.markdown("Ask anything about air discharge consents: (e.g. triggers, expiry, mitigation, or general trends)")
-            chat_input = st.text_area("Search any query:", key="chat_input")
-            if st.button("Ask AI"):
-                if not chat_input.strip():
-                    st.warning("Please enter any query.")
-                else:
-                    with st.spinner("AI is thinking..."):
-                        try:
-                            context_sample = df[["Company Name", "Consent Status", "AUP(OP) Triggers", "Mitigation (Consent Conditions)", "Expiry Date"]].dropna().head(10).to_dict(orient="records")
-                            messages = [
-                                {"role": "system", "content": "You are a helpful assistant specialized in environmental compliance and industrial air discharge consents. Always provide answers based on the provided dashboard data, such as company names, consent statuses, triggers, mitigation, and expiry dates. If the information isn't available in the data, state that gracefully."},
-                                {"role": "user", "content": f"Here is a sample of the available data from the dashboard: {context_sample}\n\nBased on this data or the general functionality of the Auckland Air Discharge Consent Dashboard, please answer the following question: {chat_input}"}
-                            ]
-                            
-                            # Use Groq API
-                            if groq_api_key:
-                                response = groq_client.chat.completions.create(
-                                    model="llama3-8b-8192", # You can choose other Groq models like "mixtral-8x7b-32768" or "gemma-7b-it"
-                                    messages=messages,
-                                    max_tokens=500,
-                                    temperature=0.7,
-                                    stream=False # Set to True for streaming responses
-                                )
-                                answer = response.choices[0].message.content
-                            else:
-                                answer = "AI assistant is offline (Groq API key not found). Please ensure your GROQ_API_KEY is set in the .env file."
-                            
-                            st.success("Answer:")
-                            st.markdown(answer)
-                            log_ai_chat(chat_input, answer)
-                        except Exception as e:
-                            st.error(f"AI error: {e}. Please ensure your Groq API key is valid and you have an active internet connection.")
+# ----------------------------
+# Ask AI About Consents Chatbot
+# ----------------------------
+st.markdown("### 🤖 Ask AI About Consents")
+with st.expander("Ask AI About Consents", expanded=True):
+    st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
+    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
+
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq", "HuggingFace"], horizontal=True)
+    chat_input = st.text_area("Search any query:", key="chat_input")
+
+    if st.button("Ask AI"):
+        if not chat_input.strip():
+            st.warning("Please enter a query.")
+        else:
+            with st.spinner("AI is thinking..."):
+                try:
+                    if "df" in locals() and not df.empty:
+                        context_sample = df[[
+                            "Company Name", "Consent Status", "AUP(OP) Triggers",
+                            "Mitigation (Consent Conditions)", "Expiry Date"
+                        ]].dropna().head(5).to_dict(orient="records")
+                    else:
+                        st.warning("No documents uploaded. AI is answering with general knowledge.")
+                        context_sample = [{"Company Name": "ABC Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1", "Mitigation (Consent Conditions)": "Dust Management Plan", "Expiry Date": "2025-12-31"}]
+
+                    user_query = f"""
+Use the following air discharge consent data to answer the user query.
+
+---
+Sample Data:
+{context_sample}
+
+---
+Query: {chat_input}
+
+Please provide your answer in bullet points.
+"""
+                    answer_raw = ""
+                    if llm_provider == "Gemini":
+                        model_genai = genai.GenerativeModel("gemini-pro")
+                        response = model_genai.generate_content(user_query)
+                        answer_raw = response.text
+                    elif llm_provider == "OpenAI":
+                        messages = [
+                            {"role": "system", "content": "You are a helpful assistant for environmental consents."},
+                            {"role": "user", "content": user_query}
+                        ]
+                        response = client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=messages,
+                            max_tokens=500,
+                            temperature=0.7
+                        )
+                        answer_raw = response.choices[0].message.content
+                    elif llm_provider == "Groq":
+                        chat = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
+                        system_message = "You are an environmental compliance assistant. Answer based only on the provided data."
+                        groq_response = chat.invoke([
+                            {"role": "system", "content": system_message},
+                            {"role": "user", "content": user_query}
+                        ])
+                        answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                    elif llm_provider == "HuggingFace":
+                        # The hf_chatbot function was not defined, so this section is disabled.
+                        # You would need to implement the model loading and pipeline for this to work.
+                        # For example: from transformers import pipeline
+                        # hf_chatbot = pipeline("text-generation", model="some-model")
+                        st.warning("HuggingFace provider is not implemented in this version.")
+                        answer_raw = "This AI provider is currently unavailable."
+
+                    st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
+                    # ADDED LOGGING CALL
+                    if answer_raw and "unavailable" not in answer_raw:
+                        log_ai_chat(chat_input, answer_raw)
+
+                except Exception as e:
+                    st.error(f"AI error: {e}")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("---")
 st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
