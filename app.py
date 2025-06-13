@@ -77,7 +77,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -109,47 +109,170 @@ def geocode_address(address):
         return (None, None)
 
 def extract_metadata(text):
-    rc_matches = re.findall(r"Application number[:\s]*([\w/-]+)", text, re.IGNORECASE)
-    if not rc_matches:
-        rc_matches = re.findall(r"RC[0-9]{5,}", text)
-    rc_str = "".join(dict.fromkeys(rc_matches))
+    # RC number patterns
+    rc_patterns = [
+        r"Application number:\s*(.+?)(?=\s*Applicant)",
+        r"Application numbers:\s*(.+)(?=\s*Applicant)",
+        r"Application number(s):\s*(.+)(?=\s*Applicant)",
+        r"RC[0-9]{5,}" # Added fallback for RC numbers
+    ]
+    rc_matches = []
+    for pattern in rc_patterns:
+        rc_matches.extend(re.findall(pattern, text, re.IGNORECASE))
+    rc_str = ", ".join(list(dict.fromkeys(rc_matches))) # Use list(dict.fromkeys()) to keep unique matches
 
-    company_str = "".join(dict.fromkeys(re.findall(r"Applicant:\s*(.+?)(?=\s*Site address)", text)))
-    address_str = "".join(dict.fromkeys(re.findall(r"Site address:\s*(.+?)(?=\s*Legal description)", text)))
+    # Company name patterns
+    company_patterns = [
+        r"Applicant:\s*(.+?)(?=\s*Site address)",
+        r"Applicant's name:\s*(.+?)(?=\s*Site address)"
+    ]
+    company_matches = []
+    for pattern in company_patterns:
+        company_matches.extend(re.findall(pattern, text, re.IGNORECASE))
+    company_str = ", ".join(list(dict.fromkeys(company_matches)))
 
-    matches_issue = re.findall(r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})", text)
-    issue_str = "".join(dict.fromkeys(matches_issue))
-    try:
-        issue_date = datetime.strptime(issue_str, "%d %B %Y")
-    except ValueError: # More specific exception for date parsing
-        issue_date = None
+    # Address patterns
+    address_pattern = r"Site address:\s*(.+?)(?=\s*Legal description)"
+    address_match = re.findall(address_pattern, text, re.IGNORECASE)
+    address_str = ", ".join(list(dict.fromkeys(address_match)))
 
-    matches_expiry = re.findall(r"shall expire on (\d{1,2} [A-Za-z]+ \d{4})", text) + re.findall(r"expires on (\d{1,2} [A-Za-z]+ \d{4})", text)
-    expiry_str = "".join(dict.fromkeys(matches_expiry))
-    try:
-        expiry_date = datetime.strptime(expiry_str, "%d %B %Y")
-    except ValueError: # More specific exception for date parsing
-        expiry_date = None
+    # Issue date patterns
+    issue_date_patterns = [
+        r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
+        r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
+        r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
+        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"(\b\d{2}/\d{2}/\d{2}\b)" # Specific pattern for dd/mm/yy
+    ]
+    issue_date = None
+    for pattern in issue_date_patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            # Try to parse the first successful match
+            for dt_str in matches:
+                try:
+                    # Attempt common date formats
+                    if '/' in dt_str:
+                        if len(dt_str.split('/')[-1]) == 2: # dd/mm/yy
+                            issue_date = datetime.strptime(dt_str, "%d/%m/%y")
+                        else: # dd/mm/yyyy
+                            issue_date = datetime.strptime(dt_str, "%d/%m/%Y")
+                    else: # Day Month Year format
+                        # Remove ordinal suffixes if present
+                        dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)\b', r'\1', dt_str)
+                        issue_date = datetime.strptime(dt_str, "%d %B %Y")
+                    break # Stop if parsing is successful
+                except ValueError:
+                    continue
+        if issue_date:
+            break # Stop searching patterns if a date is found
 
-    triggers = re.findall(r"E\d+\.\d+\.\d+", text) + re.findall(r"E\d+\.\d+\.", text) + re.findall(r"NES:STO", text) + re.findall(r"NES:AQ", text)
-    triggers_str = " ".join(dict.fromkeys(triggers))
+    # Consent Expiry patterns
+    expiry_patterns = [
+        r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
+        r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
+        r"expires (\d{1,2} [A-Za-z]+ \d{4})",
+        r"expire (\d{1,2} [A-Za-z]+\d{4})",
+        r"(\d{1,} years) from the date of commencement",
+        r"DIS\d{5,}(?:-\w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
+        r"expires (\d{1,} months [A-Za-z])+[.?!]",
+        r"expires on (\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"expire on (\d{1,2}/\d{1,2}/\d{4})",
+        r"expire ([A-Za-z](\d{1,}) years)",
+        r"expires [(\d{1,} years [A-Za-z]+[.?1])",
+    ]
+    expiry_date = None
+    for pattern in expiry_patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            for dt_str in matches:
+                # Handle cases where pattern might capture more than just the date string (e.g., tuples from groups)
+                if isinstance(dt_str, tuple):
+                    dt_str = dt_str[0] if dt_str else ""
+                if not dt_str:
+                    continue
 
-    proposal_str = " ".join(re.findall(r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", text, re.DOTALL))
+                try:
+                    if 'year' in dt_str.lower() or 'month' in dt_str.lower():
+                        # Handle relative expiry (e.g., "5 years from the date of commencement")
+                        # This part needs the issue_date to calculate an absolute expiry.
+                        # For simplicity, we'll mark these as "Relative" or process if issue_date is known.
+                        # For now, we'll just skip complex relative date calculations in this extraction.
+                        # A more robust solution would involve parsing "X years/months" and adding to issue_date.
+                        continue
+                    if '/' in dt_str:
+                        expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
+                    else:
+                        # Remove ordinal suffixes before parsing
+                        dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)\b', r'\1', dt_str)
+                        expiry_date = datetime.strptime(dt_str, "%d %B %Y")
+                    break # Stop if parsing is successful
+                except ValueError:
+                    continue
+        if expiry_date:
+            break # Stop searching patterns if a date is found
 
-    conditions_str = "".join(re.findall(r"(?<=Conditions).*?(?=Advice notes)", text, re.DOTALL))
-    conditions_numbers = re.findall(r"^\d+(?=\.)", conditions_str, re.MULTILINE)
-    managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in re.findall(r"(?i)\b(\w+)\sManagement Plan", conditions_str)]))
+    # AUP triggers
+    trigger_patterns = [
+        r"(E14\.\d+\.\d+)",
+        r"(E14\.\d+\.)",
+        r"(NES:STO)",
+        r"(NES:AQ)"
+    ]
+    triggers = []
+    for pattern in trigger_patterns:
+        triggers.extend(re.findall(pattern, text))
+    triggers_str = " ".join(list(dict.fromkeys(triggers)))
+
+    # Reason (Proposal)
+    proposal_pattern = r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
+    proposal_matches = re.findall(proposal_pattern, text, re.DOTALL)
+    proposal_str = " ".join(list(dict.fromkeys(proposal_matches)))
+
+    # Conditions (consolidated pattern for broader capture)
+    # The most comprehensive conditions pattern should be used to capture the largest possible block.
+    # The current list of conditions_raw is very specific; simplifying to avoid over-segmentation.
+    # We will prioritize the broad "Conditions to Advice notes" pattern.
+    conditions_patterns = [
+        r"(?<=Conditions).*?(?=Advice notes)",
+        # You can add a few more *distinct* broad patterns if the above fails to capture specific large blocks
+        # For example, if some documents use "Specific conditions" as a main heading without "Advice notes"
+        r"(?<=Specific conditions).*?(?=E\.\s*Definitions)", # Example for a different end marker
+        r"(?<=Conditions Specific to air quality).*?(?=Advice notes)", # Another broad one
+        r"(?<=Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)" # Another broad one
+    ]
+    conditions_str = ""
+    for pattern in conditions_patterns:
+        conditions_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+        if conditions_match:
+            conditions_str = conditions_match.group(0).strip()
+            break # Take the first successful broad match
+
+    # Extracting numbered conditions (if conditions_str is found)
+    conditions_numbers = []
+    if conditions_str:
+        # This regex looks for lines starting with a number followed by a period.
+        # It's more robust than just `^\d+(?=\.)` which might miss multi-digit numbers or other formats.
+        conditions_numbers = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
+        # Further refine to just get the leading number or section identifier
+        conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in conditions_numbers if re.match(r'^(\d+\.?\d*)', cn.strip())]
+        conditions_numbers = list(dict.fromkeys(conditions_numbers)) # Ensure unique numbers
+
+    # Management Plans from conditions
+    managementplan_raw = r"(?i)\b(\w+)\sManagement Plan"
+    management_plan = re.findall(managementplan_raw, conditions_str, re.DOTALL)
+    managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in management_plan]))
 
     return {
-        "Resource Consent Numbers": rc_str,
-        "Company Name": company_str,
-        "Address": address_str,
+        "Resource Consent Numbers": rc_str if rc_str else "Unknown",
+        "Company Name": company_str if company_str else "Unknown",
+        "Address": address_str if address_str else "Unknown",
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
         "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown",
-        "AUP(OP) Triggers": triggers_str,
-        "Reason for Consent": proposal_str,
-        "Consent Conditions": ", ".join(conditions_numbers),
-        "Mitigation (Consent Conditions)": ", ".join(managementplan_final),
+        "AUP(OP) Triggers": triggers_str if triggers_str else "None",
+        "Reason for Consent": proposal_str if proposal_str else "Unknown",
+        "Consent Conditions": ", ".join(conditions_numbers) if conditions_numbers else "None",
+        "Mitigation (Consent Conditions)": ", ".join(managementplan_final) if managementplan_final else "None",
         "Consent Status": check_expiry(expiry_date),
         "Text Blob": text
     }
@@ -301,7 +424,7 @@ if uploaded_files:
                 fig.update_traces(marker=dict(size=12))
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
                 st.plotly_chart(fig, use_container_width=True)
-        
+            
         # Semantic Search
         with st.expander("Semantic Search Results", expanded=True):
             if query_input:
