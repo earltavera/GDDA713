@@ -72,6 +72,45 @@ def get_auckland_weather():
 # Utility Functions
 # --------------------
 
+@st.cache_data(show_spinner="Geocoding addresses...")
+def geocode_address(address):
+    """
+    Geocodes a given address to latitude and longitude.
+    Uses RateLimiter to respect Nominatim's usage policy.
+    This function is cached by Streamlit to avoid repeated API calls for the same address.
+    """
+    # It's good practice to make the user_agent unique to your app.
+    # As per Nominatim's policy, including an email or website is even better.
+    geolocator = Nominatim(user_agent="auckland_air_discharge_dashboard_v1", timeout=10)
+    geocode_with_delay = RateLimiter(geolocator.geocode, min_delay_seconds=1, error_wait_seconds=10)
+
+    try:
+        # We pass 'address' and also add 'Auckland, New Zealand' for better accuracy
+        full_address = f"{address}, Auckland, New Zealand"
+        location = geocode_with_delay(full_address)
+        if location:
+            return (location.latitude, location.longitude)
+        else:
+            # If the full address fails, try the original address as a fallback
+            location = geocode_with_delay(address)
+            return (location.latitude, location.longitude) if location else (None, None)
+
+    except Exception as e:
+        # Log the specific error type for better debugging
+        st.warning(f"Geocoding for '{address}' failed with error: {type(e).__name__} - {e}. Skipping this address.")
+        return (None, None)
+
+def check_nominatim_connectivity():
+    """Checks for basic network connectivity to the Nominatim service."""
+    try:
+        response = requests.get("https://nominatim.openstreetmap.org/status.php?format=json", timeout=5)
+        response.raise_for_status()
+        # If the check is successful, we don't need to show a message.
+        # It's more useful to show an error only on failure.
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to connect to geocoding service (Nominatim). Map functionality may be affected. Error: {e}", icon="💔")
+
+
 def check_expiry(expiry_date):
     """Checks the status of a consent based on its expiry date."""
     if expiry_date is None or pd.isna(expiry_date): # Also check for NaT from pandas
@@ -79,21 +118,6 @@ def check_expiry(expiry_date):
     # Ensure comparison is timezone-aware if expiry_date has tz info
     # For simplicity, assuming expiry_date is naive and comparing to naive datetime.now().date()
     return "Expired" if expiry_date < datetime.now().date() else "Active" # Compare dates only
-
-@st.cache_data(show_spinner=False)
-def geocode_address(address):
-    """
-    Geocodes a given address to latitude and longitude.
-    Uses RateLimiter to respect Nominatim's usage policy.
-    """
-    geolocator = Nominatim(user_agent="air_discharge_dashboard", timeout=10)
-    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-    try:
-        location = geocode(address)
-        return (location.latitude, location.longitude) if location else (None, None)
-    except Exception as e:
-        st.warning(f"Geocoding failed for '{address}': {e}. Skipping this address for map.")
-        return (None, None)
 
 def parse_mixed_date(date_str):
     """
@@ -114,7 +138,7 @@ def parse_mixed_date(date_str):
         except (ValueError, TypeError):
             continue
     return None
-    
+
 # --------------------
 # Data Cleaning & Extraction
 # --------------------
@@ -375,7 +399,7 @@ def process_uploaded_pdfs(uploaded_files_list):
             # OCR Fallback if text extraction yields little to no content
             if not text.strip() or len(text.strip()) < 100: # Added a length check for robustness
                 # IMPORTANT: pytesseract requires the Tesseract OCR engine to be installed
-                # on your system and its path configured (e.g., via pytesseract.pytesseract.tesseract_cmd)
+                # on your system and its path configured (e.g., pytesseract.pytesseract.tesseract_cmd)
                 # This part will fail if Tesseract is not installed and configured.
                 if 'convert_from_bytes' in globals() and 'pytesseract' in globals():
                     st.warning(f"{file.name} appears to be image-based or has minimal text. Attempting OCR...")
@@ -413,7 +437,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+             border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong> &nbsp;&nbsp;&nbsp; 📍 <strong>Auckland</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -423,6 +447,10 @@ st.markdown("""
         Auckland Air Discharge Consent Dashboard
     </h1>
 """, unsafe_allow_html=True)
+
+# --- Call connectivity check early to inform user of potential issues ---
+check_nominatim_connectivity()
+
 
 # --------------------
 # Sidebar & Model Loader
@@ -466,15 +494,14 @@ if uploaded_files:
         df["Issue Date"] = pd.to_datetime(df["Issue Date"], errors='coerce', dayfirst=True).dt.date
         df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce', dayfirst=True).dt.date
 
-        # Apply geocoding (this will be done once per unique address due to caching)
-        df["GeoKey"] = df["Address"].astype(str).str.lower().str.strip()
-        unique_addresses = df["GeoKey"].unique()
-        
-        # Create a dictionary to store geocoded results for quick lookup
-        geocoded_cache = {addr: geocode_address(addr) for addr in unique_addresses}
-        
-        df["Latitude"] = df["GeoKey"].apply(lambda x: geocoded_cache.get(x, (None, None))[0])
-        df["Longitude"] = df["GeoKey"].apply(lambda x: geocoded_cache.get(x, (None, None))[1])
+        # --- UPDATED GEOCODING LOGIC ---
+        # Apply the cached geocode function directly to the Address column.
+        # This is efficient and leverages Streamlit's caching.
+        # The 'zip(*...)' pattern neatly unpacks the tuple results into two new columns.
+        if not df.empty and "Address" in df.columns:
+            df['Latitude'], df['Longitude'] = zip(*df['Address'].apply(geocode_address))
+        else:
+            df['Latitude'], df['Longitude'] = None, None # Ensure columns exist even if empty
 
 
         df["Consent Status Enhanced"] = df["Consent Status"]
