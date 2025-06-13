@@ -322,7 +322,7 @@ if uploaded_files:
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-
+# Removed redundant st.markdown("### 🤖 Ask AI About Consents")
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
@@ -339,6 +339,10 @@ with st.expander("Ask AI About Consents", expanded=True):
         else:
             with st.spinner("AI is thinking..."):
                 try:
+                    # Initialize context_sample_list and context_sample_json to ensure they are always defined
+                    context_sample_list = []
+                    context_sample_json = ""
+
                     # Check if df is populated or use fallback
                     if not df.empty:
                         # Convert DataFrame subset to list of dictionaries, ensuring Timestamps are formatted as strings
@@ -362,7 +366,9 @@ with st.expander("Ask AI About Consents", expanded=True):
 
                     # Convert context_sample_list to a JSON string for better LLM parsing
                     # Add a check to prevent sending excessively large data if df is very large
-                    if len(context_sample_json) > 100000: # Adjust this limit as needed for your LLM context window
+                    # This block must be OUTSIDE the `if not df.empty:` block, or the `else` within it.
+                    # It should use `context_sample_list` which is now always defined.
+                    if len(json.dumps(context_sample_list)) > 100000: # Check the length of the *full* JSON string
                         st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
                         context_sample_json = json.dumps(context_sample_list[:10], indent=2) # Send only first 10 entries if too large
                     else:
@@ -373,9 +379,10 @@ You are an intelligent assistant specializing in Auckland Air Discharge Consents
 
 Crucial Directives:
 1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Data'. Do not introduce any external knowledge, assumptions, or speculative content.
-2.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or inferred from the 'Provided Data', you *must* explicitly state: "I cannot find that information within the currently uploaded documents."
-3.  **Concise Format:** Present your answer in clear, concise bullet points.
-4.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
+2.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Data'.
+3.  **Handling Missing Information/Complex Analysis:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Data' *as presented*, or if it requires complex analysis/aggregation of data not explicitly shown (e.g., counting items not in the top 5, or performing complex filtering across a large dataset), you *must* explicitly state: "I cannot find that information within the currently uploaded documents, or it requires more complex analysis than I can perform with the provided data. Please refer to the dashboard's tables and filters for detailed insights."
+4.  **Concise Format:** Present your answer in clear, concise bullet points.
+5.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
 
 ---
 Provided Data (JSON format):
@@ -422,7 +429,7 @@ Answer:
                         st.warning("HuggingFace provider is not implemented in this version.")
                         answer_raw = "This AI provider is currently unavailable."
 
-                    st.markdown(f"### 🖥️ Answer from {llm_provider} AI\n\n{answer_raw}")
+                    st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
                     
                     # Only log successful, non-error/non-offline responses
                     if answer_raw and "unavailable" not in answer_raw and "offline" not in answer_raw and "cannot find it" not in answer_raw:
