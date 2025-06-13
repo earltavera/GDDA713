@@ -238,11 +238,12 @@ if not st.session_state.df.empty:
                 color_discrete_map=color_map, hover_name='hover_text', hover_data={"Expiry Date": "|%d %b %Y"},
                 zoom=9, height=500
             )
+            fig_map.update_traces(marker=dict(size=15))
             fig_map.update_layout(mapbox_style="open-street-map", margin={"r":0, "t":0, "l":0, "b":0}, legend_title_text='Status')
             st.plotly_chart(fig_map, use_container_width=True)
         else:
             st.info("No location data available to display on the map.")
-
+            
     # --- Ask AI Chatbot Section ---
     st.markdown("### 🤖 Ask AI to Analyze All Consent Data")
     with st.expander("Ask AI About Consents", expanded=True):
