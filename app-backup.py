@@ -9,8 +9,8 @@ import re
 from datetime import datetime, timedelta
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
-from geopy.geolocators import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
+# Removed: from geopy.geolocators import Nominatim
+# Removed: from geopy.extra.rate_limiter import RateLimiter
 import os
 from dotenv import load_dotenv
 import csv
@@ -23,6 +23,7 @@ from langchain_groq import ChatGroq
 from pdf2image import convert_from_bytes
 import pytesseract
 from dateutil.relativedelta import relativedelta # Added for precise date calculations
+import time # Added for manual rate limiting
 
 # --------------------
 # Load Environment Variables
@@ -77,24 +78,41 @@ def check_expiry(expiry_date):
     if expiry_date is None or pd.isna(expiry_date): # Also check for NaT from pandas
         return "Unknown"
     # Ensure comparison is timezone-aware if expiry_date has tz info
-    # For simplicity, assuming expiry_date is naive and comparing to naive datetime.now().date()
     return "Expired" if expiry_date < datetime.now().date() else "Active" # Compare dates only
 
 @st.cache_data(show_spinner=False)
-def geocode_address(address):
+def geocode_address_direct_nominatim(address):
     """
-    Geocodes a given address to latitude and longitude.
-    Uses RateLimiter to respect Nominatim's usage policy.
+    Geocodes a given address to latitude and longitude using Nominatim (OpenStreetMap) direct API.
+    Includes basic error handling for network issues and missing data.
     """
-    geolocator = Nominatim(user_agent="air_discharge_dashboard", timeout=10)
-    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+    base_url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": address,
+        "format": "json",
+        "limit": 1,
+        "user-agent": "air_discharge_dashboard_direct_api" # Important for Nominatim's usage policy
+    }
     try:
-        location = geocode(address)
-        return (location.latitude, location.longitude) if location else (None, None)
-    except Exception as e:
-        st.warning(f"Geocoding failed for '{address}': {e}. Skipping this address for map.")
+        response = requests.get(base_url, params=params, timeout=10)
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+        data = response.json()
+        if data and len(data) > 0:
+            latitude = data[0].get("lat")
+            longitude = data[0].get("lon")
+            if latitude is not None and longitude is not None:
+                return (float(latitude), float(longitude))
+        return (None, None) # Return None, None if no data or lat/lon missing
+    except requests.exceptions.Timeout:
+        st.warning(f"Geocoding request timed out for '{address}'.")
         return (None, None)
-
+    except requests.exceptions.RequestException as e:
+        st.warning(f"Geocoding failed for '{address}' (Network/HTTP error): {e}")
+        return (None, None)
+    except Exception as e:
+        st.warning(f"An unexpected error occurred during geocoding for '{address}': {e}")
+        return (None, None)
+    
 def parse_mixed_date(date_str):
     """
     Parses a date string from various common formats.
@@ -470,11 +488,17 @@ if uploaded_files:
         df["GeoKey"] = df["Address"].astype(str).str.lower().str.strip()
         unique_addresses = df["GeoKey"].unique()
         
-        # Create a dictionary to store geocoded results for quick lookup
-        geocoded_cache = {addr: geocode_address(addr) for addr in unique_addresses}
-        
-        df["Latitude"] = df["GeoKey"].apply(lambda x: geocoded_cache.get(x, (None, None))[0])
-        df["Longitude"] = df["GeoKey"].apply(lambda x: geocoded_cache.get(x, (None, None))[1])
+        geocoded_results = {}
+        for i, addr in enumerate(unique_addresses):
+            # Implement manual rate limiting for Nominatim (1 request per second)
+            time.sleep(1) 
+            geocoded_results[addr] = geocode_address_direct_nominatim(addr)
+            # Add a progress indicator for long geocoding tasks
+            if i % 10 == 0: # Update every 10 addresses
+                st.sidebar.progress((i + 1) / len(unique_addresses), text=f"Geocoding addresses: {i+1}/{len(unique_addresses)}")
+
+        df["Latitude"] = df["GeoKey"].apply(lambda x: geocoded_results.get(x, (None, None))[0])
+        df["Longitude"] = df["GeoKey"].apply(lambda x: geocoded_results.get(x, (None, None))[1])
 
 
         df["Consent Status Enhanced"] = df["Consent Status"]
