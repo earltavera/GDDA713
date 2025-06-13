@@ -322,7 +322,7 @@ if uploaded_files:
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-# Removed redundant st.markdown("### 💡 Ask AI About Consents")
+# Removed redundant st.markdown("### 🤖 Ask AI About Consents")
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
@@ -341,16 +341,22 @@ with st.expander("Ask AI About Consents", expanded=True):
                 try:
                     # Check if df is populated or use fallback
                     if not df.empty:
+                        # Convert DataFrame subset to list of dictionaries, ensuring Timestamps are formatted as strings
                         context_sample = df[[
                             "Company Name", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Expiry Date"
-                        ]].dropna().head(5).to_dict(orient="records")
+                        ]].dropna().head(5).copy() # Use .copy() to avoid SettingWithCopyWarning
+                        
+                        # Convert 'Expiry Date' column to string format for JSON serialization
+                        context_sample['Expiry Date'] = context_sample['Expiry Date'].dt.strftime('%Y-%m-%d')
+                        context_sample_list = context_sample.to_dict(orient="records")
+
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
-                        context_sample = [{"Company Name": "Default Sample Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Expiry Date": "2025-12-31"}]
+                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Expiry Date": "2025-12-31"}]
 
-                    # Convert context_sample to a JSON string for better LLM parsing
-                    context_sample_json = json.dumps(context_sample, indent=2)
+                    # Convert context_sample_list to a JSON string for better LLM parsing
+                    context_sample_json = json.dumps(context_sample_list, indent=2)
 
                     user_query = f"""
 You are an expert assistant for Auckland Air Discharge Consents. Your primary goal is to answer user queries accurately based *only* on the 'Sample Data' provided below.
