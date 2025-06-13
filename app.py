@@ -81,7 +81,10 @@ def geocode_address(address):
     """
     # It's good practice to make the user_agent unique to your app.
     # As per Nominatim's policy, including an email or website is even better.
-    geolocator = Nominatim(user_agent="auckland_air_discharge_dashboard_v1", timeout=10)
+    geolocator = Nominatim(
+    user_agent="AucklandAirDischargeDashboard/1.0 (your-email@example.com)", 
+    timeout=10
+    )
     geocode_with_delay = RateLimiter(geolocator.geocode, min_delay_seconds=1, error_wait_seconds=10)
 
     try:
