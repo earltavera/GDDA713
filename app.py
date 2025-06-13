@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timedelta
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
-from geopy.geolocators import Nominatim
+from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import base64
 import os
@@ -341,19 +341,20 @@ with st.expander("Ask AI About Consents", expanded=True):
                 try:
                     # Initialize context_sample_list and context_sample_json to ensure they are always defined
                     context_sample_list = []
-                    context_sample_json = "" 
+                    context_sample_json = ""
 
                     # Check if df is populated or use fallback
                     if not df.empty:
                         # Convert DataFrame subset to list of dictionaries, ensuring Timestamps are formatted as strings
-                        # IMPORTANT: This now passes ALL data to the LLM for more accurate queries, not just .head(5).
+                        # IMPORTANT: Removed .head(5) to pass ALL data to the LLM for more accurate queries.
                         context_sample_df = df[[
                             "Company Name", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Expiry Date"
-                        ]].dropna().copy() 
+                        ]].dropna().copy() # Use .copy() to avoid SettingWithCopyWarning
                         
-                        # Convert date columns to string format for JSON serialization
-                        for col in ['Expiry Date', 'Issue Date']:
+                        # Convert 'Expiry Date' column to string format for JSON serialization
+                        # Ensure 'Issue Date' is also converted if it's part of context_sample_df at any point
+                        for col in ['Expiry Date', 'Issue Date']: # Also convert 'Issue Date' if it's there
                             if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
                                 context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d')
                                 
@@ -364,24 +365,33 @@ with st.expander("Ask AI About Consents", expanded=True):
                         context_sample_list = [{"Company Name": "Default Sample Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Expiry Date": "2025-12-31"}]
 
                     # Convert context_sample_list to a JSON string for better LLM parsing
+                    # Add a check to prevent sending excessively large data if df is very large
                     # This block must be OUTSIDE the `if not df.empty:` block, or the `else` within it.
                     # It should use `context_sample_list` which is now always defined.
-                    # Removed the large data truncation logic to revert to previous state as requested.
-                    context_sample_json = json.dumps(context_sample_list, indent=2)
+                    if len(json.dumps(context_sample_list)) > 100000: # Check the length of the *full* JSON string
+                        st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
+                        context_sample_json = json.dumps(context_sample_list[:10], indent=2) # Send only first 10 entries if too large
+                    else:
+                        context_sample_json = json.dumps(context_sample_list, indent=2)
 
                     user_query = f"""
-You are an expert assistant for Auckland Air Discharge Consents. Your primary goal is to answer user queries accurately based *only* on the 'Sample Data' provided below.
+You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions exclusively and precisely using the "Provided Data" below.
 
-If a piece of information is not present in the 'Sample Data', you *must* state that you cannot find it within the current dashboard's uploaded documents. Do not use external knowledge or make assumptions.
+Crucial Directives:
+1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Data'. Do not introduce any external knowledge, assumptions, or speculative content.
+2.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Data'.
+3.  **Handling Missing Information/Complex Analysis:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Data' *as presented*, or if it requires complex analysis/aggregation of data not explicitly shown (e.g., counting items not in the top 5, or performing complex filtering across a large dataset), you *must* explicitly state: "I cannot find that information within the currently uploaded documents, or it requires more complex analysis than I can perform with the provided data. Please refer to the dashboard's tables and filters for detailed insights."
+4.  **Concise Format:** Present your answer in clear, concise bullet points.
+5.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
 
 ---
-Sample Data (JSON format):
+Provided Data (JSON format):
 {context_sample_json}
 
 ---
 User Query: {chat_input}
 
-Please provide your answer in bullet points, maintaining a helpful and professional tone.
+Answer:
 """
                     answer_raw = ""
                     if llm_provider == "Gemini":
