@@ -445,7 +445,7 @@ if uploaded_files:
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-# Removed redundant st.markdown("### 🤖 Ask AI About Consents")
+
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
@@ -471,8 +471,8 @@ with st.expander("Ask AI About Consents", expanded=True):
                         # Convert DataFrame subset to list of dictionaries, ensuring Timestamps are formatted as strings
                         # IMPORTANT: Removed .head(5) to pass ALL data to the LLM for more accurate queries.
                         context_sample_df = df[[
-                            "Company Name", "Consent Status", "AUP(OP) Triggers",
-                            "Mitigation (Consent Conditions)", "Expiry Date"
+                            "Company Name", "Address", "Consent Status", "AUP(OP) Triggers",
+                            "Mitigation (Consent Conditions)", "Issue Date", "Expiry Date", "Reason for Consent"
                         ]].dropna().copy() # Use .copy() to avoid SettingWithCopyWarning
                         
                         # Convert 'Expiry Date' column to string format for JSON serialization
@@ -485,7 +485,7 @@ with st.expander("Ask AI About Consents", expanded=True):
 
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
-                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Expiry Date": "2025-12-31"}]
+                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
 
                     # Convert context_sample_list to a JSON string for better LLM parsing
                     # Add a check to prevent sending excessively large data if df is very large
@@ -493,19 +493,25 @@ with st.expander("Ask AI About Consents", expanded=True):
                     # It should use `context_sample_list` which is now always defined.
                     if len(json.dumps(context_sample_list)) > 100000: # Check the length of the *full* JSON string
                         st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
-                        context_sample_json = json.dumps(context_sample_list[:10], indent=2) # Send only first 10 entries if too large
+                        # Send a reasonable number of entries if too large, e.g., first 50-100 entries.
+                        # The number 10 was a placeholder; 50-100 is more useful for context if data is truly large.
+                        context_sample_json = json.dumps(context_sample_list[:100], indent=2) 
                     else:
                         context_sample_json = json.dumps(context_sample_list, indent=2)
+
+                    # Get current Auckland time for the AI's context to help with expiry calculations
+                    current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     user_query = f"""
 You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions exclusively and precisely using the "Provided Data" below.
 
 Crucial Directives:
 1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Data'. Do not introduce any external knowledge, assumptions, or speculative content.
-2.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Data'.
+2.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Data'. When answering about locations, refer to the 'Address' field.
 3.  **Handling Missing Information/Complex Analysis:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Data' *as presented*, or if it requires complex analysis/aggregation of data not explicitly shown (e.g., counting items not in the top 5, or performing complex filtering across a large dataset), you *must* explicitly state: "I cannot find that information within the currently uploaded documents, or it requires more complex analysis than I can perform with the provided data. Please refer to the dashboard's tables and filters for detailed insights."
-4.  **Concise Format:** Present your answer in clear, concise bullet points.
-5.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
+4.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
+5.  **Concise Format:** Present your answer in clear, concise bullet points.
+6.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
 
 ---
 Provided Data (JSON format):
@@ -526,7 +532,7 @@ Answer:
                     elif llm_provider == "OpenAI":
                         if client:
                             messages = [
-                                {"role": "system", "content": "You are a helpful assistant for environmental consents. Answer based ONLY on the provided data or state clearly if the information is not available."},
+                                {"role": "system", "content": "You are a helpful assistant for environmental consents. Answer based ONLY on the provided data or state clearly if the information is not available. The current date for reference is " + current_auckland_time_str + "."},
                                 {"role": "user", "content": user_query}
                             ]
                             response = client.chat.completions.create(
@@ -542,7 +548,7 @@ Answer:
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Or "llama3-8b-8192" or "mixtral-8x7b-32768"
                             groq_response = chat_groq.invoke([
-                                SystemMessage(content="You are an environmental compliance assistant. Answer based ONLY on the provided data or state clearly if the information is not available."),
+                                SystemMessage(content="You are an environmental compliance assistant. Answer based ONLY on the provided data or state clearly if the information is not available. The current date for reference is " + current_auckland_time_str + "."),
                                 HumanMessage(content=user_query)
                             ])
                             answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
@@ -552,7 +558,7 @@ Answer:
                         st.warning("HuggingFace provider is not implemented in this version.")
                         answer_raw = "This AI provider is currently unavailable."
 
-                    st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
+                    st.markdown(f"### 🖥️  Answer from {llm_provider} AI\n\n{answer_raw}")
                     
                     # Only log successful, non-error/non-offline responses
                     if answer_raw and "unavailable" not in answer_raw and "offline" not in answer_raw and "cannot find it" not in answer_raw:
