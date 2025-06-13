@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
-#from geopy.geolocators import Nominatim
+from geopy.geolocators import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import os
 from dotenv import load_dotenv
