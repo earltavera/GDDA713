@@ -197,7 +197,7 @@ if not st.session_state.df.empty:
     # Status Chart
     status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
     status_counts.columns = ["Consent Status", "Count"]
-    color_map = {"Unknown": "gray", "Expired": "red", "Active": "light green", "Expiring in 90 Days": "orange"}
+    color_map = {"Unknown": "gray", "Expired": "red", "Active": "#66ff00", "Expiring in 90 Days": "orange"}
     fig_status = px.bar(status_counts, x="Consent Status", y="Count", text_auto=True, title="Consent Status Overview", color="Consent Status", color_discrete_map=color_map)
     fig_status.update_layout(title_x=0.5)
     st.plotly_chart(fig_status, use_container_width=True)
