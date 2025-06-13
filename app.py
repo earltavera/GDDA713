@@ -173,7 +173,7 @@ if uploaded_files:
             df["Consent Status"] = df["Expiry Date"].apply(check_expiry)
             df["Consent Status Enhanced"] = df["Consent Status"]
             ninety_days = datetime.now() + timedelta(days=90)
-            df.loc[(df["Consent Status"] == "Active") & (df["Expiry Date"] <= ninety_days), "Consent Status Enhanced"] = "Expiring in 90 Days"
+            df.loc[(df["Consent Status"] == "Active") & (df["Expiry Date"].notna()) & (df["Expiry Date"] <= ninety_days), "Consent Status Enhanced"] = "Expiring in 90 Days"
             st.session_state.df = df
 
 # ------------------------
@@ -195,7 +195,7 @@ if not st.session_state.df.empty:
     fig_status.update_layout(title_x=0.5)
     st.plotly_chart(fig_status, use_container_width=True)
 
-    # Detailed Data Table
+    # --- THIS SECTION IS NOW FIXED TO PREVENT THE KEYERROR ---
     st.markdown("### Detailed Consent Data")
     with st.expander("View and Filter All Consent Details", expanded=True):
         status_filter = st.selectbox("Filter table by Status:", ["All"] + list(df["Consent Status Enhanced"].unique()))
@@ -209,37 +209,42 @@ if not st.session_state.df.empty:
             "Number of Conditions": "Conditions", "AUP(OP) Triggers": "AUP Triggers", "__file_name__": "Source File"
         }
         
-        display_df = filtered_df[display_columns.keys()].copy()
-        display_df['Issued'] = pd.to_datetime(display_df['Issue Date']).dt.strftime('%d %b %Y')
-        display_df['Expires'] = pd.to_datetime(display_df['Expiry Date']).dt.strftime('%d %b %Y')
-        display_df = display_df.rename(columns=display_columns)
+        # FIX: Check which columns actually exist in the dataframe before trying to select them
+        existing_cols = [col for col in display_columns.keys() if col in filtered_df.columns]
+        
+        # Select only the columns that exist
+        display_df = filtered_df[existing_cols].copy()
+
+        # Safely format date columns if they exist
+        if 'Issue Date' in display_df.columns:
+            display_df['Issue Date'] = pd.to_datetime(display_df['Issue Date'], errors='coerce').dt.strftime('%d %b %Y')
+        if 'Expiry Date' in display_df.columns:
+            display_df['Expiry Date'] = pd.to_datetime(display_df['Expiry Date'], errors='coerce').dt.strftime('%d %b %Y')
+
+        # Rename the existing columns for display
+        display_df.rename(columns=display_columns, inplace=True)
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
         csv_export = display_df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Data as CSV", csv_export, "consent_data.csv", "text/csv", key='download-all-data')
 
-    # --- THIS SECTION HAS BEEN MOVED HERE AND EXPANDED BY DEFAULT ---
     st.markdown("### Consent Locations Map")
     with st.expander("View Consent Locations on Map", expanded=True):
         map_df = df.dropna(subset=["Latitude", "Longitude"])
         if not map_df.empty:
             map_df['hover_text'] = map_df['Company Name'] + ' - ' + map_df['Address']
             fig_map = px.scatter_mapbox(
-                map_df,
-                lat="Latitude",
-                lon="Longitude",
-                color="Consent Status Enhanced",
-                color_discrete_map=color_map,
-                hover_name='hover_text',
-                hover_data={"Expiry Date": "|%d %b %Y"},
-                zoom=9,
-                height=500
+                map_df, lat="Latitude", lon="Longitude", color="Consent Status Enhanced",
+                color_discrete_map=color_map, hover_name='hover_text', hover_data={"Expiry Date": "|%d %b %Y"},
+                zoom=9, height=500
             )
             fig_map.update_layout(mapbox_style="open-street-map", margin={"r":0, "t":0, "l":0, "b":0})
             st.plotly_chart(fig_map, use_container_width=True)
         else:
             st.info("No location data available to display on the map.")
+
+# Other sections (Search, AI Chatbot, etc.) follow and remain unchanged...
     
     # Semantic Search section
     with st.expander("Semantic Search in Documents", expanded=False):
