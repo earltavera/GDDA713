@@ -15,6 +15,7 @@ import csv
 import io
 import requests
 import pytz
+import json # Import the json module for formatting context_sample
 
 # --- LLM Specific Imports ---
 import google.generativeai as genai # For Gemini
@@ -321,7 +322,7 @@ if uploaded_files:
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-# Removed redundant st.markdown("### 🤖 Ask AI About Consents")
+# Removed redundant st.markdown("### 💡 Ask AI About Consents")
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
@@ -348,18 +349,22 @@ with st.expander("Ask AI About Consents", expanded=True):
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
                         context_sample = [{"Company Name": "Default Sample Ltd", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Expiry Date": "2025-12-31"}]
 
+                    # Convert context_sample to a JSON string for better LLM parsing
+                    context_sample_json = json.dumps(context_sample, indent=2)
+
                     user_query = f"""
-Use the following air discharge consent data to answer the user query.
-If the information is not explicitly available in the provided data, state that you cannot find it within the current dashboard's uploaded documents.
+You are an expert assistant for Auckland Air Discharge Consents. Your primary goal is to answer user queries accurately based *only* on the 'Sample Data' provided below.
+
+If a piece of information is not present in the 'Sample Data', you *must* state that you cannot find it within the current dashboard's uploaded documents. Do not use external knowledge or make assumptions.
 
 ---
-Sample Data:
-{context_sample}
+Sample Data (JSON format):
+{context_sample_json}
 
 ---
-Query: {chat_input}
+User Query: {chat_input}
 
-Please provide your answer in bullet points, maintaining a helpful and professional tone.
+Please provide your answer in concise bullet points, maintaining a helpful, professional, and data-driven tone.
 """
                     answer_raw = ""
                     if llm_provider == "Gemini":
@@ -371,7 +376,7 @@ Please provide your answer in bullet points, maintaining a helpful and professio
                     elif llm_provider == "OpenAI":
                         if client:
                             messages = [
-                                {"role": "system", "content": "You are a helpful assistant for environmental consents. Answer based only on the provided data or state if the information is not available."},
+                                {"role": "system", "content": "You are a helpful assistant for environmental consents. Answer based ONLY on the provided data or state clearly if the information is not available."},
                                 {"role": "user", "content": user_query}
                             ]
                             response = client.chat.completions.create(
@@ -387,7 +392,7 @@ Please provide your answer in bullet points, maintaining a helpful and professio
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Or "llama3-8b-8192" or "mixtral-8x7b-32768"
                             groq_response = chat_groq.invoke([
-                                SystemMessage(content="You are an environmental compliance assistant. Answer based only on the provided data or state if the information is not available."),
+                                SystemMessage(content="You are an environmental compliance assistant. Answer based ONLY on the provided data or state clearly if the information is not available."),
                                 HumanMessage(content=user_query)
                             ])
                             answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
@@ -399,7 +404,7 @@ Please provide your answer in bullet points, maintaining a helpful and professio
 
                     st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
                     
-                    if answer_raw and "unavailable" not in answer_raw and "offline" not in answer_raw:
+                    if answer_raw and "unavailable" not in answer_raw and "offline" not in answer_raw and "cannot find it" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
 
                 except Exception as e:
