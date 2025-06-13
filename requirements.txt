@@ -2,6 +2,7 @@ streamlit
 pandas
 PyMuPDF
 plotly
+sentence-transformers
 geopy
 python-dotenv
 requests
@@ -9,7 +10,6 @@ pytz
 openai
 google-generativeai
 langchain-groq
-pytesseract
 pdf2image
-sentence-transformers
+pytesseract
 python-dateutil
