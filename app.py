@@ -209,10 +209,10 @@ if not st.session_state.df.empty:
         filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
         
         display_columns = {
-            "Resource Consent Numbers": "Consent No.", "Company Name": "Company", "Address": "Site Address",
+            "__file_name__": "Source File", "Resource Consent Numbers": "Consent No.", "Company Name": "Company", "Address": "Site Address",
             "Issue Date": "Issued", "Expiry Date": "Expires", "Consent Status Enhanced": "Status",
             "Reason for Consent": "Consent Reason", "Mitigation Plans": "Mitigation Plans",
-            "Number of Conditions": "Conditions", "AUP(OP) Triggers": "AUP Triggers", "__file_name__": "Source File"
+            "Number of Conditions": "Conditions", "AUP(OP) Triggers": "AUP Triggers"
         }
         
         existing_cols = [col for col in display_columns.keys() if col in filtered_df.columns]
