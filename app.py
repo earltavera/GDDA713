@@ -322,7 +322,7 @@ if uploaded_files:
 # ----------------------------
 # Ask AI About Consents Chatbot
 # ----------------------------
-# Removed redundant st.markdown("### 🤖 Ask AI About Consents")
+
 with st.expander("Ask AI About Consents", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
@@ -408,7 +408,7 @@ Please provide your answer in concise bullet points, maintaining a helpful, prof
                         st.warning("HuggingFace provider is not implemented in this version.")
                         answer_raw = "This AI provider is currently unavailable."
 
-                    st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
+                    st.markdown(f"### 🖥️ Answer from {llm_provider} AI\n\n{answer_raw}")
                     
                     if answer_raw and "unavailable" not in answer_raw and "offline" not in answer_raw and "cannot find it" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
