@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta
 import plotly.express as px
 from sentence_transformers import SentenceTransformer, util
-#from geopy.geolocators import Nominatim
+from geopy.geolocators import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import os
 from dotenv import load_dotenv
@@ -41,6 +41,7 @@ genai.configure(api_key=google_api_key) # Configure Gemini with key
 # --------------------
 @st.cache_data(ttl=600)
 def get_auckland_weather():
+    """Fetches current weather data for Auckland using OpenWeatherMap API."""
     api_key = os.getenv("OPENWEATHER_API_KEY")
     if not api_key:
         return "Weather unavailable (API key missing)"
@@ -76,7 +77,7 @@ def check_expiry(expiry_date):
     if expiry_date is None or pd.isna(expiry_date): # Also check for NaT from pandas
         return "Unknown"
     # Ensure comparison is timezone-aware if expiry_date has tz info
-    # For simplicity, assuming expiry_date is naive and comparing to naive datetime.now()
+    # For simplicity, assuming expiry_date is naive and comparing to naive datetime.now().date()
     return "Expired" if expiry_date < datetime.now().date() else "Active" # Compare dates only
 
 @st.cache_data(show_spinner=False)
@@ -97,7 +98,7 @@ def geocode_address(address):
 def parse_mixed_date(date_str):
     """
     Parses a date string from various common formats.
-    Returns a datetime object or None if parsing fails.
+    Returns a datetime.date object or None if parsing fails.
     """
     if not isinstance(date_str, str): # Handle non-string inputs
         return None
@@ -199,25 +200,25 @@ def extract_metadata(text):
     for pattern in expiry_raw_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            date_part = match.group(1).strip()
-            # Try to parse as direct date first
-            parsed_direct_date = parse_mixed_date(date_part)
-            if parsed_direct_date:
-                expiry_date = parsed_direct_date
-                break
-            else:
-                # Handle relative dates if a direct date wasn't found in the first group
-                # This logic assumes the capture group for relative dates is the first one
+            # Check if it's a direct date first
+            is_direct_date = re.match(r"\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}|\d{1,2}/\d{1,2}/\d{2,4}", match.group(1))
+            if is_direct_date:
+                parsed_date = parse_mixed_date(match.group(1))
+                if parsed_date:
+                    expiry_date = parsed_date
+                    break
+            else: # Must be a relative duration (e.g., "5 years")
                 if len(match.groups()) >= 2: # Check if unit is captured (e.g., 'year', 'month')
                     try:
                         value = int(match.group(1))
-                        unit = match.group(2).lower() if len(match.groups()) >= 2 else "" # Handle cases where unit might be in group 3 if pattern changes
-                        if issue_date:
+                        unit = match.group(2).lower()
+                        if issue_date: # Need an issue date to calculate relative expiry
                             if "year" in unit:
                                 expiry_date = issue_date + relativedelta(years=value)
                             elif "month" in unit:
                                 expiry_date = issue_date + relativedelta(months=value)
-                            break # Found and calculated relative date, break
+                            if expiry_date: # If calculated, break
+                                break
                     except ValueError:
                         pass # Not a number, continue to next pattern
 
@@ -693,93 +694,77 @@ elif not uploaded_files:
 # ----------------------------
 st.markdown("---") # Separator
 st.markdown("### 💡 Ask AI About Consents")
-with st.expander("Ask AI About Consents", expanded=True):
-    st.markdown("""<div style="background-color:#e0f7fa; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("""
-    **Ask anything about air discharge consents** (e.g., specific triggers, expiry dates, mitigation measures, or general trends across consents).
-    The AI will try to answer based on the documents you've uploaded.
-    """, unsafe_allow_html=True)
+# Removed the outer expander here to avoid nesting issues
+st.markdown("""<div style="background-color:#e0f7fa; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
+st.markdown("""
+**Ask anything about air discharge consents** (e.g., specific triggers, expiry dates, mitigation measures, or general trends across consents).
+The AI will try to answer based on the documents you've uploaded.
+""", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq"], horizontal=True, key="llm_provider_radio")
-    chat_input = st.text_area("Enter your question here:", key="chat_input_llm")
+llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq"], horizontal=True, key="llm_provider_radio")
+chat_input = st.text_area("Enter your question here:", key="chat_input_llm")
 
-    if st.button("Ask AI", key="ask_ai_button"):
-        if not chat_input.strip():
-            st.warning("Please enter a query for the AI.")
-        else:
-            with st.spinner("AI is thinking..."):
-                try:
-                    # --- RAG: Retrieve relevant documents for LLM context ---
-                    context_for_llm = []
-                    if 'df' in locals() and not df.empty:
-                        # Re-use the semantic search model for RAG
-                        llm_query_norm = normalize_text_for_search(chat_input)
-                        llm_query_embedding = model.encode(llm_query_norm, convert_to_tensor=True)
+if st.button("Ask AI", key="ask_ai_button"):
+    if not chat_input.strip():
+        st.warning("Please enter a query for the AI.")
+    else:
+        with st.spinner("AI is thinking..."):
+            try:
+                # --- RAG: Retrieve relevant documents for LLM context ---
+                context_for_llm = []
+                if 'df' in locals() and not df.empty:
+                    # Re-use the semantic search model for RAG
+                    llm_query_norm = normalize_text_for_search(chat_input)
+                    llm_query_embedding = model.encode(llm_query_norm, convert_to_tensor=True)
 
-                        # Encode the corpus if not already done, or retrieve from cache
-                        corpus_for_llm = (
-                            df["Company Name"].fillna("") + " | " +
-                            df["Address"].fillna("") + " | " +
-                            df["AUP(OP) Triggers"].fillna("") + " | " +
-                            df["Mitigation (Consent Conditions)"].fillna("") + " | " +
-                            df["Reason for Consent"].fillna("") + " | " +
-                            df["Consent Conditions"].fillna("") + " | " +
-                            df["Resource Consent Numbers"].fillna("") + " | " +
-                            df["Text Blob"].fillna("")
-                        ).apply(normalize_text_for_search).tolist()
-                        corpus_embeddings_for_llm = model.encode(corpus_for_llm, convert_to_tensor=True)
+                    # Encode the corpus if not already done, or retrieve from cache
+                    corpus_for_llm = (
+                        df["Company Name"].fillna("") + " | " +
+                        df["Address"].fillna("") + " | " +
+                        df["AUP(OP) Triggers"].fillna("") + " | " +
+                        df["Mitigation (Consent Conditions)"].fillna("") + " | " +
+                        df["Reason for Consent"].fillna("") + " | " +
+                        df["Consent Conditions"].fillna("") + " | " +
+                        df["Resource Consent Numbers"].fillna("") + " | " +
+                        df["Text Blob"].fillna("")
+                    ).apply(normalize_text_for_search).tolist()
+                    corpus_embeddings_for_llm = model.encode(corpus_for_llm, convert_to_tensor=True)
 
-                        if "e5" in model_name or "bge" in model_name:
-                            llm_scores = llm_query_embedding @ corpus_embeddings_for_llm.T
-                        else:
-                            llm_scores = util.cos_sim(llm_query_embedding, corpus_embeddings_for_llm)[0]
-
-                        # Get top relevant documents for the LLM
-                        top_relevant_indices = llm_scores.argsort(descending=True)[:5] # Get top 5
-                        
-                        # Filter for documents with a reasonable similarity score (e.g., > 0.3)
-                        relevant_docs = []
-                        for idx in top_relevant_indices:
-                            if llm_scores[idx.item()] > 0.3: # Only include documents above a relevance threshold
-                                relevant_docs.append(df.iloc[idx.item()])
-                        
-                        if relevant_docs:
-                            # Convert relevant documents to a dictionary format suitable for LLM context
-                            context_for_llm = [
-                                {
-                                    "File Name": doc["__file_name__"],
-                                    "Resource Consent Numbers": doc["Resource Consent Numbers"],
-                                    "Company Name": doc["Company Name"],
-                                    "Address": doc["Address"],
-                                    "Issue Date": doc["Issue Date"].strftime("%Y-%m-%d") if pd.notna(doc["Issue Date"]) else "Unknown",
-                                    "Expiry Date": doc["Expiry Date"].strftime("%Y-%m-%d") if pd.notna(doc["Expiry Date"]) else "Unknown",
-                                    "Consent Status": doc["Consent Status Enhanced"],
-                                    "AUP(OP) Triggers": doc["AUP(OP) Triggers"],
-                                    "Reason for Consent": doc["Reason for Consent"],
-                                    "Consent Conditions": doc["Consent Conditions"],
-                                    "Mitigation (Consent Conditions)": doc["Mitigation (Consent Conditions)"],
-                                    "Full Document Text Sample": doc["Text Blob"][:1000] + "..." if len(doc["Text Blob"]) > 1000 else doc["Text Blob"] # Provide a snippet
-                                }
-                                for doc in relevant_docs
-                            ]
-                        else:
-                            st.info("No highly relevant documents found for your query in the uploaded files. Providing general sample data to the AI.")
-                            context_for_llm = [{
-                                "File Name": "Sample Consent.pdf",
-                                "Resource Consent Numbers": "RC12345",
-                                "Company Name": "ABC Ltd",
-                                "Address": "123 Example St, Auckland",
-                                "Issue Date": "2023-01-01",
-                                "Expiry Date": "2025-12-31",
-                                "Consent Status": "Active",
-                                "AUP(OP) Triggers": "E14.1.1",
-                                "Reason for Consent": "Discharge of contaminants to air from a boiler.",
-                                "Consent Conditions": "1. Emission limits, 2. Monitoring requirements.",
-                                "Mitigation (Consent Conditions)": "Dust Management Plan",
-                                "Full Document Text Sample": "This is a general sample consent document to provide context."
-                            }]
+                    if "e5" in model_name or "bge" in model_name:
+                        llm_scores = llm_query_embedding @ corpus_embeddings_for_llm.T
                     else:
-                        st.info("No documents uploaded. Providing general sample data to the AI.")
+                        llm_scores = util.cos_sim(llm_query_embedding, corpus_embeddings_for_llm)[0]
+
+                    # Get top relevant documents for the LLM
+                    top_relevant_indices = llm_scores.argsort(descending=True)[:5] # Get top 5
+                    
+                    # Filter for documents with a reasonable similarity score (e.g., > 0.3)
+                    relevant_docs = []
+                    for idx in top_relevant_indices:
+                        if llm_scores[idx.item()] > 0.3: # Only include documents above a relevance threshold
+                            relevant_docs.append(df.iloc[idx.item()])
+                    
+                    if relevant_docs:
+                        # Convert relevant documents to a dictionary format suitable for LLM context
+                        context_for_llm = [
+                            {
+                                "File Name": doc["__file_name__"],
+                                "Resource Consent Numbers": doc["Resource Consent Numbers"],
+                                "Company Name": doc["Company Name"],
+                                "Address": doc["Address"],
+                                "Issue Date": doc["Issue Date"].strftime("%Y-%m-%d") if pd.notna(doc["Issue Date"]) else "Unknown",
+                                "Expiry Date": doc["Expiry Date"].strftime("%Y-%m-%d") if pd.notna(doc["Expiry Date"]) else "Unknown",
+                                "Consent Status": doc["Consent Status Enhanced"],
+                                "AUP(OP) Triggers": doc["AUP(OP) Triggers"],
+                                "Reason for Consent": doc["Reason for Consent"],
+                                "Consent Conditions": doc["Consent Conditions"],
+                                "Mitigation (Consent Conditions)": doc["Mitigation (Consent Conditions)"],
+                                "Full Document Text Sample": doc["Text Blob"][:1000] + "..." if len(doc["Text Blob"]) > 1000 else doc["Text Blob"] # Provide a snippet
+                            }
+                            for doc in relevant_docs
+                        ]
+                    else:
+                        st.info("No highly relevant documents found for your query in the uploaded files. Providing general sample data to the AI.")
                         context_for_llm = [{
                             "File Name": "Sample Consent.pdf",
                             "Resource Consent Numbers": "RC12345",
@@ -794,91 +779,110 @@ with st.expander("Ask AI About Consents", expanded=True):
                             "Mitigation (Consent Conditions)": "Dust Management Plan",
                             "Full Document Text Sample": "This is a general sample consent document to provide context."
                         }]
+                else:
+                    st.info("No documents uploaded. Providing general sample data to the AI.")
+                    context_for_llm = [{
+                        "File Name": "Sample Consent.pdf",
+                        "Resource Consent Numbers": "RC12345",
+                        "Company Name": "ABC Ltd",
+                        "Address": "123 Example St, Auckland",
+                        "Issue Date": "2023-01-01",
+                        "Expiry Date": "2025-12-31",
+                        "Consent Status": "Active",
+                        "AUP(OP) Triggers": "E14.1.1",
+                        "Reason for Consent": "Discharge of contaminants to air from a boiler.",
+                        "Consent Conditions": "1. Emission limits, 2. Monitoring requirements.",
+                        "Mitigation (Consent Conditions)": "Dust Management Plan",
+                        "Full Document Text Sample": "This is a general sample consent document to provide context."
+                    }]
 
-                    # Construct the prompt for the LLM
-                    ai_system_prompt = """
-                    You are an environmental compliance assistant specializing in Auckland air discharge consents.
-                    Your goal is to answer questions accurately and concisely based *only* on the provided consent data.
-                    Do not make up information. If the answer is not explicitly stated or inferable from the provided data,
-                    state clearly that you cannot answer based on the given information.
-                    Prioritize information from the "Full Document Text Sample" and "Consent Conditions" fields if available for details.
-                    """
+                # Construct the prompt for the LLM
+                ai_system_prompt = """
+                You are an environmental compliance assistant specializing in Auckland air discharge consents.
+                Your goal is to answer questions accurately and concisely based *only* on the provided consent data.
+                Do not make up information. If the answer is not explicitly stated or inferable from the provided data,
+                state clearly that you cannot answer based on the given information.
+                Prioritize information from the "Full Document Text Sample" and "Consent Conditions" fields if available for details.
+                """
 
-                    ai_user_query = f"""
-                    ---
-                    Relevant Consent Data (JSON array of consent records):
-                    {context_for_llm}
+                ai_user_query = f"""
+                ---
+                Relevant Consent Data (JSON array of consent records):
+                {context_for_llm}
 
-                    ---
-                    User Query: {chat_input}
+                ---
+                User Query: {chat_input}
 
-                    Please provide your answer in a clear, easy-to-read format, using bullet points if appropriate.
-                    Reference specific consent details (like company name, consent number, or file name) where relevant to support your answer.
-                    """
+                Please provide your answer in a clear, easy-to-read format, using bullet points if appropriate.
+                Reference specific consent details (like company name, consent number, or file name) where relevant to support your answer.
+                """
 
-                    answer_raw = "No response from AI." # Default answer
+                answer_raw = "No response from AI." # Default answer
 
-                    if llm_provider == "Gemini":
-                        if not google_api_key:
-                            st.error("Google API Key is not set. Please set the GOOGLE_API_KEY environment variable.")
-                            answer_raw = "Error: Google API Key missing."
-                        else:
-                            model = genai.GenerativeModel("gemini-pro")
-                            response = model.generate_content(ai_user_query)
-                            answer_raw = response.text
-                    elif llm_provider == "OpenAI":
-                        if not openai_api_key:
-                            st.error("OpenAI API Key is not set. Please set the OPENAI_API_KEY environment variable.")
-                            answer_raw = "Error: OpenAI API Key missing."
-                        else:
-                            messages = [
-                                {"role": "system", "content": ai_system_prompt},
-                                {"role": "user", "content": ai_user_query}
-                            ]
-                            response = client.chat.completions.create(
-                                model="gpt-3.5-turbo", # or "gpt-4" if you have access
-                                messages=messages,
-                                max_tokens=1000, # Increased max_tokens for more detailed answers
-                                temperature=0.7
-                            )
-                            answer_raw = response.choices[0].message.content
-                    elif llm_provider == "Groq":
-                        if not groq_api_key:
-                            st.error("Groq API Key is not set. Please set the GROQ_API_KEY environment variable.")
-                            answer_raw = "Error: Groq API Key missing."
-                        else:
-                            chat = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Or "llama3-8b-8192" for faster smaller model
-                            groq_response = chat.invoke([
-                                {"role": "system", "content": ai_system_prompt},
-                                {"role": "user", "content": ai_user_query}
-                            ])
-                            answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                if llm_provider == "Gemini":
+                    if not google_api_key:
+                        st.error("Google API Key is not set. Please set the GOOGLE_API_KEY environment variable.")
+                        answer_raw = "Error: Google API Key missing."
+                    else:
+                        model = genai.GenerativeModel("gemini-pro")
+                        response = model.generate_content(ai_user_query)
+                        answer_raw = response.text
+                elif llm_provider == "OpenAI":
+                    if not openai_api_key:
+                        st.error("OpenAI API Key is not set. Please set the OPENAI_API_KEY environment variable.")
+                        answer_raw = "Error: OpenAI API Key missing."
+                    else:
+                        messages = [
+                            {"role": "system", "content": ai_system_prompt},
+                            {"role": "user", "content": ai_user_query}
+                        ]
+                        response = client.chat.completions.create(
+                            model="gpt-3.5-turbo", # or "gpt-4" if you have access
+                            messages=messages,
+                            max_tokens=1000, # Increased max_tokens for more detailed answers
+                            temperature=0.7
+                        )
+                        answer_raw = response.choices[0].message.content
+                elif llm_provider == "Groq":
+                    if not groq_api_key:
+                        st.error("Groq API Key is not set. Please set the GROQ_API_KEY environment variable.")
+                        answer_raw = "Error: Groq API Key missing."
+                    else:
+                        chat = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Or "llama3-8b-8192" for faster smaller model
+                        groq_response = chat.invoke([
+                            {"role": "system", "content": ai_system_prompt},
+                            {"role": "user", "content": ai_user_query}
+                        ])
+                        answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
 
-                    st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
-                    # Log the chat after a successful response
-                    log_ai_chat(chat_input, answer_raw)
+                st.markdown(f"### 🧠 Answer from {llm_provider} AI\n\n{answer_raw}")
+                # Log the chat after a successful response
+                log_ai_chat(chat_input, answer_raw)
 
-                except Exception as e:
-                    st.error(f"An error occurred with the AI request: {e}")
-                    st.info("Please check your API keys and internet connection, or try a different query.")
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    st.markdown("---") # Separator
-    st.markdown("### 💬 AI Chat Log")
-    with st.expander("View AI Chat Log", expanded=False):
-        csv_log = get_chat_log_as_csv()
-        if csv_log:
-            st.download_button(
-                label="Download Chat Log as CSV",
-                data=csv_log,
-                file_name="ai_chat_log.csv",
-                mime="text/csv",
-                key="download_chat_log"
-            )
-            df_chat_log = pd.read_csv(io.StringIO(csv_log.decode('utf-8')))
-            st.dataframe(df_chat_log)
-        else:
-            st.info("No chat history available yet.")
+            except Exception as e:
+                st.error(f"An error occurred with the AI request: {e}")
+                st.info("Please check your API keys and internet connection, or try a different query.")
+st.markdown("</div>", unsafe_allow_html=True) # Closes the inner div for the chatbot input area
+
+# ----------------------------
+# AI Chat Log (Now a separate top-level expander)
+# ----------------------------
+st.markdown("---") # Separator
+st.markdown("### 💬 AI Chat Log")
+with st.expander("View AI Chat Log", expanded=False): # This expander is now at the top level
+    csv_log = get_chat_log_as_csv()
+    if csv_log:
+        st.download_button(
+            label="Download Chat Log as CSV",
+            data=csv_log,
+            file_name="ai_chat_log.csv",
+            mime="text/csv",
+            key="download_chat_log"
+        )
+        df_chat_log = pd.read_csv(io.StringIO(csv_log.decode('utf-8')))
+        st.dataframe(df_chat_log)
+    else:
+        st.info("No chat history available yet.")
 
 # --------------------
 # Footer
