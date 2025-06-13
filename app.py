@@ -159,7 +159,7 @@ def extract_metadata(text):
                             issue_date = datetime.strptime(dt_str, "%d/%m/%Y")
                     else: # Day Month Year format
                         # Remove ordinal suffixes if present
-                        dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)\b', r'\1', dt_str)
+                        dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
                         issue_date = datetime.strptime(dt_str, "%d %B %Y")
                     break # Stop if parsing is successful
                 except ValueError:
@@ -172,14 +172,13 @@ def extract_metadata(text):
         r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
         r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
         r"expires (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expire (\d{1,2} [A-Za-z]+\d{4})",
+        r"expire (\d{1,2} [A-Za-z]+ \d{4})", # Added space for consistency, if needed
         r"(\d{1,} years) from the date of commencement",
         r"DIS\d{5,}(?:-\w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
-        r"expires (\d{1,} months [A-Za-z])+[.?!]",
-        r"expires on (\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"expires (\d{1,} months [A-Za-z]+)[.?!]", # Corrected to capture duration text
+        r"expires (\d{1,} years [A-Za-z]+)[.?!]", # Corrected the problematic pattern
         r"expire on (\d{1,2}/\d{1,2}/\d{4})",
-        r"expire ([A-Za-z](\d{1,}) years)",
-        r"expires [(\d{1,} years [A-Za-z]+[.?1])",
+        r"expire ([A-Za-z]\d{1,} years)", # Retained this, check if it's actually needed for your data.
     ]
     expiry_date = None
     for pattern in expiry_patterns:
@@ -193,19 +192,31 @@ def extract_metadata(text):
                     continue
 
                 try:
-                    if 'year' in dt_str.lower() or 'month' in dt_str.lower():
+                    # Attempt to parse as absolute date first
+                    if '/' in dt_str:
+                        expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
+                    elif re.match(r'^\d{1,2} [A-Za-z]+ \d{4}$', dt_str):
+                        # Remove ordinal suffixes before parsing
+                        dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
+                        expiry_date = datetime.strptime(dt_str, "%d %B %Y")
+                    else:
                         # Handle relative expiry (e.g., "5 years from the date of commencement")
                         # This part needs the issue_date to calculate an absolute expiry.
                         # For simplicity, we'll mark these as "Relative" or process if issue_date is known.
-                        # For now, we'll just skip complex relative date calculations in this extraction.
                         # A more robust solution would involve parsing "X years/months" and adding to issue_date.
-                        continue
-                    if '/' in dt_str:
-                        expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
-                    else:
-                        # Remove ordinal suffixes before parsing
-                        dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)\b', r'\1', dt_str)
-                        expiry_date = datetime.strptime(dt_str, "%d %B %Y")
+                        # For now, we'll try to extract simple year/month numbers and apply them if issue_date is known.
+                        years_match = re.search(r'(\d+)\s*years', dt_str, re.IGNORECASE)
+                        months_match = re.search(r'(\d+)\s*months', dt_str, re.IGNORECASE)
+
+                        if years_match and issue_date:
+                            num_years = int(years_match.group(1))
+                            expiry_date = issue_date + timedelta(days=num_years * 365) # Approximation
+                        elif months_match and issue_date:
+                            num_months = int(months_match.group(1))
+                            expiry_date = issue_date + timedelta(days=num_months * 30) # Approximation
+                        else:
+                            # If it's not a clear date format and not a parsable relative term, skip
+                            continue
                     break # Stop if parsing is successful
                 except ValueError:
                     continue
@@ -230,17 +241,56 @@ def extract_metadata(text):
     proposal_str = " ".join(list(dict.fromkeys(proposal_matches)))
 
     # Conditions (consolidated pattern for broader capture)
-    # The most comprehensive conditions pattern should be used to capture the largest possible block.
-    # The current list of conditions_raw is very specific; simplifying to avoid over-segmentation.
-    # We will prioritize the broad "Conditions to Advice notes" pattern.
     conditions_patterns = [
         r"(?<=Conditions).*?(?=Advice notes)",
-        # You can add a few more *distinct* broad patterns if the above fails to capture specific large blocks
-        # For example, if some documents use "Specific conditions" as a main heading without "Advice notes"
-        r"(?<=Specific conditions).*?(?=E\.\s*Definitions)", # Example for a different end marker
-        r"(?<=Conditions Specific to air quality).*?(?=Advice notes)", # Another broad one
-        r"(?<=Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)" # Another broad one
+        r"(?<=Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
+        r"(?<=Air Quality conditions).*?(?=Wastewater Discharge conditions)",
+        r"(?<=Air Discharge Permit Conditions).*?(?=E\. Definitions)",
+        r"(?<=Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
+        r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?<=Conditions Specific to air quality).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?<=Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)",
+        r"(?<=Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)",
+        r"(?<=DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
+        r"(?<=Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?<=Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
+        r"(?<=Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)",
+        r"(?<=SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)",
+        r"(?<=Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)",
+        r"(?<=Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?<=Specific Air Discharge Conditions).*?(?=Advice notes)",
+        r"(?<=Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Air Discharge Limits).*?(?= Acoustic Conditions)",
+        r"(?<=Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)",
+        r"(?<=Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
+        r"(?<=Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?<=Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?<=Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
+        r"(?<=Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?<=Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?<=DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?<=DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision", # This pattern is problematic if it doesn't have an end group for the conditions
+        r"(?<=Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
+        r"(?<=AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
+        # Fallback broad pattern if specific ones fail
+        r"(?<=Conditions\n).*?(?=(?:Advice notes|Schedule \d+|APPENDIX \w+|E\. Definitions|\Z))", # Broader, more flexible end markers
     ]
+
     conditions_str = ""
     for pattern in conditions_patterns:
         conditions_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
@@ -252,7 +302,6 @@ def extract_metadata(text):
     conditions_numbers = []
     if conditions_str:
         # This regex looks for lines starting with a number followed by a period.
-        # It's more robust than just `^\d+(?=\.)` which might miss multi-digit numbers or other formats.
         conditions_numbers = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
         # Further refine to just get the leading number or section identifier
         conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in conditions_numbers if re.match(r'^(\d+\.?\d*)', cn.strip())]
@@ -417,7 +466,6 @@ if uploaded_files:
                         "Expiry Date": True
                     },
                     zoom=10,
-                    height=500,
                     color="Consent Status Enhanced",
                     color_discrete_map=color_map
                 )
@@ -453,7 +501,6 @@ with st.expander("Ask AI About Consents", expanded=True):
     llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq", "HuggingFace"], horizontal=True)
     chat_input = st.text_area("Search any query:", key="chat_input")
 
-    # Moved the closing div here
     st.markdown("</div>", unsafe_allow_html=True)
 
     if st.button("Ask AI"):
@@ -493,9 +540,7 @@ with st.expander("Ask AI About Consents", expanded=True):
                     # It should use `context_sample_list` which is now always defined.
                     if len(json.dumps(context_sample_list)) > 100000: # Check the length of the *full* JSON string
                         st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
-                        # Send a reasonable number of entries if too large, e.g., first 50-100 entries.
-                        # The number 10 was a placeholder; 50-100 is more useful for context if data is truly large.
-                        context_sample_json = json.dumps(context_sample_list[:100], indent=2) 
+                        context_sample_json = json.dumps(context_sample_list[:100], indent=2) # Send first 100 entries if too large
                     else:
                         context_sample_json = json.dumps(context_sample_list, indent=2)
 
