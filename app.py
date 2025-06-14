@@ -569,7 +569,7 @@ with st.expander("AI Chatbot", expanded=True):
                     
                     if not df.empty:
                         context_sample_df = df[[
-                            "Company Name", "Address", "Consent Status", "AUP(OP) Triggers",
+                            "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Issue Date", "Expiry Date", "Reason for Consent"
                         ]].dropna().copy()
                         
@@ -580,7 +580,7 @@ with st.expander("AI Chatbot", expanded=True):
                         context_sample_list = context_sample_df.to_dict(orient="records")
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
-                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
+                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
 
                     context_sample_raw_json = json.dumps(context_sample_list, indent=2)
                     context_sample_json = "" # Will store the potentially truncated JSON
