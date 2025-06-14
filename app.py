@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 import csv
 import io
 import requests
-import pytz
+import pytz # Import pytz for timezone handling
 import json
 
 # --- LLM Specific Imports ---
@@ -126,9 +126,32 @@ st.markdown("""
 
 # --- Utility Functions ---
 def check_expiry(expiry_date):
+    """
+    Checks the expiry status of a consent, handling timezone-aware comparisons.
+    Assumes expiry_date from PDFs are naive and represent local Auckland time.
+    """
     if expiry_date is None:
         return "Unknown"
-    return "Expired" if expiry_date < datetime.now() else "Active"
+    
+    # Get current Auckland time, which is timezone-aware
+    current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
+    
+    # Localize the naive expiry_date to Auckland timezone for a valid comparison.
+    # If the expiry_date somehow already has timezone info, convert it to Auckland's timezone.
+    if expiry_date.tzinfo is None:
+        try:
+            localized_expiry_date = pytz.timezone("Pacific/Auckland").localize(expiry_date)
+        except Exception as e:
+            # Fallback if localization fails (e.g., ambiguous time during DST changes)
+            # In production, you might want more robust handling or logging here.
+            print(f"Warning: Could not localize expiry date {expiry_date}: {e}. Comparing as naive.")
+            return "Expired" if expiry_date < datetime.now() else "Active" # Fallback to naive local comparison
+    else:
+        # If it's already timezone-aware, convert it to Auckland's timezone for consistency
+        localized_expiry_date = expiry_date.astimezone(pytz.timezone("Pacific/Auckland"))
+
+    return "Expired" if localized_expiry_date < current_nz_time else "Active"
+
 
 @st.cache_data(show_spinner=False)
 def geocode_address(address):
@@ -157,9 +180,7 @@ def extract_metadata(text):
     flattened_rc_matches = []
     for item in rc_matches:
         if isinstance(item, tuple):
-            # Take the last element of the tuple, which is usually the actual RC number
-            # This is a heuristic that works for common cases like (s, RC_NUM)
-            flattened_rc_matches.append(item[-1]) 
+            flattened_rc_matches.append(item[-1]) # Take the last element of the tuple, usually the actual RC number
         else:
             flattened_rc_matches.append(item)
 
@@ -193,9 +214,9 @@ def extract_metadata(text):
         matches = re.findall(pattern, text)
         if matches:
             for dt_str in matches:
-                if isinstance(dt_str, tuple): # Ensure we get a string from any tuple matches
-                    dt_str = dt_str[0] if dt_str else "" # Take the first element, or empty string
-                if not isinstance(dt_str, str) or not dt_str: # Skip if not a string or empty
+                if isinstance(dt_str, tuple):
+                    dt_str = dt_str[0] if dt_str else ""
+                if not isinstance(dt_str, str) or not dt_str:
                     continue
 
                 try:
@@ -230,8 +251,8 @@ def extract_metadata(text):
     for pattern in expiry_patterns:
         matches = re.findall(pattern, text)
         if matches:
-            for dt_val in matches: # Renamed dt_str to dt_val as it can be string or tuple
-                dt_str = dt_val[0] if isinstance(dt_val, tuple) and dt_val else dt_val # Extract string from tuple if necessary
+            for dt_val in matches:
+                dt_str = dt_val[0] if isinstance(dt_val, tuple) and dt_val else dt_val
                 if not isinstance(dt_str, str) or not dt_str:
                     continue
 
@@ -452,17 +473,21 @@ if uploaded_files:
         df["Consent Status Enhanced"] = df["Consent Status"]
         df.loc[
             (df["Consent Status"] == "Active") &
-            (df["Expiry Date"] > datetime.now()) &
-            (df["Expiry Date"] <= datetime.now() + timedelta(days=90)),
+            (df["Expiry Date"] > datetime.now(pytz.timezone("Pacific/Auckland"))) & # Use timezone-aware current time
+            (df["Expiry Date"] <= datetime.now(pytz.timezone("Pacific/Auckland")) + timedelta(days=90)), # Use timezone-aware current time
             "Consent Status Enhanced"
         ] = "Expiring in 90 Days"
 
         # Metrics
         st.subheader("Consent Summary Metrics")
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4) # Added a 4th column for "Truly Active"
         col1.metric("Total Consents", len(df))
         col2.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
         col3.metric("Expiring in 90 Days", (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum())
+        # Calculate "Truly Active" (Active, not expiring soon, and not Unknown)
+        truly_active_count = (df["Consent Status Enhanced"] == "Active").sum()
+        col4.metric("Truly Active", truly_active_count)
+
 
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
