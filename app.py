@@ -558,7 +558,7 @@ with st.expander("AI Chatbot", expanded=True):
                     
                     if llm_provider == "Gemini" and google_api_key:
                         try:
-                            temp_model_for_token_count = genai.GenerativeModel("gemini-pro")
+                            temp_model_for_token_count = genai.GenerativeModel("models/gemini-pro")
                             token_count_response = temp_model_for_token_count.count_tokens(full_query_for_token_check)
                             total_tokens = token_count_response.total_tokens
 
@@ -607,7 +607,7 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini":
                         if google_api_key:
-                            gemini_model = genai.GenerativeModel("gemini-pro") # Create instance for the request
+                            gemini_model = genai.GenerativeModel("models/gemini-pro") # Create instance for the request
                             try:
                                 response = gemini_model.generate_content(user_query)
                                 if response and hasattr(response, 'text'):
