@@ -33,22 +33,56 @@ google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 # OpenWeatherMap API key
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
 
+# --- DEBUGGING API KEY LOADING (prints to console, not Streamlit UI) ---
+print(f"DEBUG: OpenAI API Key Loaded: {bool(openai_api_key)}")
+print(f"DEBUG: Groq API Key Loaded: {bool(groq_api_key)}")
+print(f"DEBUG: Google API Key Loaded: {bool(google_api_key)}")
+print(f"DEBUG: OpenWeatherMap API Key Loaded: {bool(openweathermap_api_key)}")
+# --- END DEBUGGING API KEY LOADING ---
 
-# Initialize clients and models
+
+# ------------------------
+# Streamlit Page Config & Style (MUST BE THE FIRST STREAMLIT COMMAND)
+# ------------------------
+st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
+
+# Initialize clients and models (after set_page_config)
 client = OpenAI(api_key=openai_api_key) if openai_api_key else None
 
 if google_api_key:
     genai.configure(api_key=google_api_key)
-    # No global GenerativeModel instance for Gemini needed if we create it per request
-    # or manage chat sessions explicitly. We'll create it inside the call.
+    # --- DEBUGGING STEP: Temporarily list available Gemini models (now after set_page_config) ---
+    try:
+        st.sidebar.info("Checking available Gemini models (check your console/terminal for list)...")
+        print("\n--- Listing Available Gemini Models (from genai.list_models()) ---")
+        found_gemini_pro_alias = False # Track if original gemini-pro or its common aliases are found
+        gemini_model_options = []
+        for m in genai.list_models():
+            # Only list models that support text generation (generateContent)
+            if "generateContent" in m.supported_generation_methods:
+                print(f"  - Model Name: {m.name}, Supported Methods: {m.supported_generation_methods}")
+                gemini_model_options.append(m.name)
+                # Check for common "pro" names
+                if m.name in ["models/gemini-pro", "gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-pro-latest"]:
+                    found_gemini_pro_alias = True
+        
+        if found_gemini_pro_alias:
+            print("--- A 'gemini-pro' type model was found and supports generateContent. ---")
+            print("--- Please ensure you use the EXACT NAME from the list above in your code. ---")
+            # You can pick one of these to try in the code below, e.g., "models/gemini-1.0-pro"
+        else:
+            print("--- WARNING: Common 'gemini-pro' aliases NOT found for generateContent. ---")
+            print("--- Please use one of the *listed* model names above for Gemini in your code. ---")
+            
+        print("------------------------------------\n")
+        
+    except Exception as e:
+        print(f"Error listing Gemini models: {e}")
+        st.sidebar.error(f"Failed to list Gemini models. Please check your Google API key and network connection: {e}")
+    # --- END DEBUGGING STEP ---
 else:
     # Display this warning once at startup if the key is missing
     st.error("Google API key not found. Gemini AI will be offline.")
-
-# ------------------------
-# Streamlit Page Config & Style
-# ------------------------
-st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
 # --- Weather Function ---
 @st.cache_data(ttl=600)
@@ -112,13 +146,24 @@ def extract_metadata(text):
     rc_patterns = [
         r"Application number:\s*(.+?)(?=\s*Applicant)",
         r"Application numbers:\s*(.+)(?=\s*Applicant)",
-        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)",
+        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)", # MODIFIED: non-capturing group for 's'
         r"RC[0-9]{5,}" # Added fallback for RC numbers
     ]
     rc_matches = []
     for pattern in rc_patterns:
         rc_matches.extend(re.findall(pattern, text, re.IGNORECASE))
-    rc_str = ", ".join(list(dict.fromkeys(rc_matches))) # Use list(dict.fromkeys()) to keep unique matches
+    
+    # Flatten list of lists/tuples that re.findall might return
+    flattened_rc_matches = []
+    for item in rc_matches:
+        if isinstance(item, tuple):
+            # Take the last element of the tuple, which is usually the actual RC number
+            # This is a heuristic that works for common cases like (s, RC_NUM)
+            flattened_rc_matches.append(item[-1]) 
+        else:
+            flattened_rc_matches.append(item)
+
+    rc_str = ", ".join(list(dict.fromkeys(flattened_rc_matches)))
 
     # Company name patterns
     company_patterns = [
@@ -147,80 +192,72 @@ def extract_metadata(text):
     for pattern in issue_date_patterns:
         matches = re.findall(pattern, text)
         if matches:
-            # Try to parse the first successful match
             for dt_str in matches:
+                if isinstance(dt_str, tuple): # Ensure we get a string from any tuple matches
+                    dt_str = dt_str[0] if dt_str else "" # Take the first element, or empty string
+                if not isinstance(dt_str, str) or not dt_str: # Skip if not a string or empty
+                    continue
+
                 try:
-                    # Attempt common date formats
                     if '/' in dt_str:
-                        if len(dt_str.split('/')[-1]) == 2: # dd/mm/yy
+                        if len(dt_str.split('/')[-1]) == 2:
                             issue_date = datetime.strptime(dt_str, "%d/%m/%y")
-                        else: # dd/mm/yyyy
+                        else:
                             issue_date = datetime.strptime(dt_str, "%d/%m/%Y")
-                    else: # Day Month Year format
-                        # Remove ordinal suffixes if present
+                    else:
                         dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
                         issue_date = datetime.strptime(dt_str, "%d %B %Y")
-                    break # Stop if parsing is successful
+                    break
                 except ValueError:
                     continue
             if issue_date:
-                break # Stop searching patterns if a date is found
+                break
 
     # Consent Expiry patterns
     expiry_patterns = [
         r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
         r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
         r"expires (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expire (\d{1,2} [A-Za-z]+ \d{4})", # Added space for consistency, if needed
+        r"expire (\d{1,2} [A-Za-z]+ \d{4})",
         r"(\d{1,} years) from the date of commencement",
         r"DIS\d{5,}(?:-\w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
-        r"expires (\d{1,} months [A-Za-z]+)[.?!]", # Corrected to capture duration text
-        r"expires (\d{1,} years [A-Za-z]+)[.?!]", # Corrected the problematic pattern
+        r"expires (\d{1,} months [A-Za-z]+)[.?!]",
+        r"expires (\d{1,} years [A-Za-z]+)[.?!]",
         r"expire on (\d{1,2}/\d{1,2}/\d{4})",
-        r"expire ([A-Za-z]\d{1,} years)", # Retained this, check if it's actually needed for your data.
+        r"expire ([A-Za-z]\d{1,} years)",
     ]
     expiry_date = None
     for pattern in expiry_patterns:
         matches = re.findall(pattern, text)
         if matches:
-            for dt_str in matches:
-                # Handle cases where pattern might capture more than just the date string (e.g., tuples from groups)
-                if isinstance(dt_str, tuple):
-                    dt_str = dt_str[0] if dt_str else ""
-                if not dt_str:
+            for dt_val in matches: # Renamed dt_str to dt_val as it can be string or tuple
+                dt_str = dt_val[0] if isinstance(dt_val, tuple) and dt_val else dt_val # Extract string from tuple if necessary
+                if not isinstance(dt_str, str) or not dt_str:
                     continue
 
                 try:
-                    # Attempt to parse as absolute date first
                     if '/' in dt_str:
                         expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
                     elif re.match(r'^\d{1,2} [A-Za-z]+ \d{4}$', dt_str):
-                        # Remove ordinal suffixes before parsing
                         dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
                         expiry_date = datetime.strptime(dt_str, "%d %B %Y")
                     else:
-                        # Handle relative expiry (e.g., "5 years from the date of commencement")
-                        # This part needs the issue_date to calculate an absolute expiry.
-                        # For simplicity, we'll mark these as "Relative" or process if issue_date is known.
-                        # A more robust solution would involve parsing "X years/months" and adding to issue_date.
-                        # For now, we'll try to extract simple year/month numbers and apply them if issue_date is known.
                         years_match = re.search(r'(\d+)\s*years', dt_str, re.IGNORECASE)
                         months_match = re.search(r'(\d+)\s*months', dt_str, re.IGNORECASE)
 
                         if years_match and issue_date:
                             num_years = int(years_match.group(1))
-                            expiry_date = issue_date + timedelta(days=num_years * 365) # Approximation
+                            expiry_date = issue_date + timedelta(days=num_years * 365)
                         elif months_match and issue_date:
                             num_months = int(months_match.group(1))
-                            expiry_date = issue_date + timedelta(days=num_months * 30) # Approximation
+                            expiry_date = issue_date + timedelta(days=num_months * 30)
                         else:
-                            # If it's not a clear date format and not a parsable relative term, skip
                             continue
-                    break # Stop if parsing is successful
+                    break
                 except ValueError:
                     continue
             if expiry_date:
-                break # Stop searching patterns if a date is found
+                break
 
     # AUP triggers
     trigger_patterns = [
@@ -241,54 +278,53 @@ def extract_metadata(text):
 
     # Conditions (consolidated pattern for broader capture)
     conditions_patterns = [
-        # Change (?<=Conditions) to (?:Conditions) and other variable lookbehinds
-        r"(?:Conditions).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)", # MODIFIED
-        r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)", # MODIFIED
-        r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)", # MODIFIED
-        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)", # MODIFIED
-        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)", # MODIFIED
-        r"(?:Conditions Specific to air quality).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)", # MODIFIED
-        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)", # MODIFIED
-        r"(?:Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)", # MODIFIED
-        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)", # MODIFIED
-        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)", # MODIFIED
-        r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)", # MODIFIED
-        r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)", # MODIFIED
-        r"(?:Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)", # MODIFIED
-        r"(?:Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)", # MODIFIED
-        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)", # MODIFIED
-        r"(?:Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)", # MODIFIED
-        r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)", # MODIFIED
-        r"(?:Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)", # MODIFIED
-        r"(?:Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", # MODIFIED
-        r"(?:DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision", # MODIFIED
-        r"(?:DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision", # MODIFIED
-        r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)", # MODIFIED
-        r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)", # MODIFIED
+        r"(?:Conditions).*?(?=Advice notes)",
+        r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
+        r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
+        r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)",
+        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?:Conditions Specific to air quality).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)",
+        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
+        r"(?:Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)",
+        r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)",
+        r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)",
+        r"(?:Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)",
+        r"(?:Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)",
+        r"(?:Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
+        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
+        r"(?:Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?:DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
+        r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
         # Fallback broad pattern if specific ones fail
-        r"(?:Conditions\n).*?(?=(?:Advice notes|Schedule \d+|APPENDIX \w+|E\. Definitions|\Z))", # MODIFIED
+        r"(?:Conditions\n).*?(?=(?:Advice notes|Schedule \d+|APPENDIX \w+|E\. Definitions|\Z))",
     ]
 
     conditions_str = ""
@@ -296,16 +332,22 @@ def extract_metadata(text):
         conditions_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
         if conditions_match:
             conditions_str = conditions_match.group(0).strip()
-            break # Take the first successful broad match
+            break
 
     # Extracting numbered conditions (if conditions_str is found)
     conditions_numbers = []
     if conditions_str:
-        # This regex looks for lines starting with a number followed by a period.
-        conditions_numbers = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
-        # Further refine to just get the leading number or section identifier
-        conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in conditions_numbers if re.match(r'^(\d+\.?\d*)', cn.strip())]
-        conditions_numbers = list(dict.fromkeys(conditions_numbers)) # Ensure unique numbers
+        temp_conditions_matches = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
+        
+        flattened_temp_conditions = []
+        for item in temp_conditions_matches:
+            if isinstance(item, tuple):
+                flattened_temp_conditions.append(item[0])
+            else:
+                flattened_temp_conditions.append(item)
+
+        conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
+        conditions_numbers = list(dict.fromkeys(conditions_numbers))
 
     # Management Plans from conditions
     managementplan_raw = r"(?i)\b(\w+)\sManagement Plan"
@@ -330,7 +372,7 @@ def clean_surrogates(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
 def log_ai_chat(question, answer):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d %H:%M:%S")
     log_entry = {"Timestamp": timestamp, "Question": question, "Answer": answer}
     file_exists = os.path.isfile("ai_chat_log.csv")
     try:
@@ -511,13 +553,11 @@ with st.expander("AI Chatbot", expanded=True):
                     context_sample_list = []
                     
                     if not df.empty:
-                        # Convert DataFrame subset to list of dictionaries, ensuring Timestamps are formatted as strings
                         context_sample_df = df[[
                             "Company Name", "Address", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Issue Date", "Expiry Date", "Reason for Consent"
                         ]].dropna().copy()
                         
-                        # Convert 'Expiry Date' and 'Issue Date' columns to string format for JSON serialization
                         for col in ['Expiry Date', 'Issue Date']:
                             if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
                                 context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d')
@@ -527,15 +567,11 @@ with st.expander("AI Chatbot", expanded=True):
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
                         context_sample_list = [{"Company Name": "Default Sample Ltd", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
 
-                    # Convert context_sample_list to a JSON string for better LLM parsing
                     context_sample_raw_json = json.dumps(context_sample_list, indent=2)
                     context_sample_json = "" # Will store the potentially truncated JSON
 
-                    # Get current Auckland time for the AI's context to help with expiry calculations
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
-                    # --- Token Management and Context Construction ---
-                    # Common system message for all LLMs
                     system_message_content = f"""
                     You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions exclusively and precisely using the "Provided Data" below.
 
@@ -551,49 +587,39 @@ with st.expander("AI Chatbot", expanded=True):
                     Provided Data (JSON format):
                     """
 
-                    # Construct the full prompt for token estimation
                     full_query_for_token_check = system_message_content + context_sample_raw_json + f"\n--- \nUser Query: {chat_input}\n\nAnswer:"
                     
-                    MAX_TOKENS_FOR_PROMPT = 30000 # A generous limit, Gemini Pro has 32k. Leave room for response.
+                    MAX_TOKENS_FOR_PROMPT = 30000 
                     
                     if llm_provider == "Gemini" and google_api_key:
                         try:
-                            temp_model_for_token_count = genai.GenerativeModel("models/gemini-pro")
+                            # ### IMPORTANT: REPLACE WITH THE EXACT MODEL NAME YOU FOUND IN YOUR CONSOLE OUTPUT! ###
+                            # Common options based on your list: "models/gemini-1.0-pro", "models/gemini-1.5-pro-latest", "models/gemini-flash-latest"
+                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
+                            
+                            temp_model_for_token_count = genai.GenerativeModel(GEMINI_MODEL_TO_USE) 
                             token_count_response = temp_model_for_token_count.count_tokens(full_query_for_token_check)
                             total_tokens = token_count_response.total_tokens
 
                             if total_tokens > MAX_TOKENS_FOR_PROMPT:
                                 st.warning("The uploaded data is very large. Attempting to reduce context for AI.")
-                                # A simple heuristic for reduction - consider more advanced RAG for large datasets
-                                avg_entry_len = len(context_sample_raw_json) / len(context_sample_list) if context_sample_list else 1
-                                # Estimate how many entries would fit MAX_TOKENS_FOR_PROMPT after accounting for fixed prompt parts
-                                # Rough char to token estimate: 4 chars/token. Max chars ~ MAX_TOKENS * 4
-                                # Max chars for context_sample_json part: MAX_TOKENS_FOR_PROMPT * 4 - len(system_message_content) - len(chat_input) - some buffer
-                                # This is still a heuristic, better to use iterative token counting if precise control is needed.
-                                
-                                # Let's aim for a safe number of entries, e.g., if each entry is ~200 chars, and we have 20000 tokens for data
-                                # 20000 tokens * 4 chars/token = 80000 chars. 80000 / 200 chars/entry = 400 entries.
-                                # Adjust the slice based on average entry size or a fixed number that seems reasonable.
-                                num_entries_to_send = min(len(context_sample_list), 400) # Send max 400 entries if large
+                                num_entries_to_send = min(len(context_sample_list), 400) 
 
                                 context_sample_json = json.dumps(context_sample_list[:num_entries_to_send], indent=2)
                                 st.info(f"Reduced context to approximately {num_entries_to_send} entries due to potential token limits.")
                             else:
                                 context_sample_json = context_sample_raw_json
                         except Exception as e:
-                            st.warning(f"Could not count tokens for Gemini: {e}. Sending full data (may exceed limits).")
-                            context_sample_json = context_sample_raw_json # Fallback to full data if token counting fails
+                            st.warning(f"Could not count tokens for Gemini: {e}. Sending full data (may exceed limits). This could be due to the chosen Gemini model not being available or an API issue. **Verify the model name ('{GEMINI_MODEL_TO_USE}') in your code matches an available model from your console output.**")
+                            context_sample_json = context_sample_raw_json 
                     else:
-                        # For other LLMs, use character length as a heuristic if no specific tokenizer is integrated
-                        # This part could be improved with OpenAI/Groq tokenizers if desired
-                        if len(context_sample_raw_json) > 80000: # Rough character limit, adjust as needed
+                        if len(context_sample_raw_json) > 80000: 
                             st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
-                            num_entries_to_send = min(len(context_sample_list), 100) # Send max 100 entries for other models if large
+                            num_entries_to_send = min(len(context_sample_list), 100)
                             context_sample_json = json.dumps(context_sample_list[:num_entries_to_send], indent=2)
                         else:
                             context_sample_json = context_sample_raw_json
 
-                    # Now, construct the final user_query using the (potentially truncated) context_sample_json
                     user_query = f"""
 {system_message_content}
 {context_sample_json}
@@ -607,26 +633,30 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini":
                         if google_api_key:
-                            gemini_model = genai.GenerativeModel("models/gemini-pro") # Create instance for the request
+                            # ### IMPORTANT: REPLACE WITH THE EXACT MODEL NAME YOU FOUND IN YOUR CONSOLE OUTPUT! ###
+                            # Common options based on your list: "models/gemini-1.0-pro", "models/gemini-1.5-pro-latest", "models/gemini-flash-latest"
+                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
+                            
+                            gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE) 
                             try:
                                 response = gemini_model.generate_content(user_query)
                                 if response and hasattr(response, 'text'):
                                     answer_raw = response.text
                                 else:
-                                    answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error."
+                                    answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error. Check your console for details."
                             except Exception as e:
-                                answer_raw = f"Gemini API error: {e}"
+                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue. **Verify the model name in your code matches an available model from your console output.**"
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
                     elif llm_provider == "OpenAI":
                         if client:
                             messages = [
-                                {"role": "system", "content": system_message_content + "\n" + context_sample_json}, # Pass context in system message for OpenAI
-                                {"role": "user", "content": f"User Query: {chat_input}"} # User query is just the user's actual question
+                                {"role": "system", "content": system_message_content + "\n" + context_sample_json},
+                                {"role": "user", "content": f"User Query: {chat_input}"}
                             ]
                             try:
                                 response = client.chat.completions.create(
-                                    model="gpt-3.5-turbo", # You can choose other OpenAI models
+                                    model="gpt-3.5-turbo",
                                     messages=messages,
                                     max_tokens=500,
                                     temperature=0.7
@@ -638,10 +668,10 @@ Answer:
                             answer_raw = "OpenAI AI is offline (OpenAI API key not found)."
                     elif llm_provider == "Groq":
                         if groq_api_key:
-                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Or "llama3-8b-8192" or "mixtral-8x7b-32768"
+                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
                                 groq_response = chat_groq.invoke([
-                                    SystemMessage(content=system_message_content + "\n" + context_sample_json), # Pass context in system message for Groq
+                                    SystemMessage(content=system_message_content + "\n" + context_sample_json),
                                     HumanMessage(content=f"User Query: {chat_input}")
                                 ])
                                 answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
@@ -652,15 +682,12 @@ Answer:
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider} AI\n\n{answer_raw}")
                     
-                    # Log all responses, including "cannot find it" as it's a valid, instructed output.
-                    # Only exclude general offline/unavailable messages.
-                    if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw:
+                    if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
 
                 except Exception as e:
                     st.error(f"AI interaction error: {e}")
 
-    # Section for downloading chat history
     chat_log_csv = get_chat_log_as_csv()
     if chat_log_csv:
         st.download_button(
