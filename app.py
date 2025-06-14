@@ -468,7 +468,27 @@ if uploaded_files:
         df = pd.DataFrame(all_data)
         df["GeoKey"] = df["Address"].str.lower().str.strip()
         df["Latitude"], df["Longitude"] = zip(*df["GeoKey"].apply(geocode_address))
+        auckland_tz = pytz.timezone("Pacific/Auckland")
         df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce', dayfirst=True)
+        def localize_to_auckland(dt):
+            if pd.isna(dt): # Handle NaT values
+                return pd.NaT
+            if dt.tzinfo is None:
+                try:
+                    # Using 'infer_dst=True' helps with Daylight Saving Time transitions
+                    return auckland_tz.localize(dt, is_dst=None) # is_dst=None lets pytz infer or raise Ambiguous/NonExistentTimeError
+                except pytz.AmbiguousTimeError:
+                    # Fallback for ambiguous times (e.g., during DST rollback)
+                    # You might need a more specific strategy here, like choosing 'infer_dst=True' or 'fold=True' in localize
+                    # For simplicity, returning a naive datetime in such rare cases might be acceptable or logging it.
+                    return auckland_tz.localize(dt, is_dst=False) # Or True, depending on desired resolution
+                except pytz.NonExistentTimeError:
+                    # Fallback for non-existent times (e.g., during DST spring forward)
+                    return pd.NaT # Treat as invalid or make a sensible adjustment
+            return dt.astimezone(auckland_tz) # Convert if already timezone-aware but different TZ
+
+        df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
+        
 
         df["Consent Status Enhanced"] = df["Consent Status"]
         df.loc[
