@@ -473,14 +473,9 @@ if uploaded_files:
         col1, col2, col3, col4 = st.columns(4) # Added a 4th column for "Truly Active"
         col1.metric("Total Consents", len(df))
         col2.metric("Expiring in 90 Days", (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum())
-
-        col3.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
-
-        # Calculate "Truly Active" (Active, not expiring soon, and not Unknown)
-
-        truly_active_count = (df["Consent Status Enhanced"] == "Active").sum()
-
-        col4.metric("Truly Active", truly_active_count)
+        col3.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
+        truly_active_count = (df["Consent Status Enhanced"] == "Active").sum()
+        col4.metric("Truly Active", truly_active_count)
 
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
