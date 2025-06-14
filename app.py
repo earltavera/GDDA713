@@ -153,7 +153,6 @@ def extract_metadata(text):
             flattened_rc_matches.append(item[-1]) 
         else:
             flattened_rc_matches.append(item)
-
     rc_str = ", ".join(list(dict.fromkeys(flattened_rc_matches)))
 
     # Company name patterns
@@ -362,7 +361,6 @@ def log_ai_chat(question, answer):
     except Exception as e:
         st.error(f"Error logging chat history: {e}")
 
-
 def get_chat_log_as_csv():
     if os.path.exists("ai_chat_log.csv"):
         try:
@@ -485,7 +483,6 @@ if uploaded_files:
         colored_metric(col2, "Expiring in 90 Days", expiring_90_days, color_map["Expiring in 90 Days"])
         colored_metric(col3, "Expired", expired_count, color_map["Expired"])
         colored_metric(col4, "Truly Active", truly_active_count, color_map["Active"])
-
 
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
