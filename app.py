@@ -19,7 +19,7 @@ import json
 
 # --- LLM Specific Imports ---
 import google.generativeai as genai # For Gemini
-from openai import OpenAI # For OpenAI (new client)
+# from openai import OpenAI # For OpenAI (new client) - REMOVED
 from langchain_groq import ChatGroq # For Groq (Langchain integration)
 from langchain_core.messages import SystemMessage, HumanMessage # Needed for Langchain messages
 # --- End LLM Specific Imports ---
@@ -27,14 +27,14 @@ from langchain_core.messages import SystemMessage, HumanMessage # Needed for Lan
 # --- API Key Setup ---
 load_dotenv()
 # Prioritize st.secrets for deployment, fall back to .env for local development
-openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+# openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY") # REMOVED
 groq_api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
 google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 # OpenWeatherMap API key
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
 
 # --- DEBUGGING API KEY LOADING (prints to console, not Streamlit UI) ---
-print(f"DEBUG: OpenAI API Key Loaded: {bool(openai_api_key)}")
+# print(f"DEBUG: OpenAI API Key Loaded: {bool(openai_api_key)}") # REMOVED
 print(f"DEBUG: Groq API Key Loaded: {bool(groq_api_key)}")
 print(f"DEBUG: Google API Key Loaded: {bool(google_api_key)}")
 print(f"DEBUG: OpenWeatherMap API Key Loaded: {bool(openweathermap_api_key)}")
@@ -47,10 +47,39 @@ print(f"DEBUG: OpenWeatherMap API Key Loaded: {bool(openweathermap_api_key)}")
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
 # Initialize clients and models (after set_page_config)
-client = OpenAI(api_key=openai_api_key) if openai_api_key else None
+# client = OpenAI(api_key=openai_api_key) if openai_api_key else None # REMOVED
 
 if google_api_key:
     genai.configure(api_key=google_api_key)
+    # --- DEBUGGING STEP: Temporarily list available Gemini models (now after set_page_config) ---
+    try:
+        st.sidebar.info("Checking available Gemini models (check your console/terminal for list)...")
+        print("\n--- Listing Available Gemini Models (from genai.list_models()) ---")
+        found_gemini_pro_alias = False # Track if original gemini-pro or its common aliases are found
+        gemini_model_options = []
+        for m in genai.list_models():
+            # Only list models that support text generation (generateContent)
+            if "generateContent" in m.supported_generation_methods:
+                print(f"  - Model Name: {m.name}, Supported Methods: {m.supported_generation_methods}")
+                gemini_model_options.append(m.name)
+                # Check for common "pro" names
+                if m.name in ["models/gemini-pro", "gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-pro-latest"]:
+                    found_gemini_pro_alias = True
+        
+        if found_gemini_pro_alias:
+            print("--- A 'gemini-pro' type model was found and supports generateContent. ---")
+            print("--- Please ensure you use the EXACT NAME from the list above in your code. ---")
+            # You can pick one of these to try in the code below, e.g., "models/gemini-1.0-pro"
+        else:
+            print("--- WARNING: Common 'gemini-pro' aliases NOT found for generateContent. ---")
+            print("--- Please use one of the *listed* model names above for Gemini in your code. ---")
+            
+        print("------------------------------------\n")
+        
+    except Exception as e:
+        print(f"Error listing Gemini models: {e}")
+        st.sidebar.error(f"Failed to list Gemini models. Please check your Google API key and network connection: {e}")
+    # --- END DEBUGGING STEP ---
 else:
     # Display this warning once at startup if the key is missing
     st.error("Google API key not found. Gemini AI will be offline.")
@@ -96,32 +125,44 @@ st.markdown("""
 
 
 # --- Utility Functions ---
+def localize_to_auckland(dt):
+    """
+    Helper function to localize a datetime object to Pacific/Auckland timezone.
+    Handles NaT and non-datetime types gracefully.
+    """
+    if pd.isna(dt) or not isinstance(dt, datetime):
+        return pd.NaT # Return NaT if it's not a valid datetime
+
+    auckland_tz = pytz.timezone("Pacific/Auckland")
+
+    if dt.tzinfo is None:
+        try:
+            # Localize naive datetime. is_dst=None handles DST transitions by inferring or raising errors.
+            return auckland_tz.localize(dt, is_dst=None)
+        except pytz.AmbiguousTimeError:
+            # For ambiguous times (e.g., during DST rollback), pick one (e.g., non-DST)
+            # You might need a more specific business rule here.
+            return auckland_tz.localize(dt, is_dst=False) 
+        except pytz.NonExistentTimeError:
+            # For non-existent times (e.g., during DST spring forward), return NaT or adjust.
+            return pd.NaT 
+    else:
+        # If it's already timezone-aware, convert it to Auckland's timezone for consistency
+        return dt.astimezone(auckland_tz)
+
 def check_expiry(expiry_date):
     """
-    Checks the expiry status of a consent, handling timezone-aware comparisons.
-    Assumes expiry_date from PDFs are naive and represent local Auckland time.
+    Checks the expiry status of a consent. Assumes expiry_date is already timezone-aware
+    in the 'Pacific/Auckland' timezone due to processing in the main script.
     """
-    if expiry_date is None:
+    if pd.isna(expiry_date): # Check for NaT (from localization failures or original parse errors)
         return "Unknown"
     
     # Get current Auckland time, which is timezone-aware
     current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
     
-    # Localize the naive expiry_date to Auckland timezone for a valid comparison.
-    # If the expiry_date somehow already has timezone info, convert it to Auckland's timezone.
-    if expiry_date.tzinfo is None:
-        try:
-            localized_expiry_date = pytz.timezone("Pacific/Auckland").localize(expiry_date)
-        except Exception as e:
-            # Fallback if localization fails (e.g., ambiguous time during DST changes)
-            # In production, you might want more robust handling or logging here.
-            print(f"Warning: Could not localize expiry date {expiry_date}: {e}. Comparing as naive.")
-            return "Expired" if expiry_date < datetime.now() else "Active" # Fallback to naive local comparison
-    else:
-        # If it's already timezone-aware, convert it to Auckland's timezone for consistency
-        localized_expiry_date = expiry_date.astimezone(pytz.timezone("Pacific/Auckland"))
-
-    return "Expired" if localized_expiry_date < current_nz_time else "Active"
+    # Both dates are now timezone-aware and in the same timezone for direct comparison
+    return "Expired" if expiry_date < current_nz_time else "Active"
 
 
 @st.cache_data(show_spinner=False)
@@ -140,8 +181,8 @@ def extract_metadata(text):
     rc_patterns = [
         r"Application number:\s*(.+?)(?=\s*Applicant)",
         r"Application numbers:\s*(.+)(?=\s*Applicant)",
-        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)", # MODIFIED: non-capturing group for 's'
-        r"RC[0-9]{5,}" # Added fallback for RC numbers
+        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)", 
+        r"RC[0-9]{5,}" 
     ]
     rc_matches = []
     for pattern in rc_patterns:
@@ -151,7 +192,7 @@ def extract_metadata(text):
     flattened_rc_matches = []
     for item in rc_matches:
         if isinstance(item, tuple):
-            flattened_rc_matches.append(item[-1]) # Take the last element of the tuple, usually the actual RC number
+            flattened_rc_matches.append(item[-1]) 
         else:
             flattened_rc_matches.append(item)
 
@@ -178,16 +219,15 @@ def extract_metadata(text):
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
         r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
         r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
-        r"(\b\d{2}/\d{2}/\d{2}\b)" # Specific pattern for dd/mm/yy
+        r"(\b\d{2}/\d{2}/\d{2}\b)"
     ]
     issue_date = None
     for pattern in issue_date_patterns:
         matches = re.findall(pattern, text)
         if matches:
-            for dt_str in matches:
-                if isinstance(dt_str, tuple):
-                    dt_str = dt_str[0] if dt_str else ""
-                if not isinstance(dt_str, str) or not dt_str:
+            for dt_str_candidate in matches:
+                dt_str = dt_str_candidate[0] if isinstance(dt_str_candidate, tuple) and dt_str_candidate else dt_str_candidate
+                if not isinstance(dt_str, str) or not dt_str.strip():
                     continue
 
                 try:
@@ -222,29 +262,17 @@ def extract_metadata(text):
     for pattern in expiry_patterns:
         matches = re.findall(pattern, text)
         if matches:
-            for dt_val in matches:
-                dt_str = dt_val[0] if isinstance(dt_val, tuple) and dt_val else dt_val
-                if not isinstance(dt_str, str) or not dt_str:
+            for dt_val_candidate in matches:
+                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_val_candidate
+                if not isinstance(dt_str, str) or not dt_str.strip():
                     continue
 
                 try:
                     if '/' in dt_str:
                         expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
-                    elif re.match(r'^\d{1,2} [A-Za-z]+ \d{4}$', dt_str):
+                    else:
                         dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
                         expiry_date = datetime.strptime(dt_str, "%d %B %Y")
-                    else:
-                        years_match = re.search(r'(\d+)\s*years', dt_str, re.IGNORECASE)
-                        months_match = re.search(r'(\d+)\s*months', dt_str, re.IGNORECASE)
-
-                        if years_match and issue_date:
-                            num_years = int(years_match.group(1))
-                            expiry_date = issue_date + timedelta(days=num_years * 365)
-                        elif months_match and issue_date:
-                            num_months = int(months_match.group(1))
-                            expiry_date = issue_date + timedelta(days=num_months * 30)
-                        else:
-                            continue
                     break
                 except ValueError:
                     continue
@@ -356,7 +384,7 @@ def extract_metadata(text):
         "Reason for Consent": proposal_str if proposal_str else "Unknown",
         "Consent Conditions": ", ".join(conditions_numbers) if conditions_numbers else "None",
         "Mitigation (Consent Conditions)": ", ".join(managementplan_final) if managementplan_final else "None",
-        "Consent Status": check_expiry(expiry_date),
+        "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
     }
 
@@ -439,48 +467,68 @@ if uploaded_files:
         df = pd.DataFrame(all_data)
         df["GeoKey"] = df["Address"].str.lower().str.strip()
         df["Latitude"], df["Longitude"] = zip(*df["GeoKey"].apply(geocode_address))
+
+        # --- CRITICAL CHANGE FOR DATETIME LOCALIZATION ---
         auckland_tz = pytz.timezone("Pacific/Auckland")
-        df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors='coerce', dayfirst=True)
-        def localize_to_auckland(dt):
-            if pd.isna(dt): # Handle NaT values
-                return pd.NaT
-            if dt.tzinfo is None:
-                try:
-                    # Using 'infer_dst=True' helps with Daylight Saving Time transitions
-                    return auckland_tz.localize(dt, is_dst=None) # is_dst=None lets pytz infer or raise Ambiguous/NonExistentTimeError
-                except pytz.AmbiguousTimeError:
-                    # Fallback for ambiguous times (e.g., during DST rollback)
-                    # You might need a more specific strategy here, like choosing 'infer_dst=True' or 'fold=True' in localize
-                    # For simplicity, returning a naive datetime in such rare cases might be acceptable or logging it.
-                    return auckland_tz.localize(dt, is_dst=False) # Or True, depending on desired resolution
-                except pytz.NonExistentTimeError:
-                    # Fallback for non-existent times (e.g., during DST spring forward)
-                    return pd.NaT # Treat as invalid or make a sensible adjustment
-            return dt.astimezone(auckland_tz) # Convert if already timezone-aware but different TZ
-        df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
         
+        # 1. Convert to datetime, coercing errors to NaT
+        df['Expiry Date'] = pd.to_datetime(df['Expiry Date'], errors='coerce', dayfirst=True)
+        
+        # 2. Apply localization to the entire Series. This will call the robust localize_to_auckland.
+        df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
+        # --- END CRITICAL CHANGE ---
 
         df["Consent Status Enhanced"] = df["Consent Status"]
+        
+        # Ensure comparison is always with timezone-aware datetime
+        current_nz_aware_time = datetime.now(pytz.timezone("Pacific/Auckland"))
+
         df.loc[
             (df["Consent Status"] == "Active") &
-            (df["Expiry Date"] > datetime.now(pytz.timezone("Pacific/Auckland"))) & # Use timezone-aware current time
-            (df["Expiry Date"] <= datetime.now(pytz.timezone("Pacific/Auckland")) + timedelta(days=90)), # Use timezone-aware current time
+            (df["Expiry Date"] > current_nz_aware_time) & # Now comparing aware with aware
+            (df["Expiry Date"] <= current_nz_aware_time + timedelta(days=90)), # Now comparing aware with aware
             "Consent Status Enhanced"
         ] = "Expiring in 90 Days"
 
         # Metrics
         st.subheader("Consent Summary Metrics")
-        col1, col2, col3, col4 = st.columns(4) # Added a 4th column for "Truly Active"
-        col1.metric("Total Consents", len(df))
-        col2.metric("Expiring in 90 Days", (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum())
-        col3.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
+        col1, col2, col3, col4 = st.columns(4) 
+
+        # Helper function to format metric with custom color
+        def colored_metric(column_obj, label, value, color):
+            """Displays a metric value with a custom color using markdown."""
+            column_obj.markdown(f"""
+                <div style="
+                    text-align: center;
+                    padding: 10px;
+                    border-radius: 5px;
+                    background-color: #f0f2f6; /* A light background, adjust if your theme is dark */
+                    margin-bottom: 10px;
+                ">
+                    <div style="font-size: 0.9em; color: #333;">{label}</div>
+                    <div style="font-size: 2.5em; font-weight: bold; color: {color};">{value}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        # Ensure color_map is defined or accessible here
+        color_map = {"Unknown": "gray", "Expired": "#8B0000", "Active": "green", "Expiring in 90 Days": "orange"}
+
+        total_consents = len(df)
+        expiring_90_days = (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum()
+        expired_count = df["Consent Status"].value_counts().get("Expired", 0)
         truly_active_count = (df["Consent Status Enhanced"] == "Active").sum()
-        col4.metric("Truly Active", truly_active_count)
+
+        # Apply colors from the color_map
+        colored_metric(col1, "Total Consents", total_consents, "#4682B4") # Neutral color for total
+        colored_metric(col2, "Expiring in 90 Days", expiring_90_days, color_map["Expiring in 90 Days"])
+        colored_metric(col3, "Expired", expired_count, color_map["Expired"])
+        colored_metric(col4, "Truly Active", truly_active_count, color_map["Active"])
+
 
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
         status_counts.columns = ["Consent Status", "Count"]
-        color_map = {"Unknown": "gray", "Expired": "#8B0000", "Active": "green", "Expiring in 90 Days": "orange"}
+        # color_map is already defined above, no need to redefine here
         fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map)
         fig_status.update_traces(textposition="outside")
         fig_status.update_layout(title="Consent Status Overview", title_x=0.5)
@@ -552,7 +600,8 @@ with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq"], horizontal=True, key="llm_provider_radio")
+    # Removed "OpenAI" from the radio button options
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "Groq"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -573,7 +622,7 @@ with st.expander("AI Chatbot", expanded=True):
                         
                         for col in ['Expiry Date', 'Issue Date']:
                             if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
-                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d')
+                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z')
                                 
                         context_sample_list = context_sample_df.to_dict(orient="records")
                     else:
@@ -625,60 +674,24 @@ with st.expander("AI Chatbot", expanded=True):
                         except Exception as e:
                             st.warning(f"Could not count tokens for Gemini: {e}. Sending full data (may exceed limits). This could be due to the chosen Gemini model not being available or an API issue. **Verify the model name ('{GEMINI_MODEL_TO_USE}') in your code matches an available model from your console output.**")
                             context_sample_json = context_sample_raw_json 
-                    else:
-                        if len(context_sample_raw_json) > 80000: 
-                            st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
-                            num_entries_to_send = min(len(context_sample_list), 100)
-                            context_sample_json = json.dumps(context_sample_list[:num_entries_to_send], indent=2)
-                        else:
-                            context_sample_json = context_sample_raw_json
-
-                    user_query = f"""
-{system_message_content}
-{context_sample_json}
-
----
-User Query: {chat_input}
-
-Answer:
-"""
-                    
-                    answer_raw = ""
-                    if llm_provider == "Gemini":
-                        if google_api_key:
-                            # ### IMPORTANT: REPLACE WITH THE EXACT MODEL NAME YOU FOUND IN YOUR CONSOLE OUTPUT! ###
-                            # Common options based on your list: "models/gemini-1.0-pro", "models/gemini-1.5-pro-latest", "models/gemini-flash-latest"
-                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
-                            
-                            gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE) 
-                            try:
-                                response = gemini_model.generate_content(user_query)
-                                if response and hasattr(response, 'text'):
-                                    answer_raw = response.text
-                                else:
-                                    answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error. Check your console for details."
-                            except Exception as e:
-                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue. **Verify the model name in your code matches an available model from your console output.**"
-                        else:
-                            answer_raw = "Gemini AI is offline (Google API key not found)."
-                    elif llm_provider == "OpenAI":
-                        if client:
-                            messages = [
-                                {"role": "system", "content": system_message_content + "\n" + context_sample_json},
-                                {"role": "user", "content": f"User Query: {chat_input}"}
-                            ]
-                            try:
-                                response = client.chat.completions.create(
-                                    model="gpt-3.5-turbo",
-                                    messages=messages,
-                                    max_tokens=500,
-                                    temperature=0.7
-                                )
-                                answer_raw = response.choices[0].message.content
-                            except Exception as e:
-                                answer_raw = f"OpenAI API error: {e}"
-                        else:
-                            answer_raw = "OpenAI AI is offline (OpenAI API key not found)."
+                    # elif llm_provider == "OpenAI": # REMOVED OPENAI BLOCK
+                    #     if client:
+                    #         messages = [
+                    #             {"role": "system", "content": system_message_content + "\n" + context_sample_json},
+                    #             {"role": "user", "content": f"User Query: {chat_input}"}
+                    #         ]
+                    #         try:
+                    #             response = client.chat.completions.create(
+                    #                 model="gpt-3.5-turbo",
+                    #                 messages=messages,
+                    #                 max_tokens=500,
+                    #                 temperature=0.7
+                    #             )
+                    #             answer_raw = response.choices[0].message.content
+                    #         except Exception as e:
+                    #             answer_raw = f"OpenAI API error: {e}"
+                    #     else:
+                    #         answer_raw = "OpenAI AI is offline (OpenAI API key not found)."
                     elif llm_provider == "Groq":
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
@@ -692,6 +705,10 @@ Answer:
                                 answer_raw = f"Groq API error: {e}"
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
+                    else: # Fallback for if an invalid provider is selected somehow
+                        st.warning("Selected LLM provider is not available or supported.")
+                        answer_raw = "AI provider not available."
+
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider} AI\n\n{answer_raw}")
                     
