@@ -112,7 +112,7 @@ def extract_metadata(text):
     rc_patterns = [
         r"Application number:\s*(.+?)(?=\s*Applicant)",
         r"Application numbers:\s*(.+)(?=\s*Applicant)",
-        r"Application number(s):\s*(.+)(?=\s*Applicant)",
+        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)",
         r"RC[0-9]{5,}" # Added fallback for RC numbers
     ]
     rc_matches = []
