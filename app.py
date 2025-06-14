@@ -19,7 +19,7 @@ import json
 
 # --- LLM Specific Imports ---
 import google.generativeai as genai # For Gemini
-# from openai import OpenAI # For OpenAI (new client) - REMOVED
+# REMOVED: from openai import OpenAI
 from langchain_groq import ChatGroq # For Groq (Langchain integration)
 from langchain_core.messages import SystemMessage, HumanMessage # Needed for Langchain messages
 # --- End LLM Specific Imports ---
@@ -27,14 +27,14 @@ from langchain_core.messages import SystemMessage, HumanMessage # Needed for Lan
 # --- API Key Setup ---
 load_dotenv()
 # Prioritize st.secrets for deployment, fall back to .env for local development
-# openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY") # REMOVED
+# REMOVED: openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 groq_api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
 google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 # OpenWeatherMap API key
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
 
 # --- DEBUGGING API KEY LOADING (prints to console, not Streamlit UI) ---
-# print(f"DEBUG: OpenAI API Key Loaded: {bool(openai_api_key)}") # REMOVED
+# REMOVED: print(f"DEBUG: OpenAI API Key Loaded: {bool(openai_api_key)}")
 print(f"DEBUG: Groq API Key Loaded: {bool(groq_api_key)}")
 print(f"DEBUG: Google API Key Loaded: {bool(google_api_key)}")
 print(f"DEBUG: OpenWeatherMap API Key Loaded: {bool(openweathermap_api_key)}")
@@ -47,10 +47,39 @@ print(f"DEBUG: OpenWeatherMap API Key Loaded: {bool(openweathermap_api_key)}")
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
 # Initialize clients and models (after set_page_config)
-# client = OpenAI(api_key=openai_api_key) if openai_api_key else None # REMOVED
+# REMOVED: client = OpenAI(api_key=openai_api_key) if openai_api_key else None
 
 if google_api_key:
     genai.configure(api_key=google_api_key)
+    # --- DEBUGGING STEP: Temporarily list available Gemini models (now after set_page_config) ---
+    try:
+        st.sidebar.info("Checking available Gemini models (check your console/terminal for list)...")
+        print("\n--- Listing Available Gemini Models (from genai.list_models()) ---")
+        found_gemini_pro_alias = False # Track if original gemini-pro or its common aliases are found
+        gemini_model_options = []
+        for m in genai.list_models():
+            # Only list models that support text generation (generateContent)
+            if "generateContent" in m.supported_generation_methods:
+                print(f"  - Model Name: {m.name}, Supported Methods: {m.supported_generation_methods}")
+                gemini_model_options.append(m.name)
+                # Check for common "pro" names
+                if m.name in ["models/gemini-pro", "gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-pro-latest"]:
+                    found_gemini_pro_alias = True
+        
+        if found_gemini_pro_alias:
+            print("--- A 'gemini-pro' type model was found and supports generateContent. ---")
+            print("--- Please ensure you use the EXACT NAME from the list above in your code. ---")
+            # You can pick one of these to try in the code below, e.g., "models/gemini-1.0-pro"
+        else:
+            print("--- WARNING: Common 'gemini-pro' aliases NOT found for generateContent. ---")
+            print("--- Please use one of the *listed* model names above for Gemini in your code. ---")
+            
+        print("------------------------------------\n")
+        
+    except Exception as e:
+        print(f"Error listing Gemini models: {e}")
+        st.sidebar.error(f"Failed to list Gemini models. Please check your Google API key and network connection: {e}")
+    # --- END DEBUGGING STEP ---
 else:
     # Display this warning once at startup if the key is missing
     st.error("Google API key not found. Gemini AI will be offline.")
@@ -152,7 +181,7 @@ def extract_metadata(text):
     rc_patterns = [
         r"Application number:\s*(.+?)(?=\s*Applicant)",
         r"Application numbers:\s*(.+)(?=\s*Applicant)",
-        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)", 
+        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)",
         r"RC[0-9]{5,}" 
     ]
     rc_matches = []
@@ -416,6 +445,12 @@ def load_embedding_model(name):
 
 embedding_model = load_embedding_model(model_name)
 
+# --- CACHING EMBEDDINGS FOR PERFORMANCE ---
+@st.cache_data(show_spinner="Generating document embeddings...")
+def get_corpus_embeddings(text_blobs, model_obj):
+    """Generates and caches embeddings for all text blobs."""
+    return model_obj.encode(text_blobs, convert_to_tensor=True)
+
 # Initialize df outside the if block to ensure it always exists
 df = pd.DataFrame()
 
@@ -438,7 +473,7 @@ if uploaded_files:
         df = pd.DataFrame(all_data)
         df["GeoKey"] = df["Address"].str.lower().str.strip()
         df["Latitude"], df["Longitude"] = zip(*df["GeoKey"].apply(geocode_address))
-
+        
         # --- CRITICAL CHANGE FOR DATETIME LOCALIZATION ---
         auckland_tz = pytz.timezone("Pacific/Auckland")
         
@@ -456,8 +491,8 @@ if uploaded_files:
 
         df.loc[
             (df["Consent Status"] == "Active") &
-            (df["Expiry Date"] > current_nz_aware_time) & # Now comparing aware with aware
-            (df["Expiry Date"] <= current_nz_aware_time + timedelta(days=90)), # Now comparing aware with aware
+            (df["Expiry Date"] > current_nz_aware_time) &
+            (df["Expiry Date"] <= current_nz_aware_time + timedelta(days=90)),
             "Consent Status Enhanced"
         ] = "Expiring in 90 Days"
 
@@ -481,7 +516,6 @@ if uploaded_files:
                 </div>
             """, unsafe_allow_html=True)
 
-        # Ensure color_map is defined or accessible here
         color_map = {"Unknown": "gray", "Expired": "#8B0000", "Active": "green", "Expiring in 90 Days": "orange"}
 
         total_consents = len(df)
@@ -489,7 +523,6 @@ if uploaded_files:
         expired_count = df["Consent Status"].value_counts().get("Expired", 0)
         truly_active_count = (df["Consent Status Enhanced"] == "Active").sum()
 
-        # Apply colors from the color_map
         colored_metric(col1, "Total Consents", total_consents, "#4682B4") # Neutral color for total
         colored_metric(col2, "Expiring in 90 Days", expiring_90_days, color_map["Expiring in 90 Days"])
         colored_metric(col3, "Expired", expired_count, color_map["Expired"])
@@ -499,7 +532,6 @@ if uploaded_files:
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
         status_counts.columns = ["Consent Status", "Count"]
-        # color_map is already defined above, no need to redefine here
         fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map)
         fig_status.update_traces(textposition="outside")
         fig_status.update_layout(title="Consent Status Overview", title_x=0.5)
@@ -547,18 +579,36 @@ if uploaded_files:
         with st.expander("Semantic Search Results", expanded=True):
             if query_input:
                 corpus = df["Text Blob"].tolist()
-                corpus_embeddings = embedding_model.encode(corpus, convert_to_tensor=True) # Use embedding_model
-                query_embedding = embedding_model.encode(query_input, convert_to_tensor=True) # Use embedding_model
+                # Use cached embeddings
+                corpus_embeddings = get_corpus_embeddings(corpus, embedding_model) 
+                
+                query_embedding = embedding_model.encode(query_input, convert_to_tensor=True)
                 scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-                top_k = scores.argsort(descending=True)[:3]
-                for i, idx in enumerate(top_k):
+                top_k_indices = scores.argsort(descending=True) # Get all indices sorted by score
+
+                displayed_results = 0
+                similarity_threshold = st.slider("Semantic Search Relevance Threshold", min_value=0.0, max_value=1.0, value=0.5, step=0.05) # Slider for threshold
+
+                for idx in top_k_indices:
+                    score = scores[idx.item()]
+                    if score < similarity_threshold and displayed_results >= 1: # Display at least one result, then apply threshold
+                        break # Stop if score is below threshold (after at least one result shown)
+                    
                     row = df.iloc[idx.item()]
-                    st.markdown(f"**{i+1}. {row['Company Name']} - {row['Address']}**")
+                    st.markdown(f"**{displayed_results + 1}. {row['Company Name']} - {row['Address']}** (Similarity: {score:.2f})")
                     st.markdown(f"- **Triggers**: {row['AUP(OP) Triggers']}")
-                    st.markdown(f"- **Expires**: {row['Expiry Date']}")
+                    # Display expiry date gracefully
+                    expiry_display = row['Expiry Date'].strftime('%Y-%m-%d') if pd.notna(row['Expiry Date']) else 'N/A'
+                    st.markdown(f"- **Expires**: {expiry_display}")
                     safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{i}")
+                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{idx.item()}")
                     st.markdown("---")
+                    displayed_results += 1
+                    if displayed_results >= 3: # Keep displaying top_k if above threshold (e.g., top 3)
+                        break
+
+                if displayed_results == 0:
+                    st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
 
 # ----------------------------
 # Ask AI About Consents Chatbot
@@ -571,7 +621,7 @@ with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
 
-    # Removed "OpenAI" from the radio button options
+    # REMOVED "OpenAI" from the radio button options
     llm_provider = st.radio("Choose LLM Provider", ["Gemini", "Groq"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
@@ -593,7 +643,7 @@ with st.expander("AI Chatbot", expanded=True):
                         
                         for col in ['Expiry Date', 'Issue Date']:
                             if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
-                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z')
+                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z') # Include timezone info in string for LLM
                                 
                         context_sample_list = context_sample_df.to_dict(orient="records")
                     else:
@@ -601,7 +651,7 @@ with st.expander("AI Chatbot", expanded=True):
                         context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
 
                     context_sample_raw_json = json.dumps(context_sample_list, indent=2)
-                    context_sample_json = "" # Will store the potentially truncated JSON
+                    context_sample_json = "" 
 
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
@@ -645,25 +695,43 @@ with st.expander("AI Chatbot", expanded=True):
                         except Exception as e:
                             st.warning(f"Could not count tokens for Gemini: {e}. Sending full data (may exceed limits). This could be due to the chosen Gemini model not being available or an API issue. **Verify the model name ('{GEMINI_MODEL_TO_USE}') in your code matches an available model from your console output.**")
                             context_sample_json = context_sample_raw_json 
-                    # elif llm_provider == "OpenAI": # REMOVED OPENAI BLOCK
-                    #     if client:
-                    #         messages = [
-                    #             {"role": "system", "content": system_message_content + "\n" + context_sample_json},
-                    #             {"role": "user", "content": f"User Query: {chat_input}"}
-                    #         ]
-                    #         try:
-                    #             response = client.chat.completions.create(
-                    #                 model="gpt-3.5-turbo",
-                    #                 messages=messages,
-                    #                 max_tokens=500,
-                    #                 temperature=0.7
-                    #             )
-                    #             answer_raw = response.choices[0].message.content
-                    #         except Exception as e:
-                    #             answer_raw = f"OpenAI API error: {e}"
-                    #     else:
-                    #         answer_raw = "OpenAI AI is offline (OpenAI API key not found)."
-                    elif llm_provider == "Groq":
+                    else: # This 'else' now covers Groq
+                        if len(context_sample_raw_json) > 80000: 
+                            st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
+                            num_entries_to_send = min(len(context_sample_list), 100)
+                            context_sample_json = json.dumps(context_sample_list[:num_entries_to_send], indent=2)
+                        else:
+                            context_sample_json = context_sample_raw_json
+
+                    user_query = f"""
+{system_message_content}
+{context_sample_json}
+
+---
+User Query: {chat_input}
+
+Answer:
+"""
+                    
+                    answer_raw = ""
+                    if llm_provider == "Gemini":
+                        if google_api_key:
+                            # ### IMPORTANT: REPLACE WITH THE EXACT MODEL NAME YOU FOUND IN YOUR CONSOLE OUTPUT! ###
+                            # Common options based on your list: "models/gemini-1.0-pro", "models/gemini-1.5-pro-latest", "models/gemini-flash-latest"
+                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
+                            
+                            gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE) 
+                            try:
+                                response = gemini_model.generate_content(user_query)
+                                if response and hasattr(response, 'text'):
+                                    answer_raw = response.text
+                                else:
+                                    answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error. Check your console for details."
+                            except Exception as e:
+                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue. **Verify the model name in your code matches an available model from your console output.**"
+                        else:
+                            answer_raw = "Gemini AI is offline (Google API key not found)."
+                    elif llm_provider == "Groq": # This is now 'elif' since OpenAI is gone
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
@@ -676,7 +744,7 @@ with st.expander("AI Chatbot", expanded=True):
                                 answer_raw = f"Groq API error: {e}"
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    else: # Fallback for if an invalid provider is selected somehow
+                    else: # Fallback for if an invalid provider is selected somehow (shouldn't happen with radio buttons)
                         st.warning("Selected LLM provider is not available or supported.")
                         answer_raw = "AI provider not available."
 
