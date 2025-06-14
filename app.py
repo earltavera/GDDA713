@@ -135,13 +135,26 @@ def check_expiry(expiry_date):
 
 @st.cache_data(show_spinner=False)
 def geocode_address(address):
+    # Normalize address: ensure it contains 'Auckland, New Zealand' for better geocoding accuracy
+    standardized_address = address.strip()
+    if not re.search(r'auckland', standardized_address, re.IGNORECASE):
+        standardized_address += ", Auckland"
+    if not re.search(r'new zealand|nz', standardized_address, re.IGNORECASE):
+        standardized_address += ", New Zealand"
+        
     geolocator = Nominatim(user_agent="air_discharge_dashboard")
-    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1) # Keep current rate limit
+
     try:
-        location = geocode(address)
-        return (location.latitude, location.longitude) if location else (None, None)
+        location = geocode(standardized_address)
+        if location:
+            # print(f"DEBUG: Geocoded '{address}' -> ({location.latitude}, {location.longitude})") # Optional debug print
+            return (location.latitude, location.longitude)
+        else:
+            print(f"DEBUG: Geocoding failed for '{standardized_address}' (no location found).") # Optional debug print
+            return (None, None)
     except Exception as e:
-        st.warning(f"Geocoding failed for '{address}': {e}")
+        st.warning(f"Geocoding failed for '{standardized_address}': {e}")
         return (None, None)
 
 def extract_metadata(text):
