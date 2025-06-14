@@ -26,60 +26,18 @@ from langchain_core.messages import SystemMessage, HumanMessage # Needed for Lan
 
 # --- API Key Setup ---
 load_dotenv()
-# Prioritize st.secrets for deployment, fall back to .env for local development
-# REMOVED: openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 groq_api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
 google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 # OpenWeatherMap API key
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
-
-# --- DEBUGGING API KEY LOADING (prints to console, not Streamlit UI) ---
-# REMOVED: print(f"DEBUG: OpenAI API Key Loaded: {bool(openai_api_key)}")
-print(f"DEBUG: Groq API Key Loaded: {bool(groq_api_key)}")
-print(f"DEBUG: Google API Key Loaded: {bool(google_api_key)}")
-print(f"DEBUG: OpenWeatherMap API Key Loaded: {bool(openweathermap_api_key)}")
-# --- END DEBUGGING API KEY LOADING ---
-
 
 # ------------------------
 # Streamlit Page Config & Style (MUST BE THE FIRST STREAMLIT COMMAND)
 # ------------------------
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
-# Initialize clients and models (after set_page_config)
-# REMOVED: client = OpenAI(api_key=openai_api_key) if openai_api_key else None
-
 if google_api_key:
     genai.configure(api_key=google_api_key)
-    # --- DEBUGGING STEP: Temporarily list available Gemini models (now after set_page_config) ---
-    try:
-        st.sidebar.info("Checking available Gemini models (check your console/terminal for list)...")
-        print("\n--- Listing Available Gemini Models (from genai.list_models()) ---")
-        found_gemini_pro_alias = False # Track if original gemini-pro or its common aliases are found
-        gemini_model_options = []
-        for m in genai.list_models():
-            # Only list models that support text generation (generateContent)
-            if "generateContent" in m.supported_generation_methods:
-                print(f"  - Model Name: {m.name}, Supported Methods: {m.supported_generation_methods}")
-                gemini_model_options.append(m.name)
-                # Check for common "pro" names
-                if m.name in ["models/gemini-pro", "gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-pro-latest"]:
-                    found_gemini_pro_alias = True
-        
-        if found_gemini_pro_alias:
-            print("--- A 'gemini-pro' type model was found and supports generateContent. ---")
-            print("--- Please ensure you use the EXACT NAME from the list above in your code. ---")
-            # You can pick one of these to try in the code below, e.g., "models/gemini-1.0-pro"
-        else:
-            print("--- WARNING: Common 'gemini-pro' aliases NOT found for generateContent. ---")
-            print("--- Please use one of the *listed* model names above for Gemini in your code. ---")
-            
-        print("------------------------------------\n")
-        
-    except Exception as e:
-        print(f"Error listing Gemini models: {e}")
-        st.sidebar.error(f"Failed to list Gemini models. Please check your Google API key and network connection: {e}")
-    # --- END DEBUGGING STEP ---
 else:
     # Display this warning once at startup if the key is missing
     st.error("Google API key not found. Gemini AI will be offline.")
