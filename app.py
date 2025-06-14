@@ -413,9 +413,10 @@ embedding_model = load_embedding_model(model_name)
 
 # --- CACHING EMBEDDINGS FOR PERFORMANCE ---
 @st.cache_data(show_spinner="Generating document embeddings...")
-def get_corpus_embeddings(text_blobs, model_obj):
+def get_corpus_embeddings(text_blobs_tuple, model_name_str):
     """Generates and caches embeddings for all text blobs."""
-    return model_obj.encode(text_blobs, convert_to_tensor=True)
+    model_obj=load_embedding_model(model_name_str)
+    return model_obj.encode(list(text_blobs_tuple), convert_to_tensor=True)
 
 # Initialize df outside the if block to ensure it always exists
 df = pd.DataFrame()
@@ -545,7 +546,7 @@ if uploaded_files:
             if query_input:
                 corpus = df["Text Blob"].tolist()
                 # Use cached embeddings
-                corpus_embeddings = get_corpus_embeddings(corpus, embedding_model) 
+                corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
                 
                 query_embedding = embedding_model.encode(query_input, convert_to_tensor=True)
                 scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
