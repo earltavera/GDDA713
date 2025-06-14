@@ -15,7 +15,7 @@ import csv
 import io
 import requests
 import pytz
-import json # Import the json module for formatting context_sample
+import json
 
 # --- LLM Specific Imports ---
 import google.generativeai as genai # For Gemini
@@ -24,35 +24,38 @@ from langchain_groq import ChatGroq # For Groq (Langchain integration)
 from langchain_core.messages import SystemMessage, HumanMessage # Needed for Langchain messages
 # --- End LLM Specific Imports ---
 
-# ------------------------
-# API Key Setup
-# ------------------------
+# --- API Key Setup ---
 load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY") # Get OpenAI API key
-groq_api_key = os.getenv("GROQ_API_KEY") # Get Groq API key
-google_api_key = os.getenv("GOOGLE_API_KEY") # Get Google API key for Gemini
+# Prioritize st.secrets for deployment, fall back to .env for local development
+openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+groq_api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
+google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+# OpenWeatherMap API key
+openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
 
-# Initialize clients (only if API keys are available)
+
+# Initialize clients and models
 client = OpenAI(api_key=openai_api_key) if openai_api_key else None
-# For Groq, ChatGroq is initialized inside the conditional block for the provider choice.
+
 if google_api_key:
     genai.configure(api_key=google_api_key)
-model_genai = genai.GenerativeModel("gemini-pro") if google_api_key else None
+    # No global GenerativeModel instance for Gemini needed if we create it per request
+    # or manage chat sessions explicitly. We'll create it inside the call.
+else:
+    # Display this warning once at startup if the key is missing
+    st.error("Google API key not found. Gemini AI will be offline.")
 
 # ------------------------
 # Streamlit Page Config & Style
 # ------------------------
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
 
-# ------------------------
-# Weather Function
-# ------------------------
+# --- Weather Function ---
 @st.cache_data(ttl=600)
 def get_auckland_weather():
-    api_key = os.getenv("OPENWEATHER_API_KEY")
-    if not api_key:
-        return "Sunny, 18°C (offline mode)"
-    url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={api_key}"
+    if not openweathermap_api_key:
+        return "Sunny, 18°C (offline mode)" # Default / fallback
+    url = f"https://api.openweathermap.org/data/2.5/weather?q=Auckland,nz&units=metric&appid={openweathermap_api_key}"
     try:
         response = requests.get(url)
         response.raise_for_status() # Raise an exception for HTTP errors
@@ -67,9 +70,7 @@ def get_auckland_weather():
     except Exception: # Catch other potential errors during JSON parsing, etc.
         return "Weather unavailable (data error)"
 
-# ------------------------
-# Date, Time & Weather Banner
-# ------------------------
+# --- Date, Time & Weather Banner ---
 nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
 today = nz_time.strftime("%A, %d %B %Y")
 current_time = nz_time.strftime("%I:%M %p")
@@ -77,7 +78,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -89,9 +90,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ------------------------
-# Utility Functions
-# ------------------------
+# --- Utility Functions ---
 def check_expiry(expiry_date):
     if expiry_date is None:
         return "Unknown"
@@ -164,8 +163,8 @@ def extract_metadata(text):
                     break # Stop if parsing is successful
                 except ValueError:
                     continue
-        if issue_date:
-            break # Stop searching patterns if a date is found
+            if issue_date:
+                break # Stop searching patterns if a date is found
 
     # Consent Expiry patterns
     expiry_patterns = [
@@ -220,8 +219,8 @@ def extract_metadata(text):
                     break # Stop if parsing is successful
                 except ValueError:
                     continue
-        if expiry_date:
-            break # Stop searching patterns if a date is found
+            if expiry_date:
+                break # Stop searching patterns if a date is found
 
     # AUP triggers
     trigger_patterns = [
@@ -360,16 +359,14 @@ def get_chat_log_as_csv():
     return None
 
 
-# ------------------------
-# Sidebar & Model Loader
-# ------------------------
+# --- Sidebar & Model Loader ---
 st.sidebar.markdown("""
     <h2 style='color:#2c6e91; font-family:Segoe UI, Roboto, sans-serif;'>
         Control Panel
     </h2>
 """, unsafe_allow_html=True)
 
-model_name = st.sidebar.selectbox("Choose LLM model:", [
+model_name = st.sidebar.selectbox("Choose Embedding Model:", [
     "all-MiniLM-L6-v2",
     "multi-qa-MiniLM-L6-cos-v1",
     "BAAI/bge-base-en-v1.5",
@@ -380,17 +377,15 @@ uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], acce
 query_input = st.sidebar.text_input("Semantic Search Query")
 
 @st.cache_resource
-def load_model(name):
+def load_embedding_model(name):
     return SentenceTransformer(name)
 
-model = load_model(model_name)
+embedding_model = load_embedding_model(model_name)
 
 # Initialize df outside the if block to ensure it always exists
 df = pd.DataFrame()
 
-# ------------------------
-# File Processing & Dashboard
-# ------------------------
+# --- File Processing & Dashboard ---
 if uploaded_files:
     all_data = []
     for file in uploaded_files:
@@ -477,8 +472,8 @@ if uploaded_files:
         with st.expander("Semantic Search Results", expanded=True):
             if query_input:
                 corpus = df["Text Blob"].tolist()
-                corpus_embeddings = model.encode(corpus, convert_to_tensor=True)
-                query_embedding = model.encode(query_input, convert_to_tensor=True)
+                corpus_embeddings = embedding_model.encode(corpus, convert_to_tensor=True) # Use embedding_model
+                query_embedding = embedding_model.encode(query_input, convert_to_tensor=True) # Use embedding_model
                 scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
                 top_k = scores.argsort(descending=True)[:3]
                 for i, idx in enumerate(top_k):
@@ -494,72 +489,112 @@ if uploaded_files:
 # Ask AI About Consents Chatbot
 # ----------------------------
 
-with st.expander("Ask AI About Consents", expanded=True):
+st.markdown("---") # Horizontal line for separation
+st.subheader("Ask AI About Consents")
+
+with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq", "HuggingFace"], horizontal=True)
-    chat_input = st.text_area("Search any query:", key="chat_input")
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "OpenAI", "Groq"], horizontal=True, key="llm_provider_radio")
+    chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    if st.button("Ask AI"):
+    if st.button("Ask AI", key="ask_ai_button"):
         if not chat_input.strip():
             st.warning("Please enter a query.")
         else:
             with st.spinner("AI is thinking..."):
                 try:
-                    # Initialize context_sample_list and context_sample_json to ensure they are always defined
                     context_sample_list = []
-                    context_sample_json = ""
-
-                    # Check if df is populated or use fallback
+                    
                     if not df.empty:
                         # Convert DataFrame subset to list of dictionaries, ensuring Timestamps are formatted as strings
-                        # IMPORTANT: Removed .head(5) to pass ALL data to the LLM for more accurate queries.
                         context_sample_df = df[[
                             "Company Name", "Address", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Issue Date", "Expiry Date", "Reason for Consent"
-                        ]].dropna().copy() # Use .copy() to avoid SettingWithCopyWarning
+                        ]].dropna().copy()
                         
-                        # Convert 'Expiry Date' column to string format for JSON serialization
-                        # Ensure 'Issue Date' is also converted if it's part of context_sample_df at any point
-                        for col in ['Expiry Date', 'Issue Date']: # Also convert 'Issue Date' if it's there
+                        # Convert 'Expiry Date' and 'Issue Date' columns to string format for JSON serialization
+                        for col in ['Expiry Date', 'Issue Date']:
                             if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
                                 context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d')
                                 
                         context_sample_list = context_sample_df.to_dict(orient="records")
-
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
                         context_sample_list = [{"Company Name": "Default Sample Ltd", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
 
                     # Convert context_sample_list to a JSON string for better LLM parsing
-                    # Add a check to prevent sending excessively large data if df is very large
-                    # This block must be OUTSIDE the `if not df.empty:` block, or the `else` within it.
-                    # It should use `context_sample_list` which is now always defined.
-                    if len(json.dumps(context_sample_list)) > 100000: # Check the length of the *full* JSON string
-                        st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
-                        context_sample_json = json.dumps(context_sample_list[:100], indent=2) # Send first 100 entries if too large
-                    else:
-                        context_sample_json = json.dumps(context_sample_list, indent=2)
+                    context_sample_raw_json = json.dumps(context_sample_list, indent=2)
+                    context_sample_json = "" # Will store the potentially truncated JSON
 
                     # Get current Auckland time for the AI's context to help with expiry calculations
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
+                    # --- Token Management and Context Construction ---
+                    # Common system message for all LLMs
+                    system_message_content = f"""
+                    You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions exclusively and precisely using the "Provided Data" below.
+
+                    Crucial Directives:
+                    1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Data'. Do not introduce any external knowledge, assumptions, or speculative content.
+                    2.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Data'. When answering about locations, refer to the 'Address' field.
+                    3.  **Handling Missing Information/Complex Analysis:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Data' *as presented*, or if it requires complex analysis/aggregation of data not explicitly shown (e.g., counting items not in the top 5, or performing complex filtering across a large dataset), you *must* explicitly state: "I cannot find that information within the currently uploaded documents, or it requires more complex analysis than I can perform with the provided data. Please refer to the dashboard's tables and filters for detailed insights."
+                    4.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
+                    5.  **Concise Format:** Present your answer in clear, concise bullet points.
+                    6.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
+
+                    ---
+                    Provided Data (JSON format):
+                    """
+
+                    # Construct the full prompt for token estimation
+                    full_query_for_token_check = system_message_content + context_sample_raw_json + f"\n--- \nUser Query: {chat_input}\n\nAnswer:"
+                    
+                    MAX_TOKENS_FOR_PROMPT = 30000 # A generous limit, Gemini Pro has 32k. Leave room for response.
+                    
+                    if llm_provider == "Gemini" and google_api_key:
+                        try:
+                            temp_model_for_token_count = genai.GenerativeModel("gemini-pro")
+                            token_count_response = temp_model_for_token_count.count_tokens(full_query_for_token_check)
+                            total_tokens = token_count_response.total_tokens
+
+                            if total_tokens > MAX_TOKENS_FOR_PROMPT:
+                                st.warning("The uploaded data is very large. Attempting to reduce context for AI.")
+                                # A simple heuristic for reduction - consider more advanced RAG for large datasets
+                                avg_entry_len = len(context_sample_raw_json) / len(context_sample_list) if context_sample_list else 1
+                                # Estimate how many entries would fit MAX_TOKENS_FOR_PROMPT after accounting for fixed prompt parts
+                                # Rough char to token estimate: 4 chars/token. Max chars ~ MAX_TOKENS * 4
+                                # Max chars for context_sample_json part: MAX_TOKENS_FOR_PROMPT * 4 - len(system_message_content) - len(chat_input) - some buffer
+                                # This is still a heuristic, better to use iterative token counting if precise control is needed.
+                                
+                                # Let's aim for a safe number of entries, e.g., if each entry is ~200 chars, and we have 20000 tokens for data
+                                # 20000 tokens * 4 chars/token = 80000 chars. 80000 / 200 chars/entry = 400 entries.
+                                # Adjust the slice based on average entry size or a fixed number that seems reasonable.
+                                num_entries_to_send = min(len(context_sample_list), 400) # Send max 400 entries if large
+
+                                context_sample_json = json.dumps(context_sample_list[:num_entries_to_send], indent=2)
+                                st.info(f"Reduced context to approximately {num_entries_to_send} entries due to potential token limits.")
+                            else:
+                                context_sample_json = context_sample_raw_json
+                        except Exception as e:
+                            st.warning(f"Could not count tokens for Gemini: {e}. Sending full data (may exceed limits).")
+                            context_sample_json = context_sample_raw_json # Fallback to full data if token counting fails
+                    else:
+                        # For other LLMs, use character length as a heuristic if no specific tokenizer is integrated
+                        # This part could be improved with OpenAI/Groq tokenizers if desired
+                        if len(context_sample_raw_json) > 80000: # Rough character limit, adjust as needed
+                            st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
+                            num_entries_to_send = min(len(context_sample_list), 100) # Send max 100 entries for other models if large
+                            context_sample_json = json.dumps(context_sample_list[:num_entries_to_send], indent=2)
+                        else:
+                            context_sample_json = context_sample_raw_json
+
+                    # Now, construct the final user_query using the (potentially truncated) context_sample_json
                     user_query = f"""
-You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions exclusively and precisely using the "Provided Data" below.
-
-Crucial Directives:
-1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Data'. Do not introduce any external knowledge, assumptions, or speculative content.
-2.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Data'. When answering about locations, refer to the 'Address' field.
-3.  **Handling Missing Information/Complex Analysis:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Data' *as presented*, or if it requires complex analysis/aggregation of data not explicitly shown (e.g., counting items not in the top 5, or performing complex filtering across a large dataset), you *must* explicitly state: "I cannot find that information within the currently uploaded documents, or it requires more complex analysis than I can perform with the provided data. Please refer to the dashboard's tables and filters for detailed insights."
-4.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
-5.  **Concise Format:** Present your answer in clear, concise bullet points.
-6.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
-
----
-Provided Data (JSON format):
+{system_message_content}
 {context_sample_json}
 
 ---
@@ -567,46 +602,58 @@ User Query: {chat_input}
 
 Answer:
 """
+                    
                     answer_raw = ""
                     if llm_provider == "Gemini":
-                        if model_genai:
-                            response = model_genai.generate_content(user_query)
-                            answer_raw = response.text
+                        if google_api_key:
+                            gemini_model = genai.GenerativeModel("gemini-pro") # Create instance for the request
+                            try:
+                                response = gemini_model.generate_content(user_query)
+                                if response and hasattr(response, 'text'):
+                                    answer_raw = response.text
+                                else:
+                                    answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error."
+                            except Exception as e:
+                                answer_raw = f"Gemini API error: {e}"
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
                     elif llm_provider == "OpenAI":
                         if client:
                             messages = [
-                                {"role": "system", "content": "You are a helpful assistant for environmental consents. Answer based ONLY on the provided data or state clearly if the information is not available. The current date for reference is " + current_auckland_time_str + "."},
-                                {"role": "user", "content": user_query}
+                                {"role": "system", "content": system_message_content + "\n" + context_sample_json}, # Pass context in system message for OpenAI
+                                {"role": "user", "content": f"User Query: {chat_input}"} # User query is just the user's actual question
                             ]
-                            response = client.chat.completions.create(
-                                model="gpt-3.5-turbo", # You can choose other OpenAI models
-                                messages=messages,
-                                max_tokens=500,
-                                temperature=0.7
-                            )
-                            answer_raw = response.choices[0].message.content
+                            try:
+                                response = client.chat.completions.create(
+                                    model="gpt-3.5-turbo", # You can choose other OpenAI models
+                                    messages=messages,
+                                    max_tokens=500,
+                                    temperature=0.7
+                                )
+                                answer_raw = response.choices[0].message.content
+                            except Exception as e:
+                                answer_raw = f"OpenAI API error: {e}"
                         else:
                             answer_raw = "OpenAI AI is offline (OpenAI API key not found)."
                     elif llm_provider == "Groq":
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Or "llama3-8b-8192" or "mixtral-8x7b-32768"
-                            groq_response = chat_groq.invoke([
-                                SystemMessage(content="You are an environmental compliance assistant. Answer based ONLY on the provided data or state clearly if the information is not available. The current date for reference is " + current_auckland_time_str + "."),
-                                HumanMessage(content=user_query)
-                            ])
-                            answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                            try:
+                                groq_response = chat_groq.invoke([
+                                    SystemMessage(content=system_message_content + "\n" + context_sample_json), # Pass context in system message for Groq
+                                    HumanMessage(content=f"User Query: {chat_input}")
+                                ])
+                                answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                            except Exception as e:
+                                answer_raw = f"Groq API error: {e}"
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    elif llm_provider == "HuggingFace":
-                        st.warning("HuggingFace provider is not implemented in this version.")
-                        answer_raw = "This AI provider is currently unavailable."
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider} AI\n\n{answer_raw}")
                     
-                    # Only log successful, non-error/non-offline responses
-                    if answer_raw and "unavailable" not in answer_raw and "offline" not in answer_raw and "cannot find it" not in answer_raw:
+                    # Log all responses, including "cannot find it" as it's a valid, instructed output.
+                    # Only exclude general offline/unavailable messages.
+                    if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
 
                 except Exception as e:
