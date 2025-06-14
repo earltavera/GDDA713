@@ -51,35 +51,6 @@ client = OpenAI(api_key=openai_api_key) if openai_api_key else None
 
 if google_api_key:
     genai.configure(api_key=google_api_key)
-    # --- DEBUGGING STEP: Temporarily list available Gemini models (now after set_page_config) ---
-    try:
-        st.sidebar.info("Checking available Gemini models (check your console/terminal for list)...")
-        print("\n--- Listing Available Gemini Models (from genai.list_models()) ---")
-        found_gemini_pro_alias = False # Track if original gemini-pro or its common aliases are found
-        gemini_model_options = []
-        for m in genai.list_models():
-            # Only list models that support text generation (generateContent)
-            if "generateContent" in m.supported_generation_methods:
-                print(f"  - Model Name: {m.name}, Supported Methods: {m.supported_generation_methods}")
-                gemini_model_options.append(m.name)
-                # Check for common "pro" names
-                if m.name in ["models/gemini-pro", "gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-pro-latest"]:
-                    found_gemini_pro_alias = True
-        
-        if found_gemini_pro_alias:
-            print("--- A 'gemini-pro' type model was found and supports generateContent. ---")
-            print("--- Please ensure you use the EXACT NAME from the list above in your code. ---")
-            # You can pick one of these to try in the code below, e.g., "models/gemini-1.0-pro"
-        else:
-            print("--- WARNING: Common 'gemini-pro' aliases NOT found for generateContent. ---")
-            print("--- Please use one of the *listed* model names above for Gemini in your code. ---")
-            
-        print("------------------------------------\n")
-        
-    except Exception as e:
-        print(f"Error listing Gemini models: {e}")
-        st.sidebar.error(f"Failed to list Gemini models. Please check your Google API key and network connection: {e}")
-    # --- END DEBUGGING STEP ---
 else:
     # Display this warning once at startup if the key is missing
     st.error("Google API key not found. Gemini AI will be offline.")
@@ -486,7 +457,6 @@ if uploaded_files:
                     # Fallback for non-existent times (e.g., during DST spring forward)
                     return pd.NaT # Treat as invalid or make a sensible adjustment
             return dt.astimezone(auckland_tz) # Convert if already timezone-aware but different TZ
-
         df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
         
 
