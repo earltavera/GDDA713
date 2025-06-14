@@ -470,14 +470,32 @@ if uploaded_files:
 
         # Metrics
         st.subheader("Consent Summary Metrics")
-        col1, col2, col3, col4 = st.columns(4) # Added a 4th column for "Truly Active"
-        col1.metric("Total Consents", len(df))
-        col2.metric("Expiring in 90 Days", (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum())
-        col3.metric("Expired", df["Consent Status"].value_counts().get("Expired", 0))
-        # Calculate "Truly Active" (Active, not expiring soon, and not Unknown)
+        col1, col2, col3, col4 = st.columns(4)
+        def colored_metric(column_obj, label, value, color):
+            """Displays a metric value with a custom color using markdown."""
+            column_obj.markdown(f"""
+                <div style="
+                    text-align: center;
+                    padding: 10px;
+                    border-radius: 5px;
+                    background-color: #f0f2f6; /* A light background, adjust if your theme is dark */
+                    margin-bottom: 10px;
+                ">
+                    <div style="font-size: 0.9em; color: #333;">{label}</div>
+                    <div style="font-size: 2.5em; font-weight: bold; color: {color};">{value}</div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        total_consents = len(df)
+        expiring_90_days = (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum()
+        expired_count = df["Consent Status"].value_counts().get("Expired", 0)
         truly_active_count = (df["Consent Status Enhanced"] == "Active").sum()
-        col4.metric("Truly Active", truly_active_count)
 
+        # Apply colors from the color_map
+        colored_metric(col1, "Total Consents", total_consents, "#4682B4") # You might choose a neutral color for total
+        colored_metric(col2, "Expiring in 90 Days", expiring_90_days, color_map["Expiring in 90 Days"])
+        colored_metric(col3, "Expired", expired_count, color_map["Expired"])
+        colored_metric(col4, "Truly Active", truly_active_count, color_map["Active"])
 
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
