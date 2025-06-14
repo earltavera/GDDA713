@@ -109,18 +109,28 @@ def localize_to_auckland(dt):
         return dt.astimezone(auckland_tz)
 
 def check_expiry(expiry_date):
-    """
-    Checks the expiry status of a consent. Assumes expiry_date is already timezone-aware
-    in the 'Pacific/Auckland' timezone due to processing in the main script.
-    """
-    if pd.isna(expiry_date): # Check for NaT (from localization failures or original parse errors)
+    if pd.isna(expiry_date): # Ensure this check remains first for NaT from pd.to_datetime
         return "Unknown"
     
-    # Get current Auckland time, which is timezone-aware
-    current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
-    
-    # Both dates are now timezone-aware and in the same timezone for direct comparison
-    return "Expired" if expiry_date < current_nz_time else "Active"
+    current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland")) # <-- Define this consistently
+
+    if expiry_date.tzinfo is None:
+        try:
+            localized_expiry_date = pytz.timezone("Pacific/Auckland").localize(expiry_date, is_dst=None)
+        except pytz.AmbiguousTimeError:
+            print(f"Warning: Ambiguous time for {expiry_date}. Defaulting to non-DST.")
+            localized_expiry_date = pytz.timezone("Pacific/Auckland").localize(expiry_date, is_dst=False)
+        except pytz.NonExistentTimeError:
+            print(f"Warning: Non-existent time for {expiry_date}. Treating as Unknown.")
+            return "Unknown" # Or handle specifically if you have a rule for non-existent times
+        except Exception as e: # General fallback for other localization errors
+            print(f"Warning: Could not localize expiry date {expiry_date}: {e}. Comparing as naive fallback (less robust).")
+            # --- CRITICAL FIX HERE: Use an explicitly timezone-aware current time even in fallback ---
+            return "Expired" if expiry_date < datetime.now(pytz.timezone("Pacific/Auckland")) else "Active" 
+    else:
+        localized_expiry_date = expiry_date.astimezone(pytz.timezone("Pacific/Auckland"))
+
+    return "Expired" if localized_expiry_date < current_nz_time else "Active"
 
 
 @st.cache_data(show_spinner=False)
