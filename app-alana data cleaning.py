@@ -569,12 +569,12 @@ if uploaded_files:
         total_consents = len(df)
         expiring_90_days = (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum()
         expired_count = df["Consent Status"].value_counts().get("Expired", 0)
-        truly_active_count = (df["Consent Status Enhanced"] == "Active").sum()
+        active_count = (df["Consent Status Enhanced"] == "Active").sum()
 
         colored_metric(col1, "Total Consents", total_consents, "#4682B4")
         colored_metric(col2, "Expiring in 90 Days", expiring_90_days, color_map["Expiring in 90 Days"])
         colored_metric(col3, "Expired", expired_count, color_map["Expired"])
-        colored_metric(col4, "Truly Active", truly_active_count, color_map["Active"])
+        colored_metric(col4, "Active", active_count, color_map["Active"])
 
 
         # Status Chart
