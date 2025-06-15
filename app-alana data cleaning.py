@@ -761,7 +761,7 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini":
                         if google_api_key:
-                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
+                            GEMINI_MODEL_TO_USE = "models/gemini-1.5-pro-latest" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
                             
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE) 
                             try:
