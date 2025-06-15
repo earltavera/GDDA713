@@ -20,3 +20,4 @@ langchain-groq
 pdf2image
 pytesseract
 python-dateutil
+pdfplumber
