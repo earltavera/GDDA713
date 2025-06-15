@@ -723,7 +723,7 @@ with st.expander("AI Chatbot", expanded=True):
                     
                     if llm_provider == "Gemini" and google_api_key:
                         try:
-                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
+                            GEMINI_MODEL_TO_USE = "models/gemini-1.5-pro-latest" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
                             
                             temp_model_for_token_count = genai.GenerativeModel(GEMINI_MODEL_TO_USE) 
                             token_count_response = temp_model_for_token_count.count_tokens(full_query_for_token_check)
