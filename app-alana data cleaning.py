@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import pymupdf
-fitz = pymupdf
+# import pymupdf # REMOVED
+# fitz = pymupdf # REMOVED
+import pdfplumber # ADDED pdfplumber
 import re
 from datetime import datetime, timedelta
 import plotly.express as px
@@ -48,6 +49,35 @@ st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout
 
 if google_api_key:
     genai.configure(api_key=google_api_key)
+    # --- DEBUGGING STEP: Temporarily list available Gemini models (now after set_page_config) ---
+    try:
+        st.sidebar.info("Checking available Gemini models (check your console/terminal for list)...")
+        print("\n--- Listing Available Gemini Models (from genai.list_models()) ---")
+        found_gemini_pro_alias = False # Track if original gemini-pro or its common aliases are found
+        gemini_model_options = []
+        for m in genai.list_models():
+            # Only list models that support text generation (generateContent)
+            if "generateContent" in m.supported_generation_methods:
+                print(f"  - Model Name: {m.name}, Supported Methods: {m.supported_generation_methods}")
+                gemini_model_options.append(m.name)
+                # Check for common "pro" names
+                if m.name in ["models/gemini-pro", "gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-pro-latest"]:
+                    found_gemini_pro_alias = True
+        
+        if found_gemini_pro_alias:
+            print("--- A 'gemini-pro' type model was found and supports generateContent. ---")
+            print("--- Please ensure you use the EXACT NAME from the list above in your code. ---")
+            # You can pick one of these to try in the code below, e.g., "models/gemini-1.0-pro"
+        else:
+            print("--- WARNING: Common 'gemini-pro' aliases NOT found for generateContent. ---")
+            print("--- Please use one of the *listed* model names above for Gemini in your code. ---")
+            
+        print("------------------------------------\n")
+        
+    except Exception as e:
+        print(f"Error listing Gemini models: {e}")
+        st.sidebar.error(f"Failed to list Gemini models. Please check your Google API key and network connection: {e}")
+    # --- END DEBUGGING STEP ---
 else:
     # Display this warning once at startup if the key is missing
     st.error("Google API key not found. Gemini AI will be offline.")
@@ -108,12 +138,12 @@ def localize_to_auckland(dt):
             return auckland_tz.localize(dt, is_dst=None)
         except pytz.AmbiguousTimeError:
             print(f"Warning: Ambiguous time for {dt}. Defaulting to non-DST.")
-            return auckland_tz.localize(dt, is_dst=False)
+            return auckland_tz.localize(dt, is_dst=False) 
         except pytz.NonExistentTimeError:
             print(f"Warning: Non-existent time for {dt}. Treating as Unknown.")
-            return pd.NaT # Or raise an error, or make a sensible adjustment
+            return pd.NaT 
         except Exception as e: # General fallback for other localization errors
-            print(f"Warning: Could not localize expiry date {dt}: {e}. Comparing as naive fallback (less robust).")
+            print(f"Warning: Could not localize expiry date {dt}: {e}. Returning original dt for comparison.")
             return dt # Return original dt if localization severely fails for comparison
     else:
         return dt.astimezone(auckland_tz)
@@ -123,24 +153,17 @@ def check_expiry(expiry_date):
     Checks the expiry status of a consent. Assumes expiry_date is already timezone-aware
     in the 'Pacific/Auckland' timezone due to processing in the main script.
     """
-    if pd.isna(expiry_date):
+    if pd.isna(expiry_date): # Check for NaT (from localization failures or original parse errors)
         return "Unknown"
     
     current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland"))
     
     # Ensure both dates are timezone-aware before comparison
-    # This 'if' block is important if expiry_date could still be naive from previous steps.
-    # However, the .apply(localize_to_auckland) is designed to make it aware.
-    # The return in the except block of localize_to_auckland also needs to be timezone-aware.
-    # The previous fix for the type error ensures dt is a datetime, but it might still be naive.
     if expiry_date.tzinfo is None:
-        # If for some reason it's still naive here, try to localize it now.
-        # This is a defensive step, as apply(localize_to_auckland) should ideally handle it.
         try:
             localized_expiry_date_for_check = pytz.timezone("Pacific/Auckland").localize(expiry_date, is_dst=None)
         except Exception:
-            # Fallback for severe localization issues, compare naive with naive
-            return "Expired" if expiry_date < datetime.now() else "Active"
+            return "Expired" if expiry_date < datetime.now() else "Active" # Fallback to naive local comparison
     else:
         localized_expiry_date_for_check = expiry_date.astimezone(pytz.timezone("Pacific/Auckland"))
 
@@ -176,7 +199,7 @@ def extract_metadata(text):
         r"Application numbers:\s*(.+?)(?=\s*Applicant)",
         r"Application number(?:s)?:\s*(.+?)(?=\s*Applicant)", # Use non-greedy for (.+?) and non-capturing for (?:s)?
         r"Application number:\s*(.+?)(?=\s*Original consent)",
-        r"Application numbers:\s*(.+?)(?=\s*Original consent)", # Fixed 's*Original' to 's*Original consent'
+        r"Application numbers:\s*(.+?)(?=\s*Original consent)", # Fixed 's*Original' to 's*Original consent' and added non-greedy
         r"RC[0-9]{5,}" # Added fallback for RC numbers
     ]
     rc_matches = []
@@ -227,13 +250,12 @@ def extract_metadata(text):
                     continue
 
                 try:
-                    # Removed redundant check for dt_str not being str or empty.
                     if '/' in dt_str:
                         if len(dt_str.split('/')[-1]) == 2:
                             issue_date = datetime.strptime(dt_str, "%d/%m/%y")
                         else:
                             issue_date = datetime.strptime(dt_str, "%d/%m/%Y")
-                    elif '-' in dt_str and re.match(r'\d{1,2}-\d{1,2}-\d{4}', dt_str): # Handle dd-mm-yyyy or similar
+                    elif '-' in dt_str and re.match(r'\d{1,2}-\d{1,2}-\d{4}', dt_str):
                         issue_date = datetime.strptime(dt_str, "%d-%m-%Y")
                     else:
                         dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
@@ -250,65 +272,59 @@ def extract_metadata(text):
         r"expires\s+on\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
         r"expires\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
         r"expire\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
-        r"expire\s+on\s+(\d{1,2}[-/]\d{1,2}[-/]\d{4})", # Unified dd/mm/yyyy or dd-mm-yyyy
-        r"expires\s+([A-Za-z]+\s+years)", # e.g., "five years"
+        r"expire\s+on\s+(\d{1,2}[-/]\d{1,2}[-/]\d{4})",
+        r"expires\s+([A-Za-z]+\s+years)",
         r"expire\s+([A-Za-z]+\s+years)",
         r"DIS\d{5,}(?:-\w+)?\b\s+will\s+expire\s+(\d{1,}\s+years)",
-        r"expires\s+(\d{1,}\s+months\s*(?:from\s+date\s+of\s+commencement)?)[.?!]", # More robust for months
-        r"expires\s+(\d{1,}\s+years\s*(?:from\s+date\s+of\s+commencement)?)[.?!]", # More robust for years
-        r"expires\s+on\s+the\s+(\d{1,2}(?:st|nd|rd|th)?\s+of\s+[A-Za-z]+\s+\d{4}\b)", # "on the 12th of May 2024"
-        r"on\s+(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)", # "on 12th May 2024"
-        r"(\d{1,}\s+years)", # standalone "5 years"
+        r"expires\s+(\d{1,}\s+months\s*(?:from\s+date\s+of\s+commencement)?)[.?!]",
+        r"expires\s+(\d{1,}\s+years\s*(?:from\s+date\s+of\s+commencement)?)[.?!]",
+        r"expires\s+on\s+the\s+(\d{1,2}(?:st|nd|rd|th)?\s+of\s+[A-Za-z]+\s+\d{4}\b)",
+        r"on\s+(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"(\d{1,}\s+years)",
     ]
     expiry_date = None
     for pattern in expiry_patterns:
-        # Search in the full text, not just conditions_str for expiry dates
         matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL) 
         if matches:
             for dt_val_candidate in matches:
-                # Handle cases where pattern might capture more than just the date string (e.g., tuples from groups)
                 dt_str = dt_val_candidate
                 if isinstance(dt_val_candidate, tuple):
-                    # Try to find a date-like string within the tuple elements
                     for part in dt_val_candidate:
                         if isinstance(part, str) and (re.search(r'\d{1,2}[-/][A-Za-z]+ \d{4}|\d{1,2}/\d{1,2}/\d{4}|\d{1,2} [A-Za-z]+ \d{4}', part, re.IGNORECASE)):
                             dt_str = part
                             break
-                    if not isinstance(dt_str, str): # If no string date found in tuple, skip
+                    if not isinstance(dt_str, str): 
                         continue
-                if not dt_str.strip(): # Skip if empty after stripping
+                if not dt_str.strip(): 
                     continue
 
                 try:
-                    # Absolute date parsing (dd/mm/yyyy or dd-mm-yyyy)
                     if re.match(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', dt_str):
                         if len(dt_str.split('-')[-1]) == 2 or len(dt_str.split('/')[-1]) == 2:
                              expiry_date = datetime.strptime(dt_str.replace('/', '-'), "%d-%m-%y")
                         else:
                              expiry_date = datetime.strptime(dt_str.replace('/', '-'), "%d-%m-%Y")
-                    # Absolute date parsing (Day Month Year format)
                     elif re.match(r'\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}', dt_str, re.IGNORECASE):
                         dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
                         expiry_date = datetime.strptime(dt_str, "%d %B %Y")
-                    # Relative expiry (e.g., "5 years", "6 months")
                     else:
                         years_match = re.search(r'(\d+)\s*years', dt_str, re.IGNORECASE)
                         months_match = re.search(r'(\d+)\s*months', dt_str, re.IGNORECASE)
 
                         if years_match and issue_date:
                             num_years = int(years_match.group(1))
-                            expiry_date = issue_date + timedelta(days=num_years * 365) # Approximation
+                            expiry_date = issue_date + timedelta(days=num_years * 365)
                         elif months_match and issue_date:
                             num_months = int(months_match.group(1))
-                            expiry_date = issue_date + timedelta(days=num_months * 30) # Approximation
+                            expiry_date = issue_date + timedelta(days=num_months * 30)
                         else:
-                            continue # If not a recognizable date or relative term, continue to next pattern
+                            continue
                     
-                    break # Stop if parsing is successful
+                    break
                 except ValueError:
-                    continue # Try next date format
+                    continue
             if expiry_date:
-                break # Stop searching patterns if a date is found
+                break
 
     # AUP triggers
     trigger_patterns = [
@@ -328,29 +344,27 @@ def extract_metadata(text):
         r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)",
         r"Proposal\s*(.+?)(?=\n[A-Z]|\.)",
         r"Proposal\s*(.+?)(?=\n[A-Z]|\:)",
-        r"Introduction and summary of proposal\s*(.+?)(?=\s*Submissions|\n[A-Z]|\.)", # Added non-greedy quantifier for content and Submissions as end
+        r"Introduction and summary of proposal\s*(.+?)(?=\s*Submissions|\n[A-Z]|\.)", 
         r"Proposal, site and locality description\s*(.+?)(?=\n[A-Z]|\.)",
         r"Summary of Decision\s*(.+?)(?=\n[A-Z]|\.)",
         r"Summary of proposal and activity status\s*(.+?)(?=\n[A-Z]|\.)"
     ]
-    proposal_matches = [] # Renamed from 'proposal' to avoid conflict if you had 'proposal' variable
+    proposal_matches = [] 
     for pattern in proposal_patterns:
-        proposal_matches.extend(re.findall(pattern, text, re.DOTALL)) # Keep DOTALL for multiline matches
+        proposal_matches.extend(re.findall(pattern, text, re.DOTALL)) 
     
-    # Flatten and join with space, handling tuples from re.findall
     flattened_proposal_matches = []
     for item in proposal_matches:
         if isinstance(item, tuple):
-            flattened_proposal_matches.append(" ".join(item).strip()) # Join tuple elements with space
+            flattened_proposal_matches.append(" ".join(item).strip()) 
         else:
             flattened_proposal_matches.append(item.strip())
     
     proposal_str = " ".join(list(dict.fromkeys(flattened_proposal_matches)))
 
     # Conditions (consolidated pattern for broader capture)
-    # The list is already extensive, just ensure lookbehinds are non-capturing or removed if they cause issues.
     conditions_patterns = [
-        r"(?:Conditions).*?(?=Advice notes)", # Generic, keep for fallback
+        r"(?:Conditions).*?(?=Advice notes)", 
         r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
         r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
         r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)",
@@ -395,8 +409,7 @@ def extract_metadata(text):
         r"(?:DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision",
         r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
         r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
-        # Fallback broad pattern if specific ones fail. Removed original lookbehind for consistency.
-        r"(?:Conditions).*?(?=Advice notes|\Z)", # Added \Z for end of document if no "Advice notes"
+        r"(?:Conditions\n).*?(?=(?:Advice notes|Schedule \d+|APPENDIX \w+|E\. Definitions|\Z))",
     ]
     conditions_str = ""
     for pattern in conditions_patterns:
@@ -406,15 +419,8 @@ def extract_metadata(text):
             break
 
     # Extracting numbered conditions (e.g., "1. This condition...", "2. Another...")
-    # This regex attempts to capture the full text of each numbered condition.
-    # It looks for a number followed by a period, then captures everything until the start of the next numbered condition or end of string.
     full_conditions_list = []
     if conditions_str:
-        # Regex to capture content for "1. Condition A...", "2. Condition B...", etc.
-        # It needs to look for the start of a new condition (^\s*\d+\.?\d*\s*[A-Z]) or end of string (\Z)
-        # to properly delimit each condition.
-        # This is complex and might need fine-tuning for your specific documents.
-        # A simple approach: find all lines starting with a number and period, treat each as a condition.
         raw_numbered_sections = re.findall(r"^\s*(\d+\.?\d*)\s*(.*?)(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
         for num, content in raw_numbered_sections:
              full_conditions_list.append(f"{num}. {content.strip()}")
@@ -513,8 +519,11 @@ if uploaded_files:
     for file in uploaded_files:
         try:
             file_bytes = file.read()
-            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-                text = "\n".join(page.get_text() for page in doc)
+            # --- PDFPLUMBER INTEGRATION ---
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                # Extract text page by page
+                text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
+            # --- END PDFPLUMBER INTEGRATION ---
             data = extract_metadata(text)
             data["__file_name__"] = file.name
             data["__file_bytes__"] = file_bytes
@@ -685,12 +694,12 @@ with st.expander("AI Chatbot", expanded=True):
                         context_sample_df = df[[
                             "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
                             "Mitigation (Consent Conditions)", "Issue Date", "Expiry Date", "Reason for Consent",
-                            "Consent Conditions Numbers", "Consent Conditions" # Include new fields
+                            "Consent Conditions Numbers", "Consent Conditions"
                         ]].dropna().copy()
                         
                         for col in ['Expiry Date', 'Issue Date']:
                             if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
-                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z') # Include timezone info in string for LLM
+                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z')
                                 
                         context_sample_list = context_sample_df.to_dict(orient="records")
                     else:
@@ -787,7 +796,7 @@ Answer:
                                 answer_raw = f"Groq API error: {e}"
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    else: # Fallback for if an invalid provider is selected somehow (shouldn't happen with radio buttons)
+                    else:
                         st.warning("Selected LLM provider is not available or supported.")
                         answer_raw = "AI provider not available."
 
