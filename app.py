@@ -506,7 +506,7 @@ if uploaded_files:
         colored_metric(col1, "Total Consents", total_consents, "#4682B4") # Neutral color for total
         colored_metric(col2, "Expiring in 90 Days", expiring_90_days, color_map["Expiring in 90 Days"])
         colored_metric(col3, "Expired", expired_count, color_map["Expired"])
-        colored_metric(col4, "Truly Active", truly_active_count, color_map["Active"])
+        colored_metric(col4, "Active", truly_active_count, color_map["Active"])
 
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
