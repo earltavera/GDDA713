@@ -362,7 +362,7 @@ def extract_metadata(text):
         conditions_numbers = list(dict.fromkeys(conditions_numbers))
 
     # Extracting consent conditions
-    consent_conditions = re.findall(r"\d\.\s*(.+?)\s*\d\.)", conditions_str, re.MULTILINE | re.DOTALL)
+    consent_conditions = re.findall(r"\d\.\s*(.+?)\s*\d\."), conditions_str, re.MULTILINE | re.DOTALL)
 
     return {
         "Resource Consent Numbers": rc_str if rc_str else "Unknown Resource Consent Numbers",
