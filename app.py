@@ -629,7 +629,7 @@ with st.expander("AI Chatbot", expanded=True):
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, consent conditions, or general trends)", unsafe_allow_html=True)
 
     # REMOVED "OpenAI" from the radio button options
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "Groq"], horizontal=True, key="llm_provider_radio")
+    llm_provider = st.radio("Choose LLM Provider", ["Groq AI", "Gemini AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
     st.markdown("</div>", unsafe_allow_html=True)
