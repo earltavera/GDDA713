@@ -238,6 +238,18 @@ def extract_metadata(text):
         r"expire on (\d{1,2}/\d{1,2}/\d{4})",
         r"expire ([A-Za-z]\d{1,} years)",
     ]
+    expiry_patterns = [
+        r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
+        r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
+        r"expires (\d{1,2} [A-Za-z]+ \d{4})",
+        r"expire (\d{1,2} [A-Za-z]+ \d{4})",
+        r"(\d{1,} years) from the date of commencement",
+        r"DIS\d{5,}(?:-\w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
+        r"expires (\d{1,} months [A-Za-z]+)[.?!]",
+        r"expires (\d{1,} years [A-Za-z]+)[.?!]",
+        r"expire on (\d{1,2}/\d{1,2}/\d{4})",
+        r"expire ([A-Za-z]\d{1,} years)",
+    ]
     expiry_date = None
     for pattern in expiry_patterns:
         matches = re.findall(pattern, text)
@@ -249,7 +261,7 @@ def extract_metadata(text):
 
                 try:
                     if '/' in dt_str:
-                        expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
+                        expiry_date = expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_patterns,
                     else:
                         dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
                         expiry_date = datetime.strptime(dt_str, "%d %B %Y")
