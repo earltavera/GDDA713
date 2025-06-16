@@ -225,30 +225,30 @@ def extract_metadata(text):
             if issue_date:
                 break
 
+  
     # Consent Expiry patterns
     expiry_patterns = [
-        r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expires (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expire (\d{1,2} [A-Za-z]+ \d{4})",
-        r"(\d{1,} years) from the date of commencement",
-        r"DIS\d{5,}(?:-\w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
-        r"expires (\d{1,} months [A-Za-z]+)[.?!]",
-        r"expires (\d{1,} years [A-Za-z]+)[.?!]",
-        r"expire on (\d{1,2}/\d{1,2}/\d{4})",
-        r"expire ([A-Za-z]\d{1,} years)",
-    ]
-    expiry_patterns = [
-        r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expires (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expire (\d{1,2} [A-Za-z]+ \d{4})",
-        r"(\d{1,} years) from the date of commencement",
-        r"DIS\d{5,}(?:-\w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
-        r"expires (\d{1,} months [A-Za-z]+)[.?!]",
-        r"expires (\d{1,} years [A-Za-z]+)[.?!]",
-        r"expire on (\d{1,2}/\d{1,2}/\d{4})",
-        r"expire ([A-Za-z]\d{1,} years)",
+        r"expire\s+on\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"expires\s+on\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"expires\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"expire\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"expire\s+on\s+(\d{1,2}-\d{1,2}-\d{4})",
+        r"expires\s+([A-Za-z]+\s+years)",
+        r"expire\s+([A-Za-z]+\s+years)",
+        r"DIS\d{5,}(?:-w+)?\b\s+will\s+expire\s+(\d{1,}\s+years)",
+        r"expires\s+(\d{1,}\s+months\s+[A-Za-z])+\s+[.?!]",
+        r"expires\s+on\s+(\d{1,2}(?:st|nd|rd|th)\s+of\s+?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"expires\s+on\s+the\s+(\d{1,2}(?:st|nd|rd|th)\s+of\s+?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"expire\s+on\s+(\d{1,2}/\d{1,2}/\d{4})",
+        r"expire\s+on\s+(\d{1,2}-\d{1,2}-\d{4})",
+        r"expire\s+([A-Za-z]+\s+(\d{1,})\s+years)",
+        r"expire\s+(\d{1,2}\s+years)",
+        r"expires\s+(\d{1,2}\s+years)",
+        r"expire\s+([A-Za-z]+\s+(\d{1,2})\s+[A-Za-z]+)",
+        r"earlier\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"on\s+(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"on\s+the\s+(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"(\d{1,}\s+years)",
     ]
     expiry_date = None
     for pattern in expiry_patterns:
@@ -361,21 +361,19 @@ def extract_metadata(text):
         conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
         conditions_numbers = list(dict.fromkeys(conditions_numbers))
 
-    # Management Plans from conditions
-    managementplan_raw = r"(?i)\b(\w+)\sManagement Plan"
-    management_plan = re.findall(managementplan_raw, conditions_str, re.DOTALL)
-    managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in management_plan]))
+    # Extracting consent conditions
+    consent_conditions = re.findall(r"\d\.\s*(.+?)\s*\d\."), conditions_str, re.MULTILINE)
 
     return {
         "Resource Consent Numbers": rc_str if rc_str else "Unknown Resource Consent Numbers",
         "Company Name": company_str if company_str else "Unknown Company Name",
         "Address": address_str if address_str else "Unknown Address",
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
-        "AUP(OP) Triggers": triggers_str if triggers_str else "None AUP Triggers",
-        "Reason for Consent": proposal_str if proposal_str else "Unknown Reason fro Consent",
-        "Consent Conditions": ", ".join(conditions_numbers) if conditions_numbers else "None Consent Conditions",
-        "Mitigation (Consent Conditions)": ", ".join(managementplan_final) if managementplan_final else "None",
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_patterns,
+        "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
+        "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent",
+        "Consent Condition Number": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Consent Conditions",
+        "Consent Conditions": ", ".join() if managementplan_final else "None",
         "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
     }
