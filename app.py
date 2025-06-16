@@ -626,7 +626,7 @@ st.subheader("Ask AI About Consents")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
+    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, consent conditions, or general trends)", unsafe_allow_html=True)
 
     # REMOVED "OpenAI" from the radio button options
     llm_provider = st.radio("Choose LLM Provider", ["Gemini", "Groq"], horizontal=True, key="llm_provider_radio")
@@ -645,7 +645,7 @@ with st.expander("AI Chatbot", expanded=True):
                     if not df.empty:
                         context_sample_df = df[[
                             "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
-                            "Mitigation (Consent Conditions)", "Issue Date", "Expiry Date", "Reason for Consent"
+                            "Consent Conditions", "Issue Date", "Expiry Date", "Reason for Consent"
                         ]].dropna().copy()
                         
                         for col in ['Expiry Date', 'Issue Date']:
