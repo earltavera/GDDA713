@@ -160,14 +160,16 @@ def geocode_address(address):
 def extract_metadata(text):
     # RC number patterns
     rc_patterns = [
-        r"Application number:\s*(.+?)(?=\s*Applicant)",
-        r"Application numbers:\s*(.+)(?=\s*Applicant)",
-        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)",
+        r"Application number:\s*(.+?)\s*Applicant",
+        r"Application numbers:\s*(.+)\s*Applicant",
+        r"Application number(s):\s*(.+)\s*Applicant",
+        r"Application number:\s*(.+)\s*Original consent",
+        r"Application numbers:\s*(.+)\s*Original consent"
         r"RC[0-9]{5,}" 
     ]
     rc_matches = []
     for pattern in rc_patterns:
-        rc_matches.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL |re.IGNORECASE))
+        rc_matches.extend(re.findall(pattern, text, re.MULTILINE |re.IGNORECASE))
     
     # Flatten list of lists/tuples that re.findall might return
     flattened_rc_matches = []
@@ -190,17 +192,24 @@ def extract_metadata(text):
 
     # Address patterns
     address_pattern = r"Site address:\s*(.+?)(?=\s*Legal description)"
-    address_match = re.findall(address_pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
+    address_match = re.findall(address_pattern, text, re.MULTILINE | re.IGNORECASE)
     address_str = ", ".join(list(dict.fromkeys(address_match)))
 
     # Issue date patterns
     issue_date_patterns = [
+        r"Commissioner\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
         r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
-        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
-        r"(\b\d{2}/\d{2}/\d{2}\b)"
+        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)"
     ]
+    issue_date_else_patterns = r"(\b\d{2}/\d{2}/\d{2}\b)"
+
+    if issue_date_patterns:
+        issue_date_patterns
+    else:
+        issue_date_else_patterns
+        
     issue_date = None
     for pattern in issue_date_patterns:
         matches = re.findall(pattern, text)
@@ -284,13 +293,22 @@ def extract_metadata(text):
     triggers_str = " ".join(list(dict.fromkeys(triggers)))
 
     # Reason (Proposal)
-    proposal_pattern = r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
-    proposal_matches = re.findall(proposal_pattern, text, re.DOTALL)
-    proposal_str = " ".join(list(dict.fromkeys(proposal_matches)))
+    proposal_patterns= [
+        r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Proposal\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Proposal\s*(.+?)(?=\n[A-Z]|\:)",
+        r"Introduction and summary of proposal\s*(.+?)\s*Submissions",
+        r"Proposal, site and locality description\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Summary of Decision\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Summary of proposal and activity status\s*(.+?)(?=\n[A-Z]|\.)"
+    ]
+    proposal =  []
+    for pattern in proposal_patterns:
+        proposal.extend(re.findall(pattern, text))
+    proposal_str= "".join(list(dict.fromkeys(proposal)))
 
     # Conditions (consolidated pattern for broader capture)
     conditions_patterns = [
-        r"(?:Conditions).*?(?=Advice notes)",
         r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
         r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
         r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)",
@@ -336,7 +354,7 @@ def extract_metadata(text):
         r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
         r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
         # Fallback broad pattern if specific ones fail
-        r"(?:Conditions\n).*?(?=(?:Advice notes|Schedule \d+|APPENDIX \w+|E\. Definitions|\Z))",
+        r"(?<=Conditions).*?(?=Advice notes)"
     ]
 
     conditions_str = ""
