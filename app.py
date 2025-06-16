@@ -203,14 +203,11 @@ def extract_metadata(text):
         r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
         r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)"
     ]
-    issue_date_else_patterns = r"(\b\d{2}/\d{2}/\d{2}\b)"
-
     if issue_date_patterns:
         issue_date_patterns
     else:
         issue_date_else_patterns
         
-    issue_date = None
     for pattern in issue_date_patterns:
         matches = re.findall(pattern, text)
         if matches:
