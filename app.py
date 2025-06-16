@@ -1,4 +1,4 @@
-import streamlit as st
+ximport streamlit as st
 import pandas as pd
 import pymupdf
 fitz = pymupdf
@@ -373,7 +373,7 @@ def extract_metadata(text):
         "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
         "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent",
         "Consent Condition Number": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Consent Conditions",
-        "Consent Conditions": ", ".join() if Consent_conditions else "None",
+        "Consent Conditions": ", ".join() if consent_conditions else "None",
         "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
     }
