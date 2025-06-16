@@ -355,14 +355,14 @@ def extract_metadata(text):
     managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in management_plan]))
 
     return {
-        "Resource Consent Numbers": rc_str if rc_str else "Unknown",
-        "Company Name": company_str if company_str else "Unknown",
-        "Address": address_str if address_str else "Unknown",
-        "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown",
-        "AUP(OP) Triggers": triggers_str if triggers_str else "None",
-        "Reason for Consent": proposal_str if proposal_str else "Unknown",
-        "Consent Conditions": ", ".join(conditions_numbers) if conditions_numbers else "None",
+        "Resource Consent Numbers": rc_str if rc_str else "Unknown Resource Consent Numbers",
+        "Company Name": company_str if company_str else "Unknown Company Name",
+        "Address": address_str if address_str else "Unknown Address",
+        "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
+        "AUP(OP) Triggers": triggers_str if triggers_str else "None AUP Triggers",
+        "Reason for Consent": proposal_str if proposal_str else "Unknown Reason fro Consent",
+        "Consent Conditions": ", ".join(conditions_numbers) if conditions_numbers else "None Consent Conditions",
         "Mitigation (Consent Conditions)": ", ".join(managementplan_final) if managementplan_final else "None",
         "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
