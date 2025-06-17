@@ -274,12 +274,10 @@ def extract_metadata(text):
                         else:
                             expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
                     else:
-                        # Correctly parse formats like "17th June 2025"
+                   
                         dt_str_cleaned = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?(?: of)?\b', r'\1', dt_str)
-                        # Using a flexible parser or multiple strptime formats can be more robust
                         expiry_date = datetime.strptime(dt_str_cleaned, "%d %B %Y")
     
-                    # If we successfully parse a date, break the inner loop
                     break 
 
                 except ValueError:
