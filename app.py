@@ -234,7 +234,6 @@ def extract_metadata(text):
             if issue_date:
                 break
 
-  
     # Consent Expiry patterns
     expiry_patterns = [
         r"expire\s+on\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
@@ -396,7 +395,7 @@ def extract_metadata(text):
         "Company Name": company_str if company_str else "Unknown Company Name",
         "Address": address_str if address_str else "Unknown Address",
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_patterns,
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
         "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
         "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent",
         "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers",
@@ -468,7 +467,6 @@ def get_corpus_embeddings(text_blobs_tuple, model_name_str):
     model_obj=load_embedding_model(model_name_str)
     return model_obj.encode(list(text_blobs_tuple), convert_to_tensor=True)
 
-# Initialize df outside the if block to ensure it always exists
 df = pd.DataFrame()
 
 # --- File Processing & Dashboard ---
