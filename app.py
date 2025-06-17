@@ -270,7 +270,7 @@ def extract_metadata(text):
 
                 try:
                     if '/' in dt_str:
-                        expiry_date = expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_patterns,
+                        expiry_date = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
                     else:
                         dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
                         expiry_date = datetime.strptime(dt_str, "%d %B %Y")
