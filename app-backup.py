@@ -160,14 +160,16 @@ def geocode_address(address):
 def extract_metadata(text):
     # RC number patterns
     rc_patterns = [
-        r"Application number:\s*(.+?)(?=\s*Applicant)",
-        r"Application numbers:\s*(.+)(?=\s*Applicant)",
-        r"Application number(?:s)?:\s*(.+)(?=\s*Applicant)",
+        r"Application number:\s*(.+?)\s*Applicant",
+        r"Application numbers:\s*(.+)\s*Applicant",
+        r"Application number(s):\s*(.+)\s*Applicant",
+        r"Application number:\s*(.+)\s*Original consent",
+        r"Application numbers:\s*(.+)\s*Original consent"
         r"RC[0-9]{5,}" 
     ]
     rc_matches = []
     for pattern in rc_patterns:
-        rc_matches.extend(re.findall(pattern, text, re.IGNORECASE))
+        rc_matches.extend(re.findall(pattern, text, re.MULTILINE |re.IGNORECASE | re.DOTALL))
     
     # Flatten list of lists/tuples that re.findall might return
     flattened_rc_matches = []
@@ -190,18 +192,21 @@ def extract_metadata(text):
 
     # Address patterns
     address_pattern = r"Site address:\s*(.+?)(?=\s*Legal description)"
-    address_match = re.findall(address_pattern, text, re.IGNORECASE)
+    address_match = re.findall(address_pattern, text, re.MULTILINE | re.IGNORECASE)
     address_str = ", ".join(list(dict.fromkeys(address_match)))
 
     # Issue date patterns
     issue_date_patterns = [
+        r"Commissioner\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
         r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
-        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
-        r"(\b\d{2}/\d{2}/\d{2}\b)"
+        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)"
     ]
-    issue_date = None
+    issue_date_else_patterns = r"(\b\d{2}/\d{2}/\d{2}\b)"
+
+        
+    issue_date = None   
     for pattern in issue_date_patterns:
         matches = re.findall(pattern, text)
         if matches:
@@ -227,16 +232,27 @@ def extract_metadata(text):
 
     # Consent Expiry patterns
     expiry_patterns = [
-        r"expire on (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expires on (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expires (\d{1,2} [A-Za-z]+ \d{4})",
-        r"expire (\d{1,2} [A-Za-z]+ \d{4})",
-        r"(\d{1,} years) from the date of commencement",
-        r"DIS\d{5,}(?:-\w+)?\b will expire (\d{1,} years [A-Za-z]+[.?!])",
-        r"expires (\d{1,} months [A-Za-z]+)[.?!]",
-        r"expires (\d{1,} years [A-Za-z]+)[.?!]",
-        r"expire on (\d{1,2}/\d{1,2}/\d{4})",
-        r"expire ([A-Za-z]\d{1,} years)",
+        r"expire\s+on\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"expires\s+on\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"expires\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"expire\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"expire\s+on\s+(\d{1,2}-\d{1,2}-\d{4})",
+        r"expires\s+([A-Za-z]+\s+years)",
+        r"expire\s+([A-Za-z]+\s+years)",
+        r"DIS\d{5,}(?:-w+)?\b\s+will\s+expire\s+(\d{1,}\s+years)",
+        r"expires\s+(\d{1,}\s+months\s+[A-Za-z])+\s+[.?!]",
+        r"expires\s+on\s+(\d{1,2}(?:st|nd|rd|th)\s+of\s+?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"expires\s+on\s+the\s+(\d{1,2}(?:st|nd|rd|th)\s+of\s+?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"expire\s+on\s+(\d{1,2}/\d{1,2}/\d{4})",
+        r"expire\s+on\s+(\d{1,2}-\d{1,2}-\d{4})",
+        r"expire\s+([A-Za-z]+\s+(\d{1,})\s+years)",
+        r"expire\s+(\d{1,2}\s+years)",
+        r"expires\s+(\d{1,2}\s+years)",
+        r"expire\s+([A-Za-z]+\s+(\d{1,2})\s+[A-Za-z]+)",
+        r"earlier\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+        r"on\s+(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"on\s+the\s+(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"(\d{1,}\s+years)",
     ]
     expiry_date = None
     for pattern in expiry_patterns:
@@ -249,12 +265,19 @@ def extract_metadata(text):
 
                 try:
                     if '/' in dt_str:
-                        expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
+                        if len(dt_str.split('/')[-1]) == 2:
+                            expiry_date = datetime.strptime(dt_str, "%d/%m/%y")
+                        else:
+                            expiry_date = datetime.strptime(dt_str, "%d/%m/%Y")
                     else:
-                        dt_str = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?\b', r'\1', dt_str)
-                        expiry_date = datetime.strptime(dt_str, "%d %B %Y")
-                    break
+                   
+                        dt_str_cleaned = re.sub(r'\b(\d{1,2})(?:st|nd|rd|th)?(?: of)?\b', r'\1', dt_str)
+                        expiry_date = datetime.strptime(dt_str_cleaned, "%d %B %Y")
+    
+                    break 
+
                 except ValueError:
+                    # If parsing fails for this match, just continue to the next one
                     continue
             if expiry_date:
                 break
@@ -272,13 +295,22 @@ def extract_metadata(text):
     triggers_str = " ".join(list(dict.fromkeys(triggers)))
 
     # Reason (Proposal)
-    proposal_pattern = r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)"
-    proposal_matches = re.findall(proposal_pattern, text, re.DOTALL)
-    proposal_str = " ".join(list(dict.fromkeys(proposal_matches)))
+    proposal_patterns= [
+        r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Proposal\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Proposal\s*(.+?)(?=\n[A-Z]|\:)",
+        r"Introduction and summary of proposal\s*(.+?)\s*Submissions",
+        r"Proposal, site and locality description\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Summary of Decision\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Summary of proposal and activity status\s*(.+?)(?=\n[A-Z]|\.)"
+    ]
+    proposal =  []
+    for pattern in proposal_patterns:
+        proposal.extend(re.findall(pattern, text))
+    proposal_str= "".join(list(dict.fromkeys(proposal)))
 
     # Conditions (consolidated pattern for broader capture)
     conditions_patterns = [
-        r"(?:Conditions).*?(?=Advice notes)",
         r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
         r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
         r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)",
@@ -324,7 +356,7 @@ def extract_metadata(text):
         r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
         r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
         # Fallback broad pattern if specific ones fail
-        r"(?:Conditions\n).*?(?=(?:Advice notes|Schedule \d+|APPENDIX \w+|E\. Definitions|\Z))",
+        r"(?<=Conditions).*?(?=Advice notes)"
     ]
 
     conditions_str = ""
@@ -349,21 +381,19 @@ def extract_metadata(text):
         conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
         conditions_numbers = list(dict.fromkeys(conditions_numbers))
 
-    # Management Plans from conditions
-    managementplan_raw = r"(?i)\b(\w+)\sManagement Plan"
-    management_plan = re.findall(managementplan_raw, conditions_str, re.DOTALL)
-    managementplan_final = list(dict.fromkeys([f"{word} Management Plan" for word in management_plan]))
+    # Extracting consent conditions
+    consent_conditions = re.findall(r"\d\.\s*(.+?)\s*\d\.", conditions_str, re.MULTILINE | re.DOTALL)
 
     return {
-        "Resource Consent Numbers": rc_str if rc_str else "Unknown",
-        "Company Name": company_str if company_str else "Unknown",
-        "Address": address_str if address_str else "Unknown",
-        "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown",
-        "AUP(OP) Triggers": triggers_str if triggers_str else "None",
-        "Reason for Consent": proposal_str if proposal_str else "Unknown",
-        "Consent Conditions": ", ".join(conditions_numbers) if conditions_numbers else "None",
-        "Mitigation (Consent Conditions)": ", ".join(managementplan_final) if managementplan_final else "None",
+        "Resource Consent Numbers": rc_str if rc_str else "Unknown Resource Consent Numbers",
+        "Company Name": company_str if company_str else "Unknown Company Name",
+        "Address": address_str if address_str else "Unknown Address",
+        "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
+        "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
+        "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent",
+        "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers",
+        "Consent Conditions": " ".join(consent_conditions) if consent_conditions else "Unknown Consent Conditions",
         "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
     }
@@ -431,7 +461,6 @@ def get_corpus_embeddings(text_blobs_tuple, model_name_str):
     model_obj=load_embedding_model(model_name_str)
     return model_obj.encode(list(text_blobs_tuple), convert_to_tensor=True)
 
-# Initialize df outside the if block to ensure it always exists
 df = pd.DataFrame()
 
 # --- File Processing & Dashboard ---
@@ -506,7 +535,7 @@ if uploaded_files:
         colored_metric(col1, "Total Consents", total_consents, "#4682B4") # Neutral color for total
         colored_metric(col2, "Expiring in 90 Days", expiring_90_days, color_map["Expiring in 90 Days"])
         colored_metric(col3, "Expired", expired_count, color_map["Expired"])
-        colored_metric(col4, "Truly Active", truly_active_count, color_map["Active"])
+        colored_metric(col4, "Active", truly_active_count, color_map["Active"])
 
         # Status Chart
         status_counts = df["Consent Status Enhanced"].value_counts().reset_index()
@@ -522,7 +551,7 @@ if uploaded_files:
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
             display_df = filtered_df[[
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
-                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Mitigation (Consent Conditions)"
+                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Consent Conditions"
             ]].rename(columns={
                 "__file_name__": "File Name",
                 "Consent Status Enhanced": "Consent Status"
@@ -598,10 +627,10 @@ st.subheader("Ask AI About Consents")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, mitigation, or general trends)", unsafe_allow_html=True)
+    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, consent conditions, or general trends)", unsafe_allow_html=True)
 
     # REMOVED "OpenAI" from the radio button options
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini", "Groq"], horizontal=True, key="llm_provider_radio")
+    llm_provider = st.radio("Choose LLM Provider", ["Groq AI", "Gemini AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -617,7 +646,7 @@ with st.expander("AI Chatbot", expanded=True):
                     if not df.empty:
                         context_sample_df = df[[
                             "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
-                            "Mitigation (Consent Conditions)", "Issue Date", "Expiry Date", "Reason for Consent"
+                            "Consent Conditions", "Issue Date", "Expiry Date", "Reason for Consent"
                         ]].dropna().copy()
                         
                         for col in ['Expiry Date', 'Issue Date']:
@@ -627,7 +656,7 @@ with st.expander("AI Chatbot", expanded=True):
                         context_sample_list = context_sample_df.to_dict(orient="records")
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
-                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Mitigation (Consent Conditions)": "General Management Plan", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
+                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Consent Conditions": "Consent Conditions", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
 
                     context_sample_raw_json = json.dumps(context_sample_list, indent=2)
                     context_sample_json = "" 
