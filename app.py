@@ -34,7 +34,7 @@ openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPE
 # ------------------------
 # Streamlit Page Config & Style (MUST BE THE FIRST STREAMLIT COMMAND)
 # ------------------------
-st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿")
+st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿", initial_sidebar_state="expanded")
 
 if google_api_key:
     genai.configure(api_key=google_api_key)
