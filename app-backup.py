@@ -16,7 +16,7 @@ import io
 import requests
 import pytz # Import pytz for timezone handling
 import json
-import time # <-- ADDED for progress bar UX
+import time # ADDED for progress bar UX
 
 # --- LLM Specific Imports ---
 import google.generativeai as genai # For Gemini
@@ -466,20 +466,17 @@ df = pd.DataFrame()
 
 # --- File Processing & Dashboard ---
 if uploaded_files:
+    # --- START: MULTI-STAGE PROGRESS BAR ---
+    my_bar = st.progress(0, text="Initializing...")
     all_data = []
-    
-    # --- START: PROGRESS BAR IMPLEMENTATION ---
     total_files = len(uploaded_files)
-    progress_text = f"Processing {total_files} PDF file(s). Please wait."
-    my_bar = st.progress(0, text=progress_text)
-    # --- END: PROGRESS BAR IMPLEMENTATION ---
 
+    # Stage 1: PDF Processing (0% -> 70% of total progress)
     for i, file in enumerate(uploaded_files):
+        # Calculate progress within the 0-70 range
+        progress_stage1 = int(((i + 1) / total_files) * 70)
+        my_bar.progress(progress_stage1, text=f"Step 1/3: Processing file {i+1}/{total_files} ({file.name})...")
         try:
-            # Update progress bar
-            progress_percentage = (i + 1) / total_files
-            my_bar.progress(progress_percentage, text=f"Processing {i+1}/{total_files}: {file.name}")
-
             file_bytes = file.read()
             with fitz.open(stream=file_bytes, filetype="pdf") as doc:
                 text = "\n".join(page.get_text() for page in doc)
@@ -489,33 +486,27 @@ if uploaded_files:
             all_data.append(data)
         except Exception as e:
             st.error(f"Error processing {file.name}: {e}")
-
-    # --- START: Finalize and remove progress bar ---
-    my_bar.progress(1.0, text="Processing Complete!")
-    time.sleep(1) # Keep the "Complete!" message for a moment
-    my_bar.empty() # Remove the progress bar
-    # --- END: Finalize and remove progress bar ---
+    # --- END Stage 1 ---
 
     if all_data:
+        # --- Stage 2: Geocoding (70% -> 90% of total progress) ---
+        my_bar.progress(75, text="Step 2/3: Geocoding addresses. This may take a moment...")
         df = pd.DataFrame(all_data)
         df["GeoKey"] = df["Address"].str.lower().str.strip()
+        # Geocoding is the slow part of this stage
         df["Latitude"], df["Longitude"] = zip(*df["GeoKey"].apply(geocode_address))
 
-        # --- CRITICAL CHANGE FOR DATETIME LOCALIZATION ---
+        # --- Stage 3: Finalizing and Rendering (90% -> 100%) ---
+        my_bar.progress(90, text="Step 3/3: Finalizing data and rendering dashboard...")
+
+        # --- DATETIME LOCALIZATION ---
         auckland_tz = pytz.timezone("Pacific/Auckland")
-
-        # 1. Convert to datetime, coercing errors to NaT
         df['Expiry Date'] = pd.to_datetime(df['Expiry Date'], errors='coerce', dayfirst=True)
-
-        # 2. Apply localization to the entire Series. This will call the robust localize_to_auckland.
         df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
-        # --- END CRITICAL CHANGE ---
-
+        
+        # --- ENHANCED STATUS CALCULATION ---
         df["Consent Status Enhanced"] = df["Consent Status"]
-
-        # Ensure comparison is always with timezone-aware datetime
         current_nz_aware_time = datetime.now(pytz.timezone("Pacific/Auckland"))
-
         df.loc[
             (df["Consent Status"] == "Active") &
             (df["Expiry Date"] > current_nz_aware_time) &
@@ -523,34 +514,28 @@ if uploaded_files:
             "Consent Status Enhanced"
         ] = "Expiring in 90 Days"
 
+        # --- START RENDERING DASHBOARD ---
+        
         # Metrics
         st.subheader("Consent Summary Metrics")
         col1, col2, col3, col4 = st.columns(4)
 
-        # Helper function to format metric with custom color
         def colored_metric(column_obj, label, value, color):
             """Displays a metric value with a custom color using markdown."""
             column_obj.markdown(f"""
-                <div style="
-                    text-align: center;
-                    padding: 10px;
-                    border-radius: 5px;
-                    background-color: #f0f2f6; /* A light background, adjust if your theme is dark */
-                    margin-bottom: 10px;
-                ">
+                <div style="text-align: center; padding: 10px; border-radius: 5px; background-color: #f0f2f6; margin-bottom: 10px;">
                     <div style="font-size: 0.9em; color: #333;">{label}</div>
                     <div style="font-size: 2.5em; font-weight: bold; color: {color};">{value}</div>
                 </div>
             """, unsafe_allow_html=True)
 
         color_map = {"Unknown": "gray", "Expired": "#8B0000", "Active": "green", "Expiring in 90 Days": "orange"}
-
         total_consents = len(df)
         expiring_90_days = (df["Consent Status Enhanced"] == "Expiring in 90 Days").sum()
         expired_count = df["Consent Status"].value_counts().get("Expired", 0)
         truly_active_count = (df["Consent Status Enhanced"] == "Active").sum()
 
-        colored_metric(col1, "Total Consents", total_consents, "#4682B4") # Neutral color for total
+        colored_metric(col1, "Total Consents", total_consents, "#4682B4")
         colored_metric(col2, "Expiring in 90 Days", expiring_90_days, color_map["Expiring in 90 Days"])
         colored_metric(col3, "Expired", expired_count, color_map["Expired"])
         colored_metric(col4, "Active", truly_active_count, color_map["Active"])
@@ -570,10 +555,7 @@ if uploaded_files:
             display_df = filtered_df[[
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
                 "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Consent Conditions"
-            ]].rename(columns={
-                "__file_name__": "File Name",
-                "Consent Status Enhanced": "Consent Status"
-            })
+            ]].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
             st.dataframe(display_df)
             csv_output = display_df.to_csv(index=False).encode("utf-8")
             st.download_button("Download CSV", csv_output, "filtered_consents.csv", "text/csv")
@@ -582,21 +564,9 @@ if uploaded_files:
         with st.expander("Consent Map", expanded=True):
             map_df = df.dropna(subset=["Latitude", "Longitude"])
             if not map_df.empty:
-                fig = px.scatter_mapbox(
-                    map_df,
-                    lat="Latitude",
-                    lon="Longitude",
-                    hover_name="Company Name",
-                    hover_data={
-                        "Address": True,
-                        "Consent Status Enhanced": True,
-                        "Issue Date": True,
-                        "Expiry Date": True
-                    },
-                    zoom=10,
-                    color="Consent Status Enhanced",
-                    color_discrete_map=color_map
-                )
+                fig = px.scatter_mapbox(map_df, lat="Latitude", lon="Longitude", hover_name="Company Name",
+                                        hover_data={"Address": True, "Consent Status Enhanced": True, "Issue Date": True, "Expiry Date": True},
+                                        zoom=10, color="Consent Status Enhanced", color_discrete_map=color_map)
                 fig.update_traces(marker=dict(size=12))
                 fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
                 st.plotly_chart(fig, use_container_width=True)
@@ -605,36 +575,43 @@ if uploaded_files:
         with st.expander("Semantic Search Results", expanded=True):
             if query_input:
                 corpus = df["Text Blob"].tolist()
-                # Use cached embeddings
                 corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
-
                 query_embedding = embedding_model.encode(query_input, convert_to_tensor=True)
                 scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-                top_k_indices = scores.argsort(descending=True) # Get all indices sorted by score
+                top_k_indices = scores.argsort(descending=True)
 
                 displayed_results = 0
-                similarity_threshold = st.slider("Semantic Search Relevance Threshold", min_value=0.0, max_value=1.0, value=0.5, step=0.05) # Slider for threshold
+                similarity_threshold = st.slider("Semantic Search Relevance Threshold", min_value=0.0, max_value=1.0, value=0.5, step=0.05)
 
                 for idx in top_k_indices:
                     score = scores[idx.item()]
-                    if score < similarity_threshold and displayed_results >= 1: # Display at least one result, then apply threshold
-                        break # Stop if score is below threshold (after at least one result shown)
-
+                    if score < similarity_threshold and displayed_results >= 1:
+                        break
                     row = df.iloc[idx.item()]
                     st.markdown(f"**{displayed_results + 1}. {row['Company Name']} - {row['Address']}** (Similarity: {score:.2f})")
                     st.markdown(f"- **Triggers**: {row['AUP(OP) Triggers']}")
-                    # Display expiry date gracefully
                     expiry_display = row['Expiry Date'].strftime('%Y-%m-%d') if pd.notna(row['Expiry Date']) else 'N/A'
                     st.markdown(f"- **Expires**: {expiry_display}")
                     safe_filename = clean_surrogates(row['__file_name__'])
                     st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{idx.item()}")
                     st.markdown("---")
                     displayed_results += 1
-                    if displayed_results >= 3: # Keep displaying top_k if above threshold (e.g., top 3)
+                    if displayed_results >= 3:
                         break
-
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
+        
+        # --- END RENDERING DASHBOARD ---
+
+        # Finalize and remove the progress bar
+        my_bar.progress(100, text="Dashboard Ready!")
+        time.sleep(1)
+        my_bar.empty()
+
+    else: # Handle case where no data could be extracted from any files
+        my_bar.empty()
+        st.warning("Could not extract any data from the uploaded files. Please check the file contents.")
+
 
 # ----------------------------
 # Ask AI About Consents Chatbot
