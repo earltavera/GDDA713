@@ -491,4 +491,127 @@ if uploaded_files:
                     color_discrete_map=color_map
                 )
                 fig.update_traces(marker=dict(size=12))
-                fig.update_layout(mapbox_style="open-street-map", margin={"r":
+                fig.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
+                st.plotly_chart(fig, use_container_width=True)
+            
+        # Semantic Search
+        with st.expander("Semantic Search Results", expanded=True):
+            if query_input:
+                corpus = df["Text Blob"].tolist()
+                corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
+                
+                query_embedding = embedding_model.encode(query_input, convert_to_tensor=True)
+                scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+                top_k_indices = scores.argsort(descending=True)
+
+                displayed_results = 0
+                similarity_threshold = st.slider("Semantic Search Relevance Threshold", min_value=0.0, max_value=1.0, value=0.5, step=0.05) 
+
+                for idx in top_k_indices:
+                    score = scores[idx.item()]
+                    if score >= similarity_threshold:
+                        row = df.iloc[idx.item()]
+                        st.markdown(f"**{displayed_results + 1}. {row['Company Name']} - {row['Address']}** (Similarity: {score:.2f})")
+                        st.markdown(f"- **Triggers**: {row['AUP(OP) Triggers']}")
+                        
+                        expiry_display = row['Expiry Date'].strftime('%Y-%m-%d') if pd.notna(row['Expiry Date']) else 'N/A'
+                        st.markdown(f"- **Expires**: {expiry_display}")
+                        safe_filename = clean_surrogates(row['__file_name__'])
+                        st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{idx.item()}")
+                        st.markdown("---")
+                        displayed_results += 1
+                        if displayed_results >= 5: # Show top 5 matches above threshold
+                            break
+
+                if displayed_results == 0:
+                    st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
+
+# ----------------------------
+# Ask AI About Consents Chatbot
+# ----------------------------
+# This section remains unchanged as it was already well-structured.
+st.markdown("---") 
+st.subheader("Ask AI About Consents")
+
+with st.expander("AI Chatbot", expanded=True):
+    st.markdown("""<div style="background-color:#F0F8FF; padding:20px; border-radius:10px; border: 1px solid #ADD8E6;">""", unsafe_allow_html=True)
+    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, or general trends)", unsafe_allow_html=True)
+
+    llm_provider = st.radio("Choose LLM Provider", ["Groq AI", "Gemini AI"], horizontal=True, key="llm_provider_radio")
+    chat_input = st.text_area("Search any query:", key="chat_input_text_area", placeholder="e.g., Which consents expire in the next year?")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if st.button("Ask AI", key="ask_ai_button"):
+        if not chat_input.strip():
+            st.warning("Please enter a query.")
+        else:
+            with st.spinner("AI is thinking..."):
+                try:
+                    # Context building logic...
+                    context_sample_list = []
+                    if not df.empty:
+                        context_sample_df = df.copy()
+                        for col in ['Expiry Date', 'Issue Date']:
+                            if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
+                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d')
+                        context_sample_list = context_sample_df.to_dict(orient="records")
+                    else:
+                        st.info("No documents uploaded. AI is answering with general knowledge.")
+                        context_sample_list = []
+
+                    context_sample_json = json.dumps(context_sample_list, indent=2)
+                    current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
+
+                    system_message_content = f"""
+                    You are an intelligent assistant for Auckland Air Discharge Consents. Answer user questions precisely using only the "Provided Data" below.
+                    - Base your entire response solely on the 'Provided Data'. Do not use external knowledge.
+                    - If the answer cannot be found or requires complex analysis, state: "I cannot find that information in the uploaded documents."
+                    - The current date is {current_auckland_time_str}.
+                    - Present your answer in clear, concise bullet points.
+                    ---
+                    Provided Data (JSON format):
+                    """
+                    
+                    user_query = f"{system_message_content}\n{context_sample_json}\n\n---\nUser Query: {chat_input}\n\nAnswer:"
+                    
+                    # LLM provider logic...
+                    answer_raw = ""
+                    if llm_provider == "Gemini":
+                        if google_api_key:
+                            gemini_model = genai.GenerativeModel("models/gemini-1.5-flash-latest")
+                            response = gemini_model.generate_content(user_query)
+                            answer_raw = response.text
+                        else:
+                            answer_raw = "Gemini AI is offline (Google API key not found)."
+                    elif llm_provider == "Groq":
+                        if groq_api_key:
+                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
+                            groq_response = chat_groq.invoke([
+                                SystemMessage(content=system_message_content + "\n" + context_sample_json),
+                                HumanMessage(content=f"User Query: {chat_input}")
+                            ])
+                            answer_raw = groq_response.content
+                        else:
+                            answer_raw = "Groq AI is offline (Groq API key not found)."
+                    
+                    st.markdown(f"### 🖥️  Answer from {llm_provider} AI\n\n{answer_raw}")
+                    if "offline" not in answer_raw and "error" not in answer_raw.lower():
+                        log_ai_chat(chat_input, answer_raw)
+
+                except Exception as e:
+                    st.error(f"AI interaction error: {e}")
+
+    chat_log_csv = get_chat_log_as_csv()
+    if chat_log_csv:
+        st.download_button(
+            label="Download Chat History (CSV)",
+            data=chat_log_csv,
+            file_name="ai_chat_history.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("No chat history to download yet.")
+
+st.markdown("---")
+st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
