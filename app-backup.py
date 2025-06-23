@@ -734,7 +734,7 @@ Answer:
                                 answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue. **Verify the model name in your code matches an available model from your console output.**"
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
-                    elif llm_provider == "Groq": # This is now 'elif' since OpenAI is gone
+                    elif llm_provider == "Groq AI": # This is now 'elif' since OpenAI is gone
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
