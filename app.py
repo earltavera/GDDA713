@@ -109,10 +109,10 @@ def localize_to_auckland(dt):
         return dt.astimezone(auckland_tz)
 
 def check_expiry(expiry_date):
-    if pd.isna(expiry_date): # Ensure this check remains first for NaT from pd.to_datetime
+    if pd.isna(expiry_date): # Handle missing data first
         return "Unknown"
 
-    current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland")) # <-- Define this consistently
+    current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland")) # Ensure the expiry date is timezone-aware for accurate comparison
 
     if expiry_date.tzinfo is None:
         try:
@@ -122,10 +122,9 @@ def check_expiry(expiry_date):
             localized_expiry_date = pytz.timezone("Pacific/Auckland").localize(expiry_date, is_dst=False)
         except pytz.NonExistentTimeError:
             print(f"Warning: Non-existent time for {expiry_date}. Treating as Unknown.")
-            return "Unknown" # Or handle specifically if you have a rule for non-existent times
+            return "Unknown" # handle specifically if you have a rule for non-existent times
         except Exception as e: # General fallback for other localization errors
             print(f"Warning: Could not localize expiry date {expiry_date}: {e}. Comparing as naive fallback (less robust).")
-            # --- CRITICAL FIX HERE: Use an explicitly timezone-aware current time even in fallback ---
             return "Expired" if expiry_date < datetime.now(pytz.timezone("Pacific/Auckland")) else "Active"
     else:
         localized_expiry_date = expiry_date.astimezone(pytz.timezone("Pacific/Auckland"))
