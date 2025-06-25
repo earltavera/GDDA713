@@ -725,7 +725,7 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini AI": # Ensure this matches the radio button value
                         if google_api_key:
-                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro"
+                            GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
                             try:
                                 response = gemini_model.generate_content(user_query)
