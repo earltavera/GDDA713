@@ -506,7 +506,7 @@ if uploaded_files:
         
         # Ensure 'Expiry Date' is timezone-aware by applying astimezone to valid entries
         # If a date is naive, astimezone will interpret it as local time then convert
-        df['Expiry Date'] = df['Expiry Date'].apply(lambda x: x.astimezone(auckland_tz) if pd.notna(x) else pd.NaT)
+        df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
         
         # --- ENHANCED STATUS CALCULATION ---
         df["Consent Status Enhanced"] = df["Consent Status"]
