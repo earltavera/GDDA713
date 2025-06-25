@@ -70,7 +70,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -125,8 +125,7 @@ def check_expiry(expiry_date):
             return "Unknown" # handle specifically if you have a rule for non-existent times
         except Exception as e: # General fallback for other localization errors
             print(f"Warning: Could not localize expiry date {expiry_date}: {e}. Comparing as naive fallback (less robust).")
-            # Fallback to naive comparison, though not ideal
-            return "Expired" if expiry_date < datetime.now() else "Active" # Changed to datetime.now() (naive) for fallback
+            return "Expired" if expiry_date < datetime.now(pytz.timezone("Pacific/Auckland")) else "Active"
     else:
         localized_expiry_date = expiry_date.astimezone(pytz.timezone("Pacific/Auckland"))
 
@@ -304,7 +303,7 @@ def extract_metadata(text):
         r"Summary of Decision\s*(.+?)(?=\n[A-Z]|\.)",
         r"Summary of proposal and activity status\s*(.+?)(?=\n[A-Z]|\.)"
     ]
-    proposal = []
+    proposal =  []
     for pattern in proposal_patterns:
         proposal.extend(re.findall(pattern, text))
     proposal_str= "".join(list(dict.fromkeys(proposal)))
@@ -500,17 +499,12 @@ if uploaded_files:
 
         # --- DATETIME LOCALIZATION ---
         auckland_tz = pytz.timezone("Pacific/Auckland")
-        
-        # Convert 'Expiry Date' column to datetime objects
         df['Expiry Date'] = pd.to_datetime(df['Expiry Date'], errors='coerce', dayfirst=True)
-        
-        # Ensure 'Expiry Date' is timezone-aware by applying astimezone to valid entries
-        # If a date is naive, astimezone will interpret it as local time then convert
         df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
         
         # --- ENHANCED STATUS CALCULATION ---
         df["Consent Status Enhanced"] = df["Consent Status"]
-        current_nz_aware_time = datetime.now(auckland_tz) # Explicitly make current time timezone-aware
+        current_nz_aware_time = datetime.now(pytz.timezone("Pacific/Auckland"))
         df.loc[
             (df["Consent Status"] == "Active") &
             (df["Expiry Date"] > current_nz_aware_time) &
@@ -568,8 +562,7 @@ if uploaded_files:
         with st.expander("Consent Map", expanded=True):
             map_df = df.dropna(subset=["Latitude", "Longitude"])
             if not map_df.empty:
-                # --- MODIFIED LINE FOR DEPRECATION WARNING ---
-                fig = px.scatter_map(map_df, lat="Latitude", lon="Longitude", hover_name="Company Name",
+                fig = px.scatter_mapbox(map_df, lat="Latitude", lon="Longitude", hover_name="Company Name",
                                         hover_data={"Address": True, "Consent Status Enhanced": True, "Issue Date": True, "Expiry Date": True},
                                         zoom=10, color="Consent Status Enhanced", color_discrete_map=color_map)
                 fig.update_traces(marker=dict(size=12))
@@ -677,9 +670,6 @@ with st.expander("AI Chatbot", expanded=True):
                             # Format datetime columns for JSON serialization
                             for col in ['Expiry Date', 'Issue Date']:
                                 if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
-                                    # Ensure they are timezone-aware before formatting
-                                    # Use .dt.tz_convert or .dt.tz_localize if needed here, but the prior fix
-                                    # should make 'Expiry Date' already tz-aware.
                                     context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z')
                             
                             context_sample_list = context_sample_df.to_dict(orient="records")
@@ -723,7 +713,7 @@ Answer:
 """
 
                     answer_raw = ""
-                    if llm_provider == "Gemini AI": # Ensure this matches the radio button value
+                    if llm_provider == "Gemini":
                         if google_api_key:
                             GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
@@ -738,7 +728,7 @@ Answer:
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
                     
-                    elif llm_provider == "Groq AI":
+                    elif llm_provider == "Groq AI": 
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
@@ -751,7 +741,7 @@ Answer:
                                 answer_raw = f"Groq API error: {e}"
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    else:  
+                    else: 
                         st.warning("Selected LLM provider is not available or supported.")
                         answer_raw = "AI provider not available."
 
