@@ -599,7 +599,6 @@ if uploaded_files:
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
         
-        # --- END RENDERING DASHBOARD ---
 
         # Finalize and remove the progress bar
         my_bar.progress(100, text="Dashboard Ready!")
@@ -681,9 +680,6 @@ with st.expander("AI Chatbot", expanded=True):
                     
                     context_sample_json = json.dumps(context_sample_list, indent=2)
                     
-                    # ==================================================================
-                    # MODIFICATION END
-                    # ==================================================================
 
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
