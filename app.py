@@ -622,7 +622,7 @@ with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, consent conditions, or general trends)", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Groq AI", "Gemini AI"], horizontal=True, key="llm_provider_radio")
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -713,7 +713,7 @@ Answer:
 """
 
                     answer_raw = ""
-                    if llm_provider == "Gemini":
+                    if llm_provider == "Gemini AI":
                         if google_api_key:
                             GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
