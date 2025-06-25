@@ -20,7 +20,6 @@ import time # ADDED for progress bar UX
 
 # --- LLM Specific Imports ---
 import google.generativeai as genai # For Gemini
-# REMOVED: from openai import OpenAI
 from langchain_groq import ChatGroq # For Groq (Langchain integration)
 from langchain_core.messages import SystemMessage, HumanMessage # Needed for Langchain messages
 # --- End LLM Specific Imports ---
@@ -110,10 +109,10 @@ def localize_to_auckland(dt):
         return dt.astimezone(auckland_tz)
 
 def check_expiry(expiry_date):
-    if pd.isna(expiry_date): # Ensure this check remains first for NaT from pd.to_datetime
+    if pd.isna(expiry_date): # Handle missing data first
         return "Unknown"
 
-    current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland")) # <-- Define this consistently
+    current_nz_time = datetime.now(pytz.timezone("Pacific/Auckland")) # Ensure the expiry date is timezone-aware for accurate comparison
 
     if expiry_date.tzinfo is None:
         try:
@@ -123,10 +122,9 @@ def check_expiry(expiry_date):
             localized_expiry_date = pytz.timezone("Pacific/Auckland").localize(expiry_date, is_dst=False)
         except pytz.NonExistentTimeError:
             print(f"Warning: Non-existent time for {expiry_date}. Treating as Unknown.")
-            return "Unknown" # Or handle specifically if you have a rule for non-existent times
+            return "Unknown" # handle specifically if you have a rule for non-existent times
         except Exception as e: # General fallback for other localization errors
             print(f"Warning: Could not localize expiry date {expiry_date}: {e}. Comparing as naive fallback (less robust).")
-            # --- CRITICAL FIX HERE: Use an explicitly timezone-aware current time even in fallback ---
             return "Expired" if expiry_date < datetime.now(pytz.timezone("Pacific/Auckland")) else "Active"
     else:
         localized_expiry_date = expiry_date.astimezone(pytz.timezone("Pacific/Auckland"))
@@ -624,7 +622,6 @@ with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, consent conditions, or general trends)", unsafe_allow_html=True)
 
-    # REMOVED "OpenAI" from the radio button options
     llm_provider = st.radio("Choose LLM Provider", ["Groq AI", "Gemini AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
@@ -636,25 +633,57 @@ with st.expander("AI Chatbot", expanded=True):
         else:
             with st.spinner("AI is thinking..."):
                 try:
+                    # ==================================================================
+                    # MODIFICATION START: Implement RAG (Option 3)
+                    # ==================================================================
                     context_sample_list = []
 
                     if not df.empty:
-                        context_sample_df = df[[
-                            "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
-                            "Consent Conditions", "Issue Date", "Expiry Date", "Reason for Consent"
-                        ]].dropna().copy()
+                        # 1. Perform Semantic Search to find relevant documents for the chat query
+                        corpus = df["Text Blob"].tolist()
+                        corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
+                        query_embedding = embedding_model.encode(chat_input, convert_to_tensor=True)
+                        scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
 
-                        for col in ['Expiry Date', 'Issue Date']:
-                            if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
-                                context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z') # Include timezone info in string for LLM
+                        # 2. Get top 5 most relevant document indices
+                        top_k = 5
+                        top_k_indices = scores.argsort(descending=True)[:top_k]
+                        
+                        # 3. Build a small, highly-relevant context from the search results
+                        relevant_docs_data = []
+                        for idx in top_k_indices:
+                            # Only include if the relevance score is decent (e.g., > 0.3)
+                            if scores[idx.item()] > 0.3:
+                                relevant_docs_data.append(df.iloc[idx.item()])
 
-                        context_sample_list = context_sample_df.to_dict(orient="records")
+                        if not relevant_docs_data:
+                            st.warning("Could not find any documents relevant to your query. The AI will answer without specific context.")
+                            context_sample_list = []
+                        else:
+                            st.info(f"Found {len(relevant_docs_data)} relevant documents. Providing them to the AI as context.")
+                            context_df = pd.DataFrame(relevant_docs_data)
+                            context_sample_df = context_df[[
+                                "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
+                                "Consent Conditions", "Issue Date", "Expiry Date", "Reason for Consent"
+                            ]].dropna().copy()
+
+                            # Format datetime columns for JSON serialization
+                            for col in ['Expiry Date', 'Issue Date']:
+                                if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
+                                    context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z')
+                            
+                            context_sample_list = context_sample_df.to_dict(orient="records")
+                    
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
+                        # Use a default sample if no files are uploaded
                         context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Consent Conditions": "Consent Conditions", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
-
-                    context_sample_raw_json = json.dumps(context_sample_list, indent=2)
-                    context_sample_json = ""
+                    
+                    context_sample_json = json.dumps(context_sample_list, indent=2)
+                    
+                    # ==================================================================
+                    # MODIFICATION END
+                    # ==================================================================
 
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
@@ -673,39 +702,6 @@ with st.expander("AI Chatbot", expanded=True):
                     Provided Data (JSON format):
                     """
 
-                    full_query_for_token_check = system_message_content + context_sample_raw_json + f"\n--- \nUser Query: {chat_input}\n\nAnswer:"
-
-                    MAX_TOKENS_FOR_PROMPT = 30000
-
-                    if llm_provider == "Gemini" and google_api_key:
-                        try:
-                            # ### IMPORTANT: REPLACE WITH THE EXACT MODEL NAME YOU FOUND IN YOUR CONSOLE OUTPUT! ###
-                            # Common options based on your list: "models/gemini-1.0-pro", "models/gemini-1.5-pro-latest", "models/gemini-flash-latest"
-                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
-
-                            temp_model_for_token_count = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
-                            token_count_response = temp_model_for_token_count.count_tokens(full_query_for_token_check)
-                            total_tokens = token_count_response.total_tokens
-
-                            if total_tokens > MAX_TOKENS_FOR_PROMPT:
-                                st.warning("The uploaded data is very large. Attempting to reduce context for AI.")
-                                num_entries_to_send = min(len(context_sample_list), 400)
-
-                                context_sample_json = json.dumps(context_sample_list[:num_entries_to_send], indent=2)
-                                st.info(f"Reduced context to approximately {num_entries_to_send} entries due to potential token limits.")
-                            else:
-                                context_sample_json = context_sample_raw_json
-                        except Exception as e:
-                            st.warning(f"Could not count tokens for Gemini: {e}. Sending full data (may exceed limits). This could be due to the chosen Gemini model not being available or an API issue. **Verify the model name ('{GEMINI_MODEL_TO_USE}') in your code matches an available model from your console output.**")
-                            context_sample_json = context_sample_raw_json
-                    else: # This 'else' now covers Groq
-                        if len(context_sample_raw_json) > 80000:
-                            st.warning("The uploaded data is very large. Only a portion will be sent to the AI to prevent exceeding token limits.")
-                            num_entries_to_send = min(len(context_sample_list), 100)
-                            context_sample_json = json.dumps(context_sample_list[:num_entries_to_send], indent=2)
-                        else:
-                            context_sample_json = context_sample_raw_json
-
                     user_query = f"""
 {system_message_content}
 {context_sample_json}
@@ -719,10 +715,7 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini":
                         if google_api_key:
-                            # ### IMPORTANT: REPLACE WITH THE EXACT MODEL NAME YOU FOUND IN YOUR CONSOLE OUTPUT! ###
-                            # Common options based on your list: "models/gemini-1.0-pro", "models/gemini-1.5-pro-latest", "models/gemini-flash-latest"
-                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro" # <-- CHANGE THIS LINE BASED ON YOUR CONSOLE OUTPUT
-
+                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro"
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
                             try:
                                 response = gemini_model.generate_content(user_query)
@@ -731,10 +724,11 @@ Answer:
                                 else:
                                     answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error. Check your console for details."
                             except Exception as e:
-                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue. **Verify the model name in your code matches an available model from your console output.**"
+                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue."
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
-                    elif llm_provider == "Groq AI": # This is now 'elif' since OpenAI is gone
+                    
+                    elif llm_provider == "Groq AI": # FIX: Changed from "Groq" to "Groq AI"
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
@@ -747,12 +741,12 @@ Answer:
                                 answer_raw = f"Groq API error: {e}"
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    else: # Fallback for if an invalid provider is selected somehow (shouldn't happen with radio buttons)
+                    else: 
                         st.warning("Selected LLM provider is not available or supported.")
                         answer_raw = "AI provider not available."
 
 
-                    st.markdown(f"### 🖥️  Answer from {llm_provider} AI\n\n{answer_raw}")
+                    st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
