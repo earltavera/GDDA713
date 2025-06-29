@@ -303,9 +303,6 @@ def extract_metadata(text):
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
         "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
         "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
-        # "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent", # Removed
-        # "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers", # Removed
-        # "Consent Conditions": " ".join(consent_conditions) if consent_conditions else "Unknown Consent Conditions", # Removed
         "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
     }
@@ -506,7 +503,7 @@ if uploaded_files:
                     expiry_display = row['Expiry Date'].strftime('%Y-%m-%d') if pd.notna(row['Expiry Date']) else 'N/A'
                     st.markdown(f"- **Expires**: {expiry_display}")
                     safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{idx.item()}")
+                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_search_result_{idx.item()}") # Changed key for uniqueness
                     st.markdown("---")
                     displayed_results += 1
                     if displayed_results >= 3:
@@ -548,31 +545,55 @@ with st.expander("AI Chatbot", expanded=True):
             with st.spinner("AI is thinking..."):
                 try:
                     context_sample_list = []
+                    # Store information about files relevant to the AI's answer for download buttons
+                    relevant_files_for_download = [] 
+                    
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     if not df.empty:
-                        # Convert the relevant parts of the DataFrame to a JSON string or CSV string
-                        # for the LLM to process.
-                        # This ensures the LLM sees ALL relevant rows for aggregate questions.
+                        # For RAG, we will still prioritize semantically similar documents to provide context
+                        # for specific, non-aggregate questions.
+                        # However, for broader questions, the AI will also have access to the full dataset summary.
                         
-                        # We'll use a subset of columns that are typically relevant for AI queries
-                        # related to trends or specific facts about consents.
-                        context_df_for_ai = df[[
-                            "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
-                            "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
-                        ]].copy() # Create a copy to avoid SettingWithCopyWarning
+                        corpus = df["Text Blob"].tolist()
+                        corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
+                        query_embedding = embedding_model.encode(chat_input, convert_to_tensor=True)
+                        scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
 
-                        # Convert datetime columns to string format suitable for JSON/LLM
+                        top_k = 5 # Still use top_k for direct document context
+                        top_k_indices = scores.argsort(descending=True)[:top_k]
+                        
+                        relevant_docs_data = []
+                        for idx in top_k_indices:
+                            if scores[idx.item()] > 0.3: # Only include if the relevance score is decent
+                                relevant_docs_data.append(df.iloc[idx.item()])
+                                # Capture relevant file info for download buttons
+                                relevant_files_for_download.append({
+                                    "file_name": df.iloc[idx.item()]['__file_name__'],
+                                    "file_bytes": df.iloc[idx.item()]['__file_bytes__']
+                                })
+
+                        if not relevant_docs_data:
+                            st.info("Could not find any documents highly relevant to your specific query. The AI will answer based on the full dataset summary if possible.")
+                            # Fallback to full dataset if no highly relevant documents are found for semantic RAG
+                            context_df_for_ai = df[[
+                                "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
+                                "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced"
+                            ]].copy()
+                        else:
+                            st.info(f"Found {len(relevant_docs_data)} highly relevant documents. Providing them and a dataset summary to the AI as context.")
+                            context_df_for_ai = pd.DataFrame(relevant_docs_data)[[
+                                "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
+                                "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced"
+                            ]].copy()
+
+                        # Ensure date columns are formatted for JSON serialization
                         for col in ['Issue Date', 'Expiry Date']:
                             if col in context_df_for_ai.columns and pd.api.types.is_datetime64_any_dtype(context_df_for_ai[col]):
-                                context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d') # Simplified date format for AI
-                            # For NaT values, ensure they become None or empty string in JSON
+                                context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d')
                             context_df_for_ai[col] = context_df_for_ai[col].replace({pd.NaT: None})
 
-                        # Convert to dictionary records for JSON
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
-                        
-                        st.info(f"Providing data for {len(context_sample_list)} consents to the AI as context for aggregate analysis.")
                         
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
@@ -642,6 +663,22 @@ Answer:
 
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
+
+                    # --- ADDED: Display download buttons for relevant files ---
+                    if relevant_files_for_download:
+                        st.markdown("### 📄 Relevant Documents for Download:")
+                        cols = st.columns(min(len(relevant_files_for_download), 3)) # Max 3 columns for buttons
+                        for i, file_info in enumerate(relevant_files_for_download):
+                            with cols[i % 3]: # Distribute buttons across columns
+                                safe_filename = clean_surrogates(file_info['file_name'])
+                                st.download_button(
+                                    label=f"Download {safe_filename}",
+                                    data=file_info['file_bytes'],
+                                    file_name=safe_filename,
+                                    mime="application/pdf",
+                                    key=f"ai_download_{i}_{time.time()}" # Unique key for each button
+                                )
+                    # --- END ADDED ---
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
