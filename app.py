@@ -404,8 +404,10 @@ def extract_metadata(text):
         "Company Name": company_str if company_str else "Unknown Company Name",
         "Address": address_str if address_str else "Unknown Address",
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str,
         "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
+        "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent",
+        "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers",
         "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
     }
