@@ -77,7 +77,7 @@ st.markdown(f"""
 
 st.markdown("""
     <div style="text-align: center;">
-        <h2 style='color:#4682B4; font-family: Quicksand, sans-serif; font-size: 2em;'>
+        <h2 style='color:#0000FF; font-family: Quicksand, sans-serif; font-size: 2em;'>
             Welcome to the Auckland Air Discharge Consent Dashboard
         </h2>
         <p style='font-size: 1.1em; color: #555;'>
