@@ -571,7 +571,6 @@ with st.expander("AI Chatbot", expanded=True):
                         
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
-                        # Use a default sample if no files are uploaded
                         context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31"}]
 
                     context_sample_json = json.dumps(context_sample_list, indent=2)
@@ -639,46 +638,62 @@ Answer:
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
 
                     # --- New Logic: Extract consent numbers from AI's answer and prepare downloads ---
-                    if "Resource Consent Numbers" in answer_raw or re.search(r'\b(RC|DIS|BUN)\d{5,}\b', answer_raw, re.IGNORECASE):
-                        # Attempt to parse consent numbers from the AI's response
-                        # Look for patterns like RCXXXXX, DISXXXXX, BUNXXXXX or comma-separated lists
-                        consent_numbers_in_response = re.findall(r'\b(RC|DIS|BUN)\d{5,}(?:-\w+)?\b', answer_raw, re.IGNORECASE)
-                        
-                        if consent_numbers_in_response and not df.empty:
-                            found_downloadable_files = []
-                            # Normalize the consent numbers from AI response for matching
-                            normalized_ai_consents = [cn.upper() for cn in consent_numbers_in_response]
-                            
-                            # Iterate through the DataFrame to find matching files
-                            for idx, row in df.iterrows():
-                                # Check if any of the consent numbers in the row match those from the AI's response
-                                # Splitting by comma to handle multiple consents in one cell
-                                row_consent_numbers = [rc.strip().upper() for rc in row['Resource Consent Numbers'].split(',')]
-                                if any(cn in normalized_ai_consents for cn in row_consent_numbers):
-                                    file_info = {
-                                        "file_name": row['__file_name__'],
-                                        "file_bytes": row['__file_bytes__']
-                                    }
-                                    if file_info not in found_downloadable_files: # Avoid duplicates
-                                        found_downloadable_files.append(file_info)
+                    # Using a more comprehensive regex to capture various consent number formats and lists
+                    consent_number_pattern = re.compile(r'\b(?:RC|DIS|BUN)[0-9]{5,}(?:[ -]?[A-Za-z0-9]+)?\b', re.IGNORECASE)
+                    
+                    # Find all potential consent numbers in the AI's raw answer
+                    extracted_consent_numbers = consent_number_pattern.findall(answer_raw)
+                    
+                    # Clean and normalize extracted consent numbers
+                    normalized_extracted_consents = set()
+                    for cn in extracted_consent_numbers:
+                        # Further clean by removing common suffixes if they are not part of the core ID
+                        cn_cleaned = re.sub(r'(-w+)$', '', cn, flags=re.IGNORECASE).strip().upper()
+                        normalized_extracted_consents.add(cn_cleaned)
 
-                            if found_downloadable_files:
-                                st.markdown("### 📥 Download Related Consents:")
-                                cols_download = st.columns(min(len(found_downloadable_files), 3))
-                                for i, file_info in enumerate(found_downloadable_files):
-                                    with cols_download[i % 3]:
-                                        safe_filename = clean_surrogates(file_info['file_name'])
-                                        st.download_button(
-                                            label=f"Download {safe_filename}",
-                                            data=file_info['file_bytes'],
-                                            file_name=safe_filename,
-                                            mime="application/pdf",
-                                            key=f"ai_specific_download_{i}_{time.time()}" 
-                                        )
-                            else:
-                                st.info("Could not find specific files for the consents mentioned by the AI.")
+                    if normalized_extracted_consents and not df.empty:
+                        found_downloadable_files = []
+                        
+                        # Iterate through the DataFrame to find matching files
+                        # Create a set of all consent numbers in the DataFrame for efficient lookup
+                        df_all_consents = set()
+                        for rc_str in df['Resource Consent Numbers'].dropna():
+                            for cn_in_df in rc_str.split(','):
+                                df_all_consents.add(cn_in_df.strip().upper())
+
+                        for idx, row in df.iterrows():
+                            row_consent_numbers_normalized = [rc.strip().upper() for rc in str(row['Resource Consent Numbers']).split(',') if pd.notna(rc)]
+                            
+                            # Check if any of the AI-extracted consent numbers are present in this row's consent numbers
+                            if any(ai_cn in row_consent_numbers_normalized for ai_cn in normalized_extracted_consents):
+                                file_info = {
+                                    "file_name": row['__file_name__'],
+                                    "file_bytes": row['__file_bytes__'],
+                                    "consent_numbers_in_file": row['Resource Consent Numbers'] # To display which consents match
+                                }
+                                # Add only unique files (based on file_name and bytes)
+                                if file_info not in found_downloadable_files: 
+                                    found_downloadable_files.append(file_info)
+
+                        if found_downloadable_files:
+                            st.markdown("### 📥 Download Related Consents:")
+                            cols_download = st.columns(min(len(found_downloadable_files), 3))
+                            for i, file_info in enumerate(found_downloadable_files):
+                                with cols_download[i % 3]:
+                                    safe_filename = clean_surrogates(file_info['file_name'])
+                                    st.download_button(
+                                        label=f"Download {safe_filename}",
+                                        data=file_info['file_bytes'],
+                                        file_name=safe_filename,
+                                        mime="application/pdf",
+                                        key=f"ai_specific_download_{i}_{time.time()}" 
+                                    )
+                                    # Optionally display the consent numbers found in this file
+                                    st.caption(f"({file_info['consent_numbers_in_file']})") 
                         else:
-                            st.info("The AI did not specify consent numbers that I can link to files for download.")
+                            st.info("The AI mentioned consent numbers, but I could not find matching files among the uploaded documents.")
+                    else:
+                        st.info("The AI did not specify consent numbers that I can link to files for download, or no documents were uploaded.")
                     # --- End New Logic ---
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
@@ -686,6 +701,9 @@ Answer:
 
                 except Exception as e:
                     st.error(f"AI interaction error: {e}")
+                    # Log the full traceback for debugging in the console
+                    import traceback
+                    st.exception(traceback.exc_info())
 
     chat_log_csv = get_chat_log_as_csv()
     if chat_log_csv:
