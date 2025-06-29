@@ -75,11 +75,9 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-
-# --- Welcome Text (Modified Section) ---
 st.markdown("""
     <div style="text-align: center;">
-        <h2 style='color:#004489; font-family: Quicksand, sans-serif; font-size: 2em;'>
+        <h2 style='color:#004489; font-family: Quicksand, sans-serif; font-size: 2.7em;'>
             Welcome to the Auckland Air Discharge Consent Dashboard
         </h2>
         <p style='font-size: 1.1em; color: #dc002e;'>
@@ -646,9 +644,7 @@ st.subheader("Ask About Consents using AI")
 st.write("Leverage the power of AI to gain insights from your uploaded consent data. Ask questions about trends, specific consent details, or general information.")
 
 with st.expander("AI Chatbot", expanded=True):
-    st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    # The line to be colored (not bold)
-    st.markdown("""<span style="color:#1E90FF;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
+    st.markdown("""<span style="color:#dc002e;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
 
     # Modified: Label for st.text_area to be bold and colored
     chat_input = st.text_area(
