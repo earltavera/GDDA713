@@ -69,7 +69,7 @@ current_time = nz_time.strftime("%I:%M %p")
 weather = get_auckland_weather()
 
 st.markdown(f"""
-    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#D3D3D3;
+    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#949494;
                      border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
