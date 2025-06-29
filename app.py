@@ -348,7 +348,7 @@ def get_chat_log_as_csv():
 
 # --- Sidebar & Model Loader ---
 st.sidebar.markdown("""
-    <h2 style='color:#2c6e91; font-family:Segoe UI, Roboto, sans-serif;'>
+    <h2 style='color:#00247D; font-family:Segoe UI, Roboto, sans-serif;'>
         Control Panel
     </h2>
 """, unsafe_allow_html=True)
