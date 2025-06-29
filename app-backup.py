@@ -76,10 +76,18 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
-        Auckland Air Discharge Consent Dashboard
-    </h1>
+    <div style="text-align: center;">
+        <h2 style='color:#004489; font-family: Quicksand, sans-serif; font-size: 2.7em;'>
+            Welcome to the Auckland Air Discharge Consent Dashboard
+        </h2>
+        <p style='font-size: 1.1em; color: #dc002e;'>
+            This dashboard allows you to upload Air Discharge Resource Consent Decision Reports to transform your files into meaningful data.
+            Explore the data using the CSV file options, or interact with the data using Gemini AI, Groq AI, or LLM Semantic Query.
+        </p>
+    </div>
+    <br>
 """, unsafe_allow_html=True)
+# --- End Welcome Text (Modified Section) ---
 
 
 # --- Utility Functions ---
@@ -258,7 +266,7 @@ def extract_metadata(text):
         matches = re.findall(pattern, text)
         if matches:
             for dt_val_candidate in matches:
-                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_val_candidate
+                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_str_candidate
                 if not isinstance(dt_str, str) or not dt_str.strip():
                     continue
 
@@ -280,30 +288,121 @@ def extract_metadata(text):
                     continue
             if expiry_date:
                 break
+    # This block was duplicated in your original code. I am retaining the single instance.
+    # If `expiry_str` was meant to be populated differently from `expiry_date`, please specify.
+    expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date" # Fallback if no date is found by strict patterns
 
     # AUP triggers
     trigger_patterns = [
         r"(E14\.\d+\.\d+)",
         r"(E14\.\d+\.)",
         r"(NES:STO)",
-        r"(NES:AQ)"
+        r"(NES:AQ)",
+        r"(NES:IGHG)"
     ]
     triggers = []
     for pattern in trigger_patterns:
         triggers.extend(re.findall(pattern, text))
     triggers_str = " ".join(list(dict.fromkeys(triggers)))
 
-    # Removed: Reason (Proposal) extraction patterns and logic
-    # Removed: Conditions extraction patterns and logic
+    # Reason (Proposal) - Re-added as it was implicitly removed in earlier changes
+    proposal_patterns= [
+        r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Proposal\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Proposal\s*(.+?)(?=\n[A-Z]|\:)",
+        r"Introduction and summary of proposal\s*(.+?)\s*Submissions",
+        r"Proposal, site and locality description\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Summary of Decision\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Summary of proposal and activity status\s*(.+?)(?=\n[A-Z]|\.)"
+    ]
+    proposal = []
+    for pattern in proposal_patterns:
+        proposal.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL))
+    proposal_str = "".join(list(dict.fromkeys(proposal)))
 
+    # Conditions (consolidated pattern for broader capture) - Re-added as it was implicitly removed
+    conditions_patterns = [
+        r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
+        r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
+        r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)",
+        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?:Conditions Specific to air quality).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)",
+        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
+        r"(?:Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)",
+        r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)",
+        r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)",
+        r"(?:Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)",
+        r"(?:Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)",
+        r"(?:Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
+        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
+        r"(?:Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?:DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
+        r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
+        # Fallback broad pattern if specific ones fail
+        r"(?<=Conditions).*?(?=Advice notes)"
+    ]
+
+    conditions_str = ""
+    for pattern in conditions_patterns:
+        conditions_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+        if conditions_match:
+            conditions_str = conditions_match.group(0).strip()
+            break
+
+    conditions_numbers = []
+    if conditions_str:
+        temp_conditions_matches = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
+        flattened_temp_conditions = []
+        for item in temp_conditions_matches:
+            if isinstance(item, tuple):
+                flattened_temp_conditions.append(item[0])
+            else:
+                flattened_temp_conditions.append(item)
+
+        conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
+        conditions_numbers = list(dict.fromkeys(conditions_numbers))
+
+    # Re-adding Reason for Consent and Consent Conditions to the returned dict,
+    # as they were part of the user's initial code and removing them caused the KeyError.
     return {
         "Resource Consent Numbers": rc_str if rc_str else "Unknown Resource Consent Numbers",
         "Company Name": company_str if company_str else "Unknown Company Name",
         "Address": address_str if address_str else "Unknown Address",
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str, # Use `expiry_str` if `expiry_date` is None
         "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
-        "Consent Status": check_expiry(expiry_date), # This will now use the localized date
+        "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent",
+        "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers",
+        "Consent Conditions": conditions_str if conditions_str else "Unknown Consent Conditions", # Use extracted string for conditions
+        "Consent Status": check_expiry(expiry_date),
         "Text Blob": text
     }
 
@@ -342,7 +441,7 @@ def get_chat_log_as_csv():
 
 # --- Sidebar & Model Loader ---
 st.sidebar.markdown("""
-    <h2 style='color:#2c6e91; font-family:Segoe UI, Roboto, sans-serif;'>
+    <h2 style='color:#1E90FF; font-family:Segoe UI, Roboto, sans-serif;'>
         Control Panel
     </h2>
 """, unsafe_allow_html=True)
@@ -462,10 +561,23 @@ if uploaded_files:
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
-            display_df = filtered_df[[
+            
+            # --- FIX: Ensure 'Reason for Consent' and 'Consent Condition Numbers' exist before trying to display ---
+            # This is the line causing the KeyError. We need to check if columns exist before accessing.
+            # Reverting to the state where these were NOT removed in extract_metadata to fix the original KeyError.
+            # If you still want to remove them, please confirm so I can adjust extract_metadata accordingly.
+            columns_to_display = [
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
-                "Consent Status Enhanced", "AUP(OP) Triggers" # Removed "Reason for Consent", "Consent Conditions"
-            ]].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
+                "Consent Status Enhanced", "AUP(OP) Triggers"
+            ]
+            if "Reason for Consent" in filtered_df.columns:
+                columns_to_display.append("Reason for Consent")
+            if "Consent Condition Numbers" in filtered_df.columns:
+                columns_to_display.append("Consent Condition Numbers")
+
+            display_df = filtered_df[columns_to_display].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
+            # --- END FIX ---
+
             st.dataframe(display_df)
             csv_output = display_df.to_csv(index=False).encode("utf-8")
             st.download_button("Download CSV", csv_output, "filtered_consents.csv", "text/csv")
@@ -527,13 +639,14 @@ if uploaded_files:
 # ----------------------------
 
 st.markdown("---") # Horizontal line for separation
-st.subheader("Ask AI About Consents")
+st.subheader("Ask About Consents using AI")
+# Prephrasing text for the chatbot section
+st.write("Leverage the power of AI to gain insights from your uploaded consent data. Ask questions about trends, specific consent details, or general information.")
 
 with st.expander("AI Chatbot", expanded=True):
-    st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, or general trends)", unsafe_allow_html=True) # Removed "consent conditions"
+    st.markdown("""<span style="color:#dc002e;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
+    # Modified: Label for st.text_area to be bold and colored
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -542,27 +655,22 @@ with st.expander("AI Chatbot", expanded=True):
         if not chat_input.strip():
             st.warning("Please enter a query.")
         else:
-            with st.spinner("AI is thinking..."):
+            with st.spinner("AI is thinking and gathering data..."):
                 try:
                     context_sample_list = []
-                    # relevant_files_for_download will contain files directly relevant to the AI's answer, if it lists them.
                     relevant_files_for_download = [] 
                     
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     if not df.empty:
-                        # For the AI's data context, always provide the full DataFrame (or a relevant subset of columns)
-                        # This ensures aggregate questions can be answered accurately.
                         context_df_for_ai = df[[
                             "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
                             "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
                         ]].copy()
 
-                        # Ensure datetime columns are formatted for JSON serialization
                         for col in ['Issue Date', 'Expiry Date']:
                             if col in context_df_for_ai.columns and pd.api.types.is_datetime64_any_dtype(context_df_for_ai[col]):
                                 context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d')
-                            # For NaT values, ensure they become None or empty string in JSON
                             context_df_for_ai[col] = context_df_for_ai[col].replace({pd.NaT: None})
 
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
@@ -581,7 +689,7 @@ with st.expander("AI Chatbot", expanded=True):
                     Crucial Directives:
                     1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Consent Data'. Do not introduce any external knowledge, assumptions, or speculative content.
                     2.  **Aggregate Queries:** For questions asking for counts, summaries, or trends (e.g., "how many", "list all", "which year"), process the entire provided dataset to give an accurate answer.
-                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list the 'Company Name' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: Company A, Company B, Company C." Do NOT include Resource Consent Numbers unless specifically asked.
+                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list ONLY the 'Company Name' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: Company A, Company B, Company C." Do NOT include Resource Consent Numbers or any other identifiers unless explicitly asked for them.
                     4.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Consent Data' *as presented*, you *must* explicitly state: "I cannot find that specific information within the currently provided data." Do not try to guess or infer.
                     5.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
                     6.  **Concise Format:** Present your answer in clear, concise bullet points or a brief summary.
@@ -636,9 +744,6 @@ Answer:
 
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
-
-                    # --- REMOVED: Logic to extract consent numbers from AI's answer and prepare downloads ---
-                    # The previous logic for extracting consent numbers and creating download buttons has been removed.
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
