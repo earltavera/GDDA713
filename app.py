@@ -27,7 +27,7 @@ from langchain_core.messages import SystemMessage, HumanMessage # Needed for Lan
 # --- API Key Setup ---
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
-google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+google_api_key = os.getenv("GOOGLE_API_key") or st.secrets.get("GOOGLE_API_KEY")
 # OpenWeatherMap API key
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
 
@@ -592,9 +592,9 @@ with st.expander("AI Chatbot", expanded=True):
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
                         
                         if not relevant_files_for_download:
-                            st.info("No documents found with high semantic relevance to your specific query for direct download, but the AI will analyze all uploaded data.")
+                            st.info("No highly semantically relevant documents found for download, but the AI will analyze all uploaded data.")
                         else:
-                            st.info(f"The AI is analyzing all uploaded data. Found {len(relevant_files_for_download)} semantically related document(s) for direct download.")
+                            st.info(f"The AI is analyzing all uploaded data. Found {len(relevant_files_for_download)} semantically relevant document(s) for direct download.")
                         
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
@@ -667,7 +667,7 @@ Answer:
 
                     # --- MODIFIED: Display download buttons for relevant files ---
                     if relevant_files_for_download:
-                        st.markdown("### 📄 Related Documents for Download (Semantic Match):") # Changed title for clarity
+                        st.markdown("### 📄 Related Documents for Download:") # Changed title for clarity
                         cols = st.columns(min(len(relevant_files_for_download), 3)) # Max 3 columns for buttons
                         for i, file_info in enumerate(relevant_files_for_download):
                             with cols[i % 3]: # Distribute buttons across columns
@@ -677,30 +677,11 @@ Answer:
                                     data=file_info['file_bytes'],
                                     file_name=safe_filename,
                                     mime="application/pdf",
-                                    key=f"ai_download_related_{i}_{time.time()}" # Unique key for each button
+                                    key=f"ai_download_{i}_{time.time()}" # Unique key for each button
                                 )
                     else:
                         st.info("No documents found with high semantic relevance to your specific query for direct download.")
                     # --- END MODIFIED ---
-
-                    # --- ADDED: Section to download all uploaded PDFs ---
-                    if not df.empty: # Only show if there are files processed
-                        st.markdown("### 📥 Download All Uploaded Consents:")
-                        # We can simply iterate through the original 'all_data' which contains the file bytes
-                        all_uploaded_files_info = df[['__file_name__', '__file_bytes__']].drop_duplicates().to_dict(orient='records')
-                        cols_all = st.columns(min(len(all_uploaded_files_info), 3))
-                        for i, file_info in enumerate(all_uploaded_files_info):
-                            with cols_all[i % 3]:
-                                safe_filename = clean_surrogates(file_info['__file_name__'])
-                                st.download_button(
-                                    label=f"Download All: {safe_filename}",
-                                    data=file_info['__file_bytes__'],
-                                    file_name=safe_filename,
-                                    mime="application/pdf",
-                                    key=f"ai_download_all_{i}_{time.time()}" # Unique key
-                                )
-                    # --- END ADDED ---
-
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
