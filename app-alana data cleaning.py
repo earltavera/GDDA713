@@ -76,26 +76,17 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-    <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
-        Auckland Air Discharge Consent Dashboard
-    </h1>
-""", unsafe_allow_html=True)
-
-# --- Welcome Text (Modified Section) ---
-st.markdown("""
     <div style="text-align: center;">
-        <h2 style='color:#4682B4; font-family: Quicksand, sans-serif; font-size: 2em;'>
+        <h2 style='color:#004489; font-family: Quicksand, sans-serif; font-size: 2em;'>
             Welcome to the Auckland Air Discharge Consent Dashboard
         </h2>
-        <p style='font-size: 1.1em; color: #555;'>
+        <p style='font-size: 1.1em; color: #dc002e;'>
             This dashboard allows you to upload Air Discharge Resource Consent Decision Reports to transform your files into meaningful data.
             Explore the data using the CSV file options, or interact with the data using Gemini AI, Groq AI, or LLM Semantic Query.
         </p>
     </div>
     <br>
 """, unsafe_allow_html=True)
-# --- End Welcome Text (Modified Section) ---
-
 
 # --- Utility Functions ---
 def localize_to_auckland(dt):
@@ -652,23 +643,13 @@ if uploaded_files:
 
 st.markdown("---") # Horizontal line for separation
 st.subheader("Ask AI About Consents")
-# Prephrasing text for the chatbot section
-st.write("Leverage the power of AI to gain insights from your uploaded consent data. Ask questions about trends, specific consent details, or general information.")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("""<span style="color:#1E90FF;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
+    st.markdown("""<span style="color:#dc002e;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Groq AI", "Gemini AI"], horizontal=True, key="llm_provider_radio")
-    
-    # Modified: Label for st.text_area to be bold and colored
-    chat_input = st.text_area(
-        label="""<span style="color:#1E90FF; font-weight:bold;">Search any query:</span>""",
-        key="chat_input_text_area",
-        help="Type your question here and press Enter to ask the AI. The AI will analyze all uploaded data."
-    )
-
-    st.markdown("</div>", unsafe_allow_html=True)
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio") 
+    chat_input = st.text_area("Search any query:", key="chat_input")
 
     if st.button("Ask AI", key="ask_ai_button"):
         if not chat_input.strip():
