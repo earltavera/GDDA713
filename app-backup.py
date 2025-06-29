@@ -77,7 +77,7 @@ st.markdown(f"""
 
 st.markdown("""
     <div style="text-align: center;">
-        <h2 style='color:#004489; font-family: Quicksand, sans-serif; font-size: 2.7em;'>
+        <h2 style='color:#004489; font-family: Quicksand, sans-serif; font-size: 2em;'>
             Welcome to the Auckland Air Discharge Consent Dashboard
         </h2>
         <p style='font-size: 1.1em; color: #dc002e;'>
@@ -87,8 +87,6 @@ st.markdown("""
     </div>
     <br>
 """, unsafe_allow_html=True)
-# --- End Welcome Text (Modified Section) ---
-
 
 # --- Utility Functions ---
 def localize_to_auckland(dt):
@@ -167,16 +165,19 @@ def geocode_address(address):
 def extract_metadata(text):
     # RC number patterns
     rc_patterns = [
-        r"Application number:\s*(.+?)\s*Applicant",
-        r"Application numbers:\s*(.+)\s*Applicant",
-        r"Application number(s):\s*(.+)\s*Applicant",
-        r"Application number:\s*(.+)\s*Original consent",
-        r"Application numbers:\s*(.+)\s*Original consent"
+        r"Application number:\s*(.+?)(?=\s*Applicant:)",
+        r"Application numbers:\s*(.+?)(?=\s*Applicant:)",
+        r"Application number(s):\s*(.+?)(?=\s*Applicant:)",
+        r"Application number:\s*(.+?)(?=\s*Original consent)",
+        r"Application numbers:\s*(.+?)(?=\s*Original consent)",
+        r"Application number:\s*(.+?)(?=\s*Site address:)",
+        r"Application numbers:\s*(.+?)(?=\s*Site address:)",
+        r"Application number(s):\s*(.+?)(?=\s*Site address:)",
         r"RC[0-9]{5,}"
     ]
     rc_matches = []
     for pattern in rc_patterns:
-        rc_matches.extend(re.findall(pattern, text, re.MULTILINE |re.IGNORECASE | re.DOTALL))
+        rc_matches.extend(re.findall(pattern, text, re.DOTALL | re.MULTILINE | re.IGNORECASE))
 
     # Flatten list of lists/tuples that re.findall might return
     flattened_rc_matches = []
@@ -194,12 +195,12 @@ def extract_metadata(text):
     ]
     company_matches = []
     for pattern in company_patterns:
-        company_matches.extend(re.findall(pattern, text, re.IGNORECASE))
+        company_matches.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL))
     company_str = ", ".join(list(dict.fromkeys(company_matches)))
 
     # Address patterns
     address_pattern = r"Site address:\s*(.+?)(?=\s*Legal description)"
-    address_match = re.findall(address_pattern, text, re.MULTILINE | re.IGNORECASE)
+    address_match = re.findall(address_pattern, text, re.MULTILINE | re.DOTALL)
     address_str = ", ".join(list(dict.fromkeys(address_match)))
 
     # Issue date patterns
@@ -208,14 +209,13 @@ def extract_metadata(text):
         r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})",
         r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
-        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)"
+        r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"(\b\d{2}/\d{2}/\d{2}\b)"
     ]
-    issue_date_else_patterns = r"(\b\d{2}/\d{2}/\d{2}\b)"
-
-
+    
     issue_date = None
     for pattern in issue_date_patterns:
-        matches = re.findall(pattern, text)
+        matches = re.findall(pattern, text, re.DOTALL | re.MULTILINE)
         if matches:
             for dt_str_candidate in matches:
                 dt_str = dt_str_candidate[0] if isinstance(dt_str_candidate, tuple) and dt_str_candidate else dt_str_candidate
@@ -233,7 +233,7 @@ def extract_metadata(text):
                         issue_date = datetime.strptime(dt_str, "%d %B %Y")
                     break
                 except ValueError:
-                    continue
+                    continue            
             if issue_date:
                 break
 
@@ -262,11 +262,12 @@ def extract_metadata(text):
         r"(\d{1,}\s+years)",
     ]
     expiry_date = None
+    
     for pattern in expiry_patterns:
         matches = re.findall(pattern, text)
         if matches:
             for dt_val_candidate in matches:
-                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_str_candidate
+                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_val_candidate
                 if not isinstance(dt_str, str) or not dt_str.strip():
                     continue
 
@@ -288,9 +289,15 @@ def extract_metadata(text):
                     continue
             if expiry_date:
                 break
-    # This block was duplicated in your original code. I am retaining the single instance.
-    # If `expiry_str` was meant to be populated differently from `expiry_date`, please specify.
-    expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date" # Fallback if no date is found by strict patterns
+    
+    # If no specific expiry date is found, try to infer it from "X years" phrases
+    if not expiry_date:
+        years_match = re.search(r'(\d+)\s+years', text, re.IGNORECASE)
+        if years_match and issue_date:
+            num_years = int(years_match.group(1))
+            expiry_date = issue_date + timedelta(days=num_years * 365.25) # Account for leap years
+    
+    expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date"
 
     # AUP triggers
     trigger_patterns = [
@@ -305,7 +312,7 @@ def extract_metadata(text):
         triggers.extend(re.findall(pattern, text))
     triggers_str = " ".join(list(dict.fromkeys(triggers)))
 
-    # Reason (Proposal) - Re-added as it was implicitly removed in earlier changes
+    # Reason (Proposal)
     proposal_patterns= [
         r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)",
         r"Proposal\s*(.+?)(?=\n[A-Z]|\.)",
@@ -320,7 +327,7 @@ def extract_metadata(text):
         proposal.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL))
     proposal_str = "".join(list(dict.fromkeys(proposal)))
 
-    # Conditions (consolidated pattern for broader capture) - Re-added as it was implicitly removed
+    # Conditions (consolidated pattern for broader capture)
     conditions_patterns = [
         r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
         r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
@@ -372,7 +379,7 @@ def extract_metadata(text):
 
     conditions_str = ""
     for pattern in conditions_patterns:
-        conditions_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+        conditions_match = re.search(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
         if conditions_match:
             conditions_str = conditions_match.group(0).strip()
             break
@@ -390,8 +397,6 @@ def extract_metadata(text):
         conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
         conditions_numbers = list(dict.fromkeys(conditions_numbers))
 
-    # Re-adding Reason for Consent and Consent Conditions to the returned dict,
-    # as they were part of the user's initial code and removing them caused the KeyError.
     return {
         "Resource Consent Numbers": rc_str if rc_str else "Unknown Resource Consent Numbers",
         "Company Name": company_str if company_str else "Unknown Company Name",
@@ -454,7 +459,7 @@ model_name = st.sidebar.selectbox("Choose Embedding Model:", [
 ])
 
 uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
-query_input = st.sidebar.text_input("Semantic Search Query")
+query_input = st.sidebar.text_input("LLM Semantic Search Query")
 
 @st.cache_resource
 def load_embedding_model(name):
@@ -562,22 +567,20 @@ if uploaded_files:
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
             
-            # --- FIX: Ensure 'Reason for Consent' and 'Consent Condition Numbers' exist before trying to display ---
-            # This is the line causing the KeyError. We need to check if columns exist before accessing.
-            # Reverting to the state where these were NOT removed in extract_metadata to fix the original KeyError.
-            # If you still want to remove them, please confirm so I can adjust extract_metadata accordingly.
+            # --- FIX: Dynamically check if columns exist before adding to display_df ---
             columns_to_display = [
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
                 "Consent Status Enhanced", "AUP(OP) Triggers"
             ]
+            # Conditionally add "Reason for Consent" and "Consent Condition Numbers" if they exist
             if "Reason for Consent" in filtered_df.columns:
                 columns_to_display.append("Reason for Consent")
             if "Consent Condition Numbers" in filtered_df.columns:
                 columns_to_display.append("Consent Condition Numbers")
-
-            display_df = filtered_df[columns_to_display].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
             # --- END FIX ---
-
+            
+            display_df = filtered_df[columns_to_display].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
+            
             st.dataframe(display_df)
             csv_output = display_df.to_csv(index=False).encode("utf-8")
             st.download_button("Download CSV", csv_output, "filtered_consents.csv", "text/csv")
@@ -594,7 +597,7 @@ if uploaded_files:
                 st.plotly_chart(fig, use_container_width=True)
 
         # Semantic Search
-        with st.expander("Semantic Search Results", expanded=True):
+        with st.expander("LLM Semantic Search Results", expanded=True):
             if query_input:
                 corpus = df["Text Blob"].tolist()
                 corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
@@ -603,7 +606,7 @@ if uploaded_files:
                 top_k_indices = scores.argsort(descending=True)
 
                 displayed_results = 0
-                similarity_threshold = st.slider("Semantic Search Relevance Threshold", min_value=0.0, max_value=1.0, value=0.5, step=0.05)
+                similarity_threshold = st.slider("LLM Semantic Search Relevance Threshold", min_value=0.0, max_value=1.0, value=0.5, step=0.05)
 
                 for idx in top_k_indices:
                     score = scores[idx.item()]
@@ -639,17 +642,13 @@ if uploaded_files:
 # ----------------------------
 
 st.markdown("---") # Horizontal line for separation
-st.subheader("Ask About Consents using AI")
-# Prephrasing text for the chatbot section
-st.write("Leverage the power of AI to gain insights from your uploaded consent data. Ask questions about trends, specific consent details, or general information.")
+st.subheader("Ask AI About Consents")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<span style="color:#dc002e;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
 
-    # Modified: Label for st.text_area to be bold and colored
-    chat_input = st.text_area("Search any query:", key="chat_input_text_area")
-
-    st.markdown("</div>", unsafe_allow_html=True)
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio") 
+    chat_input = st.text_area("Search any query:", key="chat_input")
 
     if st.button("Ask AI", key="ask_ai_button"):
         if not chat_input.strip():
