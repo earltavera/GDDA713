@@ -726,7 +726,7 @@ Answer:
                     
                     elif llm_provider == "Groq AI":    
                         if groq_api_key:
-                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="whisper-large-v3")
+                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama-3.1-8b-instant")
                             try:
                                 groq_response = chat_groq.invoke([
                                     SystemMessage(content=system_message_content),
@@ -734,7 +734,7 @@ Answer:
                                 ])
                                 answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
                             except Exception as e:
-                                answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('whisper-large-v3') not being available or an API issue, or the input context being too long for the model."
+                                answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('llama-3.1-8b-instant') not being available or an API issue, or the input context being too long for the model."
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
                     else:    
