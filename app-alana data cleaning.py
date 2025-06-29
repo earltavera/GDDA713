@@ -70,7 +70,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                     border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -78,11 +78,23 @@ st.markdown(f"""
 st.markdown("""
     <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
         Auckland Air Discharge Consent Dashboard
-        
-        Welcome to the Auckland Air Discharge Consent Dashboard. This dashboard allows you to upload the Air Discharge Resource Consent Decison Report to transforms your files into meaningful data.
-        Explore the data by the csv file options or interact with the data using the Groq AI or LLM Semantic Query.
     </h1>
 """, unsafe_allow_html=True)
+
+# --- Welcome Text (Modified Section) ---
+st.markdown("""
+    <div style="text-align: center;">
+        <h2 style='color:#4682B4; font-family: Quicksand, sans-serif; font-size: 2em;'>
+            Welcome to the Auckland Air Discharge Consent Dashboard
+        </h2>
+        <p style='font-size: 1.1em; color: #555;'>
+            This dashboard allows you to upload Air Discharge Resource Consent Decision Reports to transform your files into meaningful data.
+            Explore the data using the CSV file options, or interact with the data using Gemini AI, Groq AI, or LLM Semantic Query.
+        </p>
+    </div>
+    <br>
+""", unsafe_allow_html=True)
+# --- End Welcome Text (Modified Section) ---
 
 
 # --- Utility Functions ---
@@ -170,7 +182,7 @@ def extract_metadata(text):
         r"Application number:\s*(.+?)(?=\s*Site address:)",
         r"Application numbers:\s*(.+?)(?=\s*Site address:)",
         r"Application number(s):\s*(.+?)(?=\s*Site address:)",
-        r"RC[0-9]{5,}" 
+        r"RC[0-9]{5,}"
     ]
     rc_matches = []
     for pattern in rc_patterns:
@@ -209,7 +221,7 @@ def extract_metadata(text):
         r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
         r"(\b\d{2}/\d{2}/\d{2}\b)"
     ]
-  
+    
     issue_date = None
     for pattern in issue_date_patterns:
         matches = re.findall(pattern, text, re.DOTALL | re.MULTILINE)
@@ -230,7 +242,7 @@ def extract_metadata(text):
                         issue_date = datetime.strptime(dt_str, "%d %B %Y")
                     break
                 except ValueError:
-                    continue           
+                    continue            
             if issue_date:
                 break
 
@@ -259,7 +271,7 @@ def extract_metadata(text):
         r"(\d{1,}\s+years)",
     ]
     expiry_date = None
-    expiry_date1 = []
+    
     for pattern in expiry_patterns:
         matches = re.findall(pattern, text)
         if matches:
@@ -287,16 +299,15 @@ def extract_metadata(text):
             if expiry_date:
                 break
     
-    for pattern in expiry_patterns:
-        matches = re.findall(pattern, text)
-        for match in matches:
-            if isinstance(match, tuple):
-                expiry_date1.append(" ".join([m for m in match if m]).strip())
-            else:
-                expiry_date1.append(match.strip())
-    expiry_date1 = list(dict.fromkeys(expiry_date1))
-    expiry_str= ", ".join(expiry_date1)
-        
+    # If no specific expiry date is found, try to infer it from "X years" phrases
+    if not expiry_date:
+        years_match = re.search(r'(\d+)\s+years', text, re.IGNORECASE)
+        if years_match and issue_date:
+            num_years = int(years_match.group(1))
+            expiry_date = issue_date + timedelta(days=num_years * 365.25) # Account for leap years
+    
+    expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date"
+
     # AUP triggers
     trigger_patterns = [
         r"(E14\.\d+\.\d+)",
@@ -320,10 +331,10 @@ def extract_metadata(text):
         r"Summary of Decision\s*(.+?)(?=\n[A-Z]|\.)",
         r"Summary of proposal and activity status\s*(.+?)(?=\n[A-Z]|\.)"
     ]
-    proposal =  []
+    proposal = []
     for pattern in proposal_patterns:
         proposal.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL))
-    proposal_str= "".join(list(dict.fromkeys(proposal)))
+    proposal_str = "".join(list(dict.fromkeys(proposal)))
 
     # Conditions (consolidated pattern for broader capture)
     conditions_patterns = [
@@ -375,14 +386,13 @@ def extract_metadata(text):
         r"(?<=Conditions).*?(?=Advice notes)"
     ]
 
-    conditions_str = []
+    conditions_str = ""
     for pattern in conditions_patterns:
         conditions_match = re.search(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
         if conditions_match:
             conditions_str = conditions_match.group(0).strip()
             break
 
-    # Extracting numbered conditions (if conditions_str is found)
     conditions_numbers = []
     if conditions_str:
         temp_conditions_matches = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
@@ -394,18 +404,19 @@ def extract_metadata(text):
                 flattened_temp_conditions.append(item)
 
         conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
-        conditions_numbers = list(dict.fromkeys(conditions_numbers))        
+        conditions_numbers = list(dict.fromkeys(conditions_numbers))
 
     return {
         "Resource Consent Numbers": rc_str if rc_str else "Unknown Resource Consent Numbers",
         "Company Name": company_str if company_str else "Unknown Company Name",
         "Address": address_str if address_str else "Unknown Address",
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str,
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str, # Use `expiry_str` if `expiry_date` is None
         "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
         "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent",
         "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers",
-        "Consent Status": check_expiry(expiry_date), # This will now use the localized date
+        "Consent Conditions": conditions_str if conditions_str else "Unknown Consent Conditions", # Use extracted string for conditions
+        "Consent Status": check_expiry(expiry_date),
         "Text Blob": text
     }
 
@@ -444,7 +455,7 @@ def get_chat_log_as_csv():
 
 # --- Sidebar & Model Loader ---
 st.sidebar.markdown("""
-    <h2 style='color:#2c6e91; font-family:Segoe UI, Roboto, sans-serif;'>
+    <h2 style='color:#1E90FF; font-family:Segoe UI, Roboto, sans-serif;'>
         Control Panel
     </h2>
 """, unsafe_allow_html=True)
@@ -511,6 +522,8 @@ if uploaded_files:
 
         # --- DATETIME LOCALIZATION ---
         auckland_tz = pytz.timezone("Pacific/Auckland")
+        df['Issue Date'] = pd.to_datetime(df['Issue Date'], errors='coerce', dayfirst=True) # Ensure Issue Date is datetime
+        df['Issue Date'] = df['Issue Date'].apply(localize_to_auckland)
         df['Expiry Date'] = pd.to_datetime(df['Expiry Date'], errors='coerce', dayfirst=True)
         df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
         
@@ -562,10 +575,21 @@ if uploaded_files:
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
-            display_df = filtered_df[[
+            
+            # --- FIX: Dynamically check if columns exist before adding to display_df ---
+            columns_to_display = [
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
-                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Consent Condition Numbers"
-            ]].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
+                "Consent Status Enhanced", "AUP(OP) Triggers"
+            ]
+            # Conditionally add "Reason for Consent" and "Consent Condition Numbers" if they exist
+            if "Reason for Consent" in filtered_df.columns:
+                columns_to_display.append("Reason for Consent")
+            if "Consent Condition Numbers" in filtered_df.columns:
+                columns_to_display.append("Consent Condition Numbers")
+            # --- END FIX ---
+            
+            display_df = filtered_df[columns_to_display].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
+            
             st.dataframe(display_df)
             csv_output = display_df.to_csv(index=False).encode("utf-8")
             st.download_button("Download CSV", csv_output, "filtered_consents.csv", "text/csv")
@@ -603,7 +627,7 @@ if uploaded_files:
                     expiry_display = row['Expiry Date'].strftime('%Y-%m-%d') if pd.notna(row['Expiry Date']) else 'N/A'
                     st.markdown(f"- **Expires**: {expiry_display}")
                     safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{idx.item()}")
+                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_search_result_{idx.item()}") # Changed key for uniqueness
                     st.markdown("---")
                     displayed_results += 1
                     if displayed_results >= 3:
@@ -611,7 +635,7 @@ if uploaded_files:
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
         
-   
+
         # Finalize and remove the progress bar
         my_bar.progress(100, text="Dashboard Ready!")
         time.sleep(1)
@@ -628,13 +652,21 @@ if uploaded_files:
 
 st.markdown("---") # Horizontal line for separation
 st.subheader("Ask AI About Consents")
+# Prephrasing text for the chatbot section
+st.write("Leverage the power of AI to gain insights from your uploaded consent data. Ask questions about trends, specific consent details, or general information.")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, consent conditions, or general trends)", unsafe_allow_html=True)
+    st.markdown("""<span style="color:#1E90FF;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
 
     llm_provider = st.radio("Choose LLM Provider", ["Groq AI", "Gemini AI"], horizontal=True, key="llm_provider_radio")
-    chat_input = st.text_area("Search any query:", key="chat_input_text_area")
+    
+    # Modified: Label for st.text_area to be bold and colored
+    chat_input = st.text_area(
+        label="""<span style="color:#1E90FF; font-weight:bold;">Search any query:</span>""",
+        key="chat_input_text_area",
+        help="Type your question here and press Enter to ask the AI. The AI will analyze all uploaded data."
+    )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -642,75 +674,48 @@ with st.expander("AI Chatbot", expanded=True):
         if not chat_input.strip():
             st.warning("Please enter a query.")
         else:
-            with st.spinner("AI is thinking..."):
+            with st.spinner("AI is thinking and gathering data..."):
                 try:
-                    # ==================================================================
-                    # MODIFICATION START: Implement RAG (Option 3)
-                    # ==================================================================
                     context_sample_list = []
-
-                    if not df.empty:
-                        # 1. Perform Semantic Search to find relevant documents for the chat query
-                        corpus = df["Text Blob"].tolist()
-                        corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
-                        query_embedding = embedding_model.encode(chat_input, convert_to_tensor=True)
-                        scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-
-                        # 2. Get top 5 most relevant document indices
-                        top_k = 5
-                        top_k_indices = scores.argsort(descending=True)[:top_k]
-                        
-                        # 3. Build a small, highly-relevant context from the search results
-                        relevant_docs_data = []
-                        for idx in top_k_indices:
-                            # Only include if the relevance score is decent (e.g., > 0.3)
-                            if scores[idx.item()] > 0.3:
-                                relevant_docs_data.append(df.iloc[idx.item()])
-
-                        if not relevant_docs_data:
-                            st.warning("Could not find any documents relevant to your query. The AI will answer without specific context.")
-                            context_sample_list = []
-                        else:
-                            st.info(f"Found {len(relevant_docs_data)} relevant documents. Providing them to the AI as context.")
-                            context_df = pd.DataFrame(relevant_docs_data)
-                            context_sample_df = context_df[[
-                                "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
-                                "Consent Conditions", "Issue Date", "Expiry Date", "Reason for Consent"
-                            ]].dropna().copy()
-
-                            # Format datetime columns for JSON serialization
-                            for col in ['Expiry Date', 'Issue Date']:
-                                if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
-                                    context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z')
-                            
-                            context_sample_list = context_sample_df.to_dict(orient="records")
+                    relevant_files_for_download = [] 
                     
-                    else:
-                        st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
-                        # Use a default sample if no files are uploaded
-                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Consent Conditions": "Consent Conditions", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
-                    
-                    context_sample_json = json.dumps(context_sample_list, indent=2)
-                    
-                    # ==================================================================
-                    # MODIFICATION END
-                    # ==================================================================
-
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
+                    if not df.empty:
+                        context_df_for_ai = df[[
+                            "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
+                            "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
+                        ]].copy()
+
+                        for col in ['Issue Date', 'Expiry Date']:
+                            if col in context_df_for_ai.columns and pd.api.types.is_datetime64_any_dtype(context_df_for_ai[col]):
+                                context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d')
+                            context_df_for_ai[col] = context_df_for_ai[col].replace({pd.NaT: None})
+
+                        context_sample_list = context_df_for_ai.to_dict(orient="records")
+                        
+                        st.info("The AI is analyzing all uploaded data.")
+                        
+                    else:
+                        st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
+                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31"}]
+
+                    context_sample_json = json.dumps(context_sample_list, indent=2)
+                    
                     system_message_content = f"""
-                    You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions exclusively and precisely using the "Provided Data" below.
+                    You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions based *strictly and exclusively* on the "Provided Consent Data" below.
 
                     Crucial Directives:
-                    1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Data'. Do not introduce any external knowledge, assumptions, or speculative content.
-                    2.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Data'. When answering about locations, refer to the 'Address' field.
-                    3.  **Handling Missing Information/Complex Analysis:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Data' *as presented*, or if it requires complex analysis/aggregation of data not explicitly shown (e.g., counting items not in the top 5, or performing complex filtering across a large dataset), you *must* explicitly state: "I cannot find that information within the currently uploaded documents, or it requires more complex analysis than I can perform with the provided data. Please refer to the dashboard's tables and filters for detailed insights."
-                    4.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
-                    5.  **Concise Format:** Present your answer in clear, concise bullet points.
-                    6.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
+                    1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Consent Data'. Do not introduce any external knowledge, assumptions, or speculative content.
+                    2.  **Aggregate Queries:** For questions asking for counts, summaries, or trends (e.g., "how many", "list all", "which year"), process the entire provided dataset to give an accurate answer.
+                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list ONLY the 'Company Name' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: Company A, Company B, Company C." Do NOT include Resource Consent Numbers or any other identifiers unless explicitly asked for them.
+                    4.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Consent Data' *as presented*, you *must* explicitly state: "I cannot find that specific information within the currently provided data." Do not try to guess or infer.
+                    5.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
+                    6.  **Concise Format:** Present your answer in clear, concise bullet points or a brief summary.
+                    7.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
 
                     ---
-                    Provided Data (JSON format):
+                    Provided Consent Data (JSON format, each object is a consent record):
                     """
 
                     user_query = f"""
@@ -724,7 +729,7 @@ Answer:
 """
 
                     answer_raw = ""
-                    if llm_provider == "Gemini":
+                    if llm_provider == "Gemini AI":
                         if google_api_key:
                             GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
@@ -735,24 +740,24 @@ Answer:
                                 else:
                                     answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error. Check your console for details."
                             except Exception as e:
-                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue."
+                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue, or the input context being too long for the model."
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
                     
-                    elif llm_provider == "Groq AI": # FIX: Changed from "Groq" to "Groq AI"
+                    elif llm_provider == "Groq AI":    
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
                                 groq_response = chat_groq.invoke([
-                                    SystemMessage(content=system_message_content + "\n" + context_sample_json),
-                                    HumanMessage(content=f"User Query: {chat_input}")
+                                    SystemMessage(content=system_message_content),
+                                    HumanMessage(content=f"{context_sample_json}\n\nUser Query: {chat_input}")
                                 ])
                                 answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
                             except Exception as e:
-                                answer_raw = f"Groq API error: {e}"
+                                answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('llama3-70b-8192') not being available or an API issue, or the input context being too long for the model."
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    else: 
+                    else:    
                         st.warning("Selected LLM provider is not available or supported.")
                         answer_raw = "AI provider not available."
 
@@ -764,6 +769,9 @@ Answer:
 
                 except Exception as e:
                     st.error(f"AI interaction error: {e}")
+                    # Log the full traceback for debugging in the console
+                    import traceback
+                    st.exception(traceback.exc_info())
 
     chat_log_csv = get_chat_log_as_csv()
     if chat_log_csv:
