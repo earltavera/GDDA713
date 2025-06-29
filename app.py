@@ -647,11 +647,7 @@ with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<span style="color:#dc002e;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
 
     # Modified: Label for st.text_area to be bold and colored
-    chat_input = st.text_area(
-        label="""<span style="color:#1E90FF; font-weight:bold;">Search any query:</span>""",
-        key="chat_input_text_area",
-        help="Type your question here and press Enter to ask the AI. The AI will analyze all uploaded data."
-    )
+    chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
