@@ -69,7 +69,7 @@ current_time = nz_time.strftime("%I:%M %p")
 weather = get_auckland_weather()
 
 st.markdown(f"""
-    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
+    <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#FFFFFF;
                      border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
@@ -533,7 +533,7 @@ if uploaded_files:
 # ----------------------------
 
 st.markdown("---") # Horizontal line for separation
-st.subheader("Ask AI About Consents")
+st.subheader("Ask About Consents using AI")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<span style="color:#1E90FF;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span> """, unsafe_allow_html=True)
