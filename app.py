@@ -726,7 +726,7 @@ Answer:
                     
                     elif llm_provider == "Groq AI":    
                         if groq_api_key:
-                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
+                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3.3-70b-versatile")
                             try:
                                 groq_response = chat_groq.invoke([
                                     SystemMessage(content=system_message_content),
