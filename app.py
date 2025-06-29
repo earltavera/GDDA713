@@ -412,6 +412,8 @@ if uploaded_files:
 
         # --- DATETIME LOCALIZATION ---
         auckland_tz = pytz.timezone("Pacific/Auckland")
+        df['Issue Date'] = pd.to_datetime(df['Issue Date'], errors='coerce', dayfirst=True) # Ensure Issue Date is datetime
+        df['Issue Date'] = df['Issue Date'].apply(localize_to_auckland)
         df['Expiry Date'] = pd.to_datetime(df['Expiry Date'], errors='coerce', dayfirst=True)
         df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
         
@@ -545,70 +547,54 @@ with st.expander("AI Chatbot", expanded=True):
         else:
             with st.spinner("AI is thinking..."):
                 try:
-                    # ==================================================================
-                    # MODIFICATION START: Implement RAG (Option 3)
-                    # ==================================================================
                     context_sample_list = []
+                    current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     if not df.empty:
-                        # 1. Perform Semantic Search to find relevant documents for the chat query
-                        corpus = df["Text Blob"].tolist()
-                        corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
-                        query_embedding = embedding_model.encode(chat_input, convert_to_tensor=True)
-                        scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-
-                        # 2. Get top 5 most relevant document indices
-                        top_k = 5
-                        top_k_indices = scores.argsort(descending=True)[:top_k]
+                        # Convert the relevant parts of the DataFrame to a JSON string or CSV string
+                        # for the LLM to process.
+                        # This ensures the LLM sees ALL relevant rows for aggregate questions.
                         
-                        # 3. Build a small, highly-relevant context from the search results
-                        relevant_docs_data = []
-                        for idx in top_k_indices:
-                            # Only include if the relevance score is decent (e.g., > 0.3)
-                            if scores[idx.item()] > 0.3:
-                                relevant_docs_data.append(df.iloc[idx.item()])
+                        # We'll use a subset of columns that are typically relevant for AI queries
+                        # related to trends or specific facts about consents.
+                        context_df_for_ai = df[[
+                            "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
+                            "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
+                        ]].copy() # Create a copy to avoid SettingWithCopyWarning
 
-                        if not relevant_docs_data:
-                            st.warning("Could not find any documents relevant to your query. The AI will answer without specific context.")
-                            context_sample_list = []
-                        else:
-                            st.info(f"Found {len(relevant_docs_data)} relevant documents. Providing them to the AI as context.")
-                            context_df = pd.DataFrame(relevant_docs_data)
-                            context_sample_df = context_df[[
-                                "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
-                                "Issue Date", "Expiry Date" # Removed "Consent Conditions", "Reason for Consent"
-                            ]].dropna().copy()
+                        # Convert datetime columns to string format suitable for JSON/LLM
+                        for col in ['Issue Date', 'Expiry Date']:
+                            if col in context_df_for_ai.columns and pd.api.types.is_datetime64_any_dtype(context_df_for_ai[col]):
+                                context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d') # Simplified date format for AI
+                            # For NaT values, ensure they become None or empty string in JSON
+                            context_df_for_ai[col] = context_df_for_ai[col].replace({pd.NaT: None})
 
-                            # Format datetime columns for JSON serialization
-                            for col in ['Expiry Date', 'Issue Date']:
-                                if col in context_sample_df.columns and pd.api.types.is_datetime64_any_dtype(context_sample_df[col]):
-                                    context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z')
-                            
-                            context_sample_list = context_sample_df.to_dict(orient="records")
-                            
+                        # Convert to dictionary records for JSON
+                        context_sample_list = context_df_for_ai.to_dict(orient="records")
+                        
+                        st.info(f"Providing data for {len(context_sample_list)} consents to the AI as context for aggregate analysis.")
+                        
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
                         # Use a default sample if no files are uploaded
-                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31"}] # Removed "Consent Conditions", "Reason for Consent"
-                    
+                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31"}]
+
                     context_sample_json = json.dumps(context_sample_list, indent=2)
                     
-
-                    current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
-
                     system_message_content = f"""
-                    You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions exclusively and precisely using the "Provided Data" below.
+                    You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions based *strictly and exclusively* on the "Provided Consent Data" below.
 
                     Crucial Directives:
-                    1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Data'. Do not introduce any external knowledge, assumptions, or speculative content.
-                    2.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Data'. When answering about locations, refer to the 'Address' field.
-                    3.  **Handling Missing Information/Complex Analysis:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Data' *as presented*, or if it requires complex analysis/aggregation of data not explicitly shown (e.g., counting items not in the top 5, or performing complex filtering across a large dataset), you *must* explicitly state: "I cannot find that information within the currently uploaded documents, or it requires more complex analysis than I can perform with the provided data. Please refer to the dashboard's tables and filters for detailed insights."
-                    4.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
-                    5.  **Concise Format:** Present your answer in clear, concise bullet points.
-                    6.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
+                    1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Consent Data'. Do not introduce any external knowledge, assumptions, or speculative content.
+                    2.  **Aggregate Queries:** For questions asking for counts, summaries, or trends (e.g., "how many", "list all", "which year"), process the entire provided dataset to give an accurate answer.
+                    3.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Consent Data'.
+                    4.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Consent Data' *as presented*, you *must* explicitly state: "I cannot find that specific information within the currently provided data." Do not try to guess or infer.
+                    5.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
+                    6.  **Concise Format:** Present your answer in clear, concise bullet points or a brief summary.
+                    7.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
 
                     ---
-                    Provided Data (JSON format):
+                    Provided Consent Data (JSON format, each object is a consent record):
                     """
 
                     user_query = f"""
@@ -624,7 +610,7 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini AI":
                         if google_api_key:
-                            GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
+                            GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro" # Ensure this model can handle your context length
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
                             try:
                                 response = gemini_model.generate_content(user_query)
@@ -633,21 +619,21 @@ Answer:
                                 else:
                                     answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error. Check your console for details."
                             except Exception as e:
-                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue."
+                                answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue, or the input context being too long for the model."
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
                     
                     elif llm_provider == "Groq AI":    
                         if groq_api_key:
-                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
+                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Ensure this model can handle your context length
                             try:
                                 groq_response = chat_groq.invoke([
-                                    SystemMessage(content=system_message_content + "\n" + context_sample_json),
-                                    HumanMessage(content=f"User Query: {chat_input}")
+                                    SystemMessage(content=system_message_content), # SystemMessage separate from HumanMessage for better Langchain integration
+                                    HumanMessage(content=f"{context_sample_json}\n\nUser Query: {chat_input}") # Combine context with user query here
                                 ])
                                 answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
                             except Exception as e:
-                                answer_raw = f"Groq API error: {e}"
+                                answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('llama3-70b-8192') not being available or an API issue, or the input context being too long for the model."
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
                     else:    
