@@ -79,7 +79,7 @@ st.markdown("""
     <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
         Auckland Air Discharge Consent Dashboard
         
-        Welcome to the Auckland Air Discharge Consent Dashboard. This dashboard allows you to upload the Air Discharge Resource Consent Decison Report to transforms your files into meaningful data.Add commentMore actions
+        Welcome to the Auckland Air Discharge Consent Dashboard. This dashboard allows you to upload the Air Discharge Resource Consent Decison Report to transforms your files into meaningful data.
         Explore the data by the csv file options or interact with the data using the Groq AI or LLM Semantic Query.
     </h1>
 """, unsafe_allow_html=True)
@@ -611,8 +611,7 @@ if uploaded_files:
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
         
-        # --- END RENDERING DASHBOARD ---
-
+   
         # Finalize and remove the progress bar
         my_bar.progress(100, text="Dashboard Ready!")
         time.sleep(1)
@@ -727,7 +726,7 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini":
                         if google_api_key:
-                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro"
+                            GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
                             try:
                                 response = gemini_model.generate_content(user_query)
