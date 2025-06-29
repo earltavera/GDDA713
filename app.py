@@ -537,7 +537,7 @@ st.subheader("Ask AI About Consents")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("""<span style="color:#1E90FF; font-weight:bold;">Ask anything about air discharge consents</span> (e.g. common triggers, expiry date, or consents in Manukau)""", unsafe_allow_html=True)
+    st.markdown("""<span style="color:#1E90FF; font-weight:bold;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span> """, unsafe_allow_html=True)
 
     llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
@@ -548,7 +548,7 @@ with st.expander("AI Chatbot", expanded=True):
         if not chat_input.strip():
             st.warning("Please enter a query.")
         else:
-            with st.spinner("AI is thinking..."):
+            with st.spinner("AI is thinking and gathering data..."):
                 try:
                     context_sample_list = []
                     # relevant_files_for_download is populated but no longer used for display
@@ -638,9 +638,6 @@ Answer:
 
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
-
-                    # --- REMOVED: Logic to extract consent numbers from AI's answer and prepare downloads ---
-                    # The previous logic for extracting consent numbers and creating download buttons has been removed.
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
