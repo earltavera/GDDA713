@@ -70,7 +70,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -293,95 +293,8 @@ def extract_metadata(text):
         triggers.extend(re.findall(pattern, text))
     triggers_str = " ".join(list(dict.fromkeys(triggers)))
 
-    # Reason (Proposal)
-    proposal_patterns= [
-        r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)",
-        r"Proposal\s*(.+?)(?=\n[A-Z]|\.)",
-        r"Proposal\s*(.+?)(?=\n[A-Z]|\:)",
-        r"Introduction and summary of proposal\s*(.+?)\s*Submissions",
-        r"Proposal, site and locality description\s*(.+?)(?=\n[A-Z]|\.)",
-        r"Summary of Decision\s*(.+?)(?=\n[A-Z]|\.)",
-        r"Summary of proposal and activity status\s*(.+?)(?=\n[A-Z]|\.)"
-    ]
-    proposal =  []
-    for pattern in proposal_patterns:
-        proposal.extend(re.findall(pattern, text))
-    proposal_str= "".join(list(dict.fromkeys(proposal)))
-
-    # Conditions (consolidated pattern for broader capture)
-    conditions_patterns = [
-        r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
-        r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
-        r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)",
-        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
-        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
-        r"(?:Conditions Specific to air quality).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)",
-        r"(?:Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)",
-        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)",
-        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
-        r"(?:Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
-        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
-        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)",
-        r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)",
-        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)",
-        r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
-        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)",
-        r"(?:Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)",
-        r"(?:Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)",
-        r"(?:Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
-        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
-        r"(?:Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
-        r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
-        r"(?:Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
-        r"(?:Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision",
-        r"(?:DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision",
-        r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
-        r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
-        # Fallback broad pattern if specific ones fail
-        r"(?<=Conditions).*?(?=Advice notes)"
-    ]
-
-    conditions_str = ""
-    for pattern in conditions_patterns:
-        conditions_match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-        if conditions_match:
-            conditions_str = conditions_match.group(0).strip()
-            break
-
-    # Extracting numbered conditions (if conditions_str is found)
-    conditions_numbers = []
-    if conditions_str:
-        temp_conditions_matches = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
-
-        flattened_temp_conditions = []
-        for item in temp_conditions_matches:
-            if isinstance(item, tuple):
-                flattened_temp_conditions.append(item[0])
-            else:
-                flattened_temp_conditions.append(item)
-
-        conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
-        conditions_numbers = list(dict.fromkeys(conditions_numbers))
-
-    # Extracting consent conditions
-    consent_conditions = re.findall(r"\d\.\s*(.+?)\s*\d\.", conditions_str, re.MULTILINE | re.DOTALL)
+    # Removed: Reason (Proposal) extraction patterns and logic
+    # Removed: Conditions extraction patterns and logic
 
     return {
         "Resource Consent Numbers": rc_str if rc_str else "Unknown Resource Consent Numbers",
@@ -390,9 +303,9 @@ def extract_metadata(text):
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
         "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
         "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
-        "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent",
-        "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers",
-        "Consent Conditions": " ".join(consent_conditions) if consent_conditions else "Unknown Consent Conditions",
+        # "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent", # Removed
+        # "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers", # Removed
+        # "Consent Conditions": " ".join(consent_conditions) if consent_conditions else "Unknown Consent Conditions", # Removed
         "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
     }
@@ -552,7 +465,7 @@ if uploaded_files:
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
             display_df = filtered_df[[
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
-                "Consent Status Enhanced", "AUP(OP) Triggers", "Reason for Consent", "Consent Conditions"
+                "Consent Status Enhanced", "AUP(OP) Triggers" # Removed "Reason for Consent", "Consent Conditions"
             ]].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
             st.dataframe(display_df)
             csv_output = display_df.to_csv(index=False).encode("utf-8")
@@ -619,7 +532,7 @@ st.subheader("Ask AI About Consents")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, consent conditions, or general trends)", unsafe_allow_html=True)
+    st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, or general trends)", unsafe_allow_html=True) # Removed "consent conditions"
 
     llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
@@ -663,7 +576,7 @@ with st.expander("AI Chatbot", expanded=True):
                             context_df = pd.DataFrame(relevant_docs_data)
                             context_sample_df = context_df[[
                                 "Company Name", "Resource Consent Numbers","Address", "Consent Status", "AUP(OP) Triggers",
-                                "Consent Conditions", "Issue Date", "Expiry Date", "Reason for Consent"
+                                "Issue Date", "Expiry Date" # Removed "Consent Conditions", "Reason for Consent"
                             ]].dropna().copy()
 
                             # Format datetime columns for JSON serialization
@@ -672,11 +585,11 @@ with st.expander("AI Chatbot", expanded=True):
                                     context_sample_df[col] = context_sample_df[col].dt.strftime('%Y-%m-%d %H:%M:%S %Z%z')
                             
                             context_sample_list = context_sample_df.to_dict(orient="records")
-                    
+                            
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
                         # Use a default sample if no files are uploaded
-                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Consent Conditions": "Consent Conditions", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31", "Reason for Consent": "General default operations"}]
+                        context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31"}] # Removed "Consent Conditions", "Reason for Consent"
                     
                     context_sample_json = json.dumps(context_sample_list, indent=2)
                     
@@ -724,7 +637,7 @@ Answer:
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
                     
-                    elif llm_provider == "Groq AI": 
+                    elif llm_provider == "Groq AI":    
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
@@ -737,7 +650,7 @@ Answer:
                                 answer_raw = f"Groq API error: {e}"
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    else: 
+                    else:    
                         st.warning("Selected LLM provider is not available or supported.")
                         answer_raw = "AI provider not available."
 
