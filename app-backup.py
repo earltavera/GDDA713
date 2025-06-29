@@ -70,7 +70,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                     border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -545,36 +545,12 @@ with st.expander("AI Chatbot", expanded=True):
             with st.spinner("AI is thinking..."):
                 try:
                     context_sample_list = []
-                    # Store information about files relevant to the AI's answer for download buttons
+                    # relevant_files_for_download will now contain files directly relevant to the AI's answer, if it lists them.
                     relevant_files_for_download = [] 
                     
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     if not df.empty:
-                        # For RAG, we will still prioritize semantically similar documents to provide context
-                        # for specific, non-aggregate questions.
-                        
-                        corpus = df["Text Blob"].tolist()
-                        corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
-                        query_embedding = embedding_model.encode(chat_input, convert_to_tensor=True)
-                        scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-
-                        # Define a threshold for "highly relevant" documents to be offered for download
-                        download_relevance_threshold = 0.3 
-                        
-                        # Get indices of documents that meet the download relevance threshold
-                        download_indices = [i for i, score in enumerate(scores) if score > download_relevance_threshold]
-
-                        # Populate relevant_files_for_download based on this broader relevance
-                        for idx in download_indices:
-                            # Avoid duplicates if the same file is relevant in multiple ways
-                            file_info = {
-                                "file_name": df.iloc[idx]['__file_name__'],
-                                "file_bytes": df.iloc[idx]['__file_bytes__']
-                            }
-                            if file_info not in relevant_files_for_download:
-                                relevant_files_for_download.append(file_info)
-
                         # For the AI's data context, always provide the full DataFrame (or a relevant subset of columns)
                         # This ensures aggregate questions can be answered accurately.
                         context_df_for_ai = df[[
@@ -591,10 +567,7 @@ with st.expander("AI Chatbot", expanded=True):
 
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
                         
-                        if not relevant_files_for_download:
-                            st.info("No documents found with high semantic relevance to your specific query for direct download, but the AI will analyze all uploaded data.")
-                        else:
-                            st.info(f"The AI is analyzing all uploaded data. Found {len(relevant_files_for_download)} semantically related document(s) for direct download.")
+                        st.info("The AI is analyzing all uploaded data.")
                         
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
@@ -609,7 +582,7 @@ with st.expander("AI Chatbot", expanded=True):
                     Crucial Directives:
                     1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Consent Data'. Do not introduce any external knowledge, assumptions, or speculative content.
                     2.  **Aggregate Queries:** For questions asking for counts, summaries, or trends (e.g., "how many", "list all", "which year"), process the entire provided dataset to give an accurate answer.
-                    3.  **Direct Retrieval:** Prioritize direct retrieval of facts from the 'Provided Consent Data'.
+                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list the 'Resource Consent Numbers' for each item in a comma-separated format within the answer*. For example: "There are 3 consents issued in 2019: RC12345, DIS67890, BUN11223." This is crucial for linking to download options.
                     4.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Consent Data' *as presented*, you *must* explicitly state: "I cannot find that specific information within the currently provided data." Do not try to guess or infer.
                     5.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
                     6.  **Concise Format:** Present your answer in clear, concise bullet points or a brief summary.
@@ -632,7 +605,7 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini AI":
                         if google_api_key:
-                            GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro" # Ensure this model can handle your context length
+                            GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
                             try:
                                 response = gemini_model.generate_content(user_query)
@@ -647,11 +620,11 @@ Answer:
                     
                     elif llm_provider == "Groq AI":    
                         if groq_api_key:
-                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192") # Ensure this model can handle your context length
+                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
                                 groq_response = chat_groq.invoke([
-                                    SystemMessage(content=system_message_content), # SystemMessage separate from HumanMessage for better Langchain integration
-                                    HumanMessage(content=f"{context_sample_json}\n\nUser Query: {chat_input}") # Combine context with user query here
+                                    SystemMessage(content=system_message_content),
+                                    HumanMessage(content=f"{context_sample_json}\n\nUser Query: {chat_input}")
                                 ])
                                 answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
                             except Exception as e:
@@ -665,42 +638,48 @@ Answer:
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
 
-                    # --- MODIFIED: Display download buttons for relevant files ---
-                    if relevant_files_for_download:
-                        st.markdown("### 📄 Related Documents for Download (Semantic Match):") # Changed title for clarity
-                        cols = st.columns(min(len(relevant_files_for_download), 3)) # Max 3 columns for buttons
-                        for i, file_info in enumerate(relevant_files_for_download):
-                            with cols[i % 3]: # Distribute buttons across columns
-                                safe_filename = clean_surrogates(file_info['file_name'])
-                                st.download_button(
-                                    label=f"Download {safe_filename}",
-                                    data=file_info['file_bytes'],
-                                    file_name=safe_filename,
-                                    mime="application/pdf",
-                                    key=f"ai_download_related_{i}_{time.time()}" # Unique key for each button
-                                )
-                    else:
-                        st.info("No documents found with high semantic relevance to your specific query for direct download.")
-                    # --- END MODIFIED ---
+                    # --- New Logic: Extract consent numbers from AI's answer and prepare downloads ---
+                    if "Resource Consent Numbers" in answer_raw or re.search(r'\b(RC|DIS|BUN)\d{5,}\b', answer_raw, re.IGNORECASE):
+                        # Attempt to parse consent numbers from the AI's response
+                        # Look for patterns like RCXXXXX, DISXXXXX, BUNXXXXX or comma-separated lists
+                        consent_numbers_in_response = re.findall(r'\b(RC|DIS|BUN)\d{5,}(?:-\w+)?\b', answer_raw, re.IGNORECASE)
+                        
+                        if consent_numbers_in_response and not df.empty:
+                            found_downloadable_files = []
+                            # Normalize the consent numbers from AI response for matching
+                            normalized_ai_consents = [cn.upper() for cn in consent_numbers_in_response]
+                            
+                            # Iterate through the DataFrame to find matching files
+                            for idx, row in df.iterrows():
+                                # Check if any of the consent numbers in the row match those from the AI's response
+                                # Splitting by comma to handle multiple consents in one cell
+                                row_consent_numbers = [rc.strip().upper() for rc in row['Resource Consent Numbers'].split(',')]
+                                if any(cn in normalized_ai_consents for cn in row_consent_numbers):
+                                    file_info = {
+                                        "file_name": row['__file_name__'],
+                                        "file_bytes": row['__file_bytes__']
+                                    }
+                                    if file_info not in found_downloadable_files: # Avoid duplicates
+                                        found_downloadable_files.append(file_info)
 
-                    # --- ADDED: Section to download all uploaded PDFs ---
-                    if not df.empty: # Only show if there are files processed
-                        st.markdown("### 📥 Download All Uploaded Consents:")
-                        # We can simply iterate through the original 'all_data' which contains the file bytes
-                        all_uploaded_files_info = df[['__file_name__', '__file_bytes__']].drop_duplicates().to_dict(orient='records')
-                        cols_all = st.columns(min(len(all_uploaded_files_info), 3))
-                        for i, file_info in enumerate(all_uploaded_files_info):
-                            with cols_all[i % 3]:
-                                safe_filename = clean_surrogates(file_info['__file_name__'])
-                                st.download_button(
-                                    label=f"Download All: {safe_filename}",
-                                    data=file_info['__file_bytes__'],
-                                    file_name=safe_filename,
-                                    mime="application/pdf",
-                                    key=f"ai_download_all_{i}_{time.time()}" # Unique key
-                                )
-                    # --- END ADDED ---
-
+                            if found_downloadable_files:
+                                st.markdown("### 📥 Download Related Consents:")
+                                cols_download = st.columns(min(len(found_downloadable_files), 3))
+                                for i, file_info in enumerate(found_downloadable_files):
+                                    with cols_download[i % 3]:
+                                        safe_filename = clean_surrogates(file_info['file_name'])
+                                        st.download_button(
+                                            label=f"Download {safe_filename}",
+                                            data=file_info['file_bytes'],
+                                            file_name=safe_filename,
+                                            mime="application/pdf",
+                                            key=f"ai_specific_download_{i}_{time.time()}" 
+                                        )
+                            else:
+                                st.info("Could not find specific files for the consents mentioned by the AI.")
+                        else:
+                            st.info("The AI did not specify consent numbers that I can link to files for download.")
+                    # --- End New Logic ---
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
