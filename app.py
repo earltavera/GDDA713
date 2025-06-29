@@ -545,24 +545,20 @@ with st.expander("AI Chatbot", expanded=True):
             with st.spinner("AI is thinking..."):
                 try:
                     context_sample_list = []
-                    # relevant_files_for_download will contain files directly relevant to the AI's answer, if it lists them.
+                    # relevant_files_for_download is populated but no longer used for display
                     relevant_files_for_download = [] 
                     
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     if not df.empty:
-                        # For the AI's data context, always provide the full DataFrame (or a relevant subset of columns)
-                        # This ensures aggregate questions can be answered accurately.
                         context_df_for_ai = df[[
                             "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
-                            "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
+                            "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced"
                         ]].copy()
 
-                        # Ensure datetime columns are formatted for JSON serialization
                         for col in ['Issue Date', 'Expiry Date']:
                             if col in context_df_for_ai.columns and pd.api.types.is_datetime64_any_dtype(context_df_for_ai[col]):
                                 context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d')
-                            # For NaT values, ensure they become None or empty string in JSON
                             context_df_for_ai[col] = context_df_for_ai[col].replace({pd.NaT: None})
 
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
@@ -581,7 +577,7 @@ with st.expander("AI Chatbot", expanded=True):
                     Crucial Directives:
                     1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Consent Data'. Do not introduce any external knowledge, assumptions, or speculative content.
                     2.  **Aggregate Queries:** For questions asking for counts, summaries, or trends (e.g., "how many", "list all", "which year"), process the entire provided dataset to give an accurate answer.
-                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list the 'Company Name' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: Company A, Company B, Company C." Do NOT include Resource Consent Numbers unless specifically asked.
+                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list ONLY the 'Company Name' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: Company A, Company B, Company C." Do NOT include Resource Consent Numbers or any other identifiers unless explicitly asked for them.
                     4.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Consent Data' *as presented*, you *must* explicitly state: "I cannot find that specific information within the currently provided data." Do not try to guess or infer.
                     5.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
                     6.  **Concise Format:** Present your answer in clear, concise bullet points or a brief summary.
