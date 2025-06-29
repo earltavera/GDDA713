@@ -537,7 +537,7 @@ st.subheader("Ask AI About Consents")
 
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
-    st.markdown("""<span style="color:#1E90FF; font-weight:bold;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span> """, unsafe_allow_html=True)
+    st.markdown("""<span style="color:#1E90FF;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span> """, unsafe_allow_html=True)
 
     llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
