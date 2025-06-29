@@ -348,7 +348,7 @@ def get_chat_log_as_csv():
 
 # --- Sidebar & Model Loader ---
 st.sidebar.markdown("""
-    <h2 style='color:#00247D; font-family:Segoe UI, Roboto, sans-serif;'>
+    <h2 style='color:#1E90FF; font-family:Segoe UI, Roboto, sans-serif;'>
         Control Panel
     </h2>
 """, unsafe_allow_html=True)
@@ -536,7 +536,7 @@ st.markdown("---") # Horizontal line for separation
 st.subheader("Ask About Consents using AI")
 
 with st.expander("AI Chatbot", expanded=True):
-    st.markdown("""<span style="color:#1E90FF;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span> """, unsafe_allow_html=True)
+    st.markdown("""<span style="color:#C8102E;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span> """, unsafe_allow_html=True)
 
     llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
@@ -550,7 +550,7 @@ with st.expander("AI Chatbot", expanded=True):
             with st.spinner("AI is thinking and gathering data..."):
                 try:
                     context_sample_list = []
-                    # relevant_files_for_download is populated but no longer used for display
+                    # relevant_files_for_download is populated but no longer used for display 
                     relevant_files_for_download = [] 
                     
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
