@@ -303,9 +303,6 @@ def extract_metadata(text):
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
         "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date",
         "AUP(OP) Triggers": triggers_str if triggers_str else "Unknown AUP Triggers",
-        # "Reason for Consent": proposal_str if proposal_str else "Unknown Reason for Consent", # Removed
-        # "Consent Condition Numbers": ", ".join(conditions_numbers) if conditions_numbers else "Unknown Condition Numbers", # Removed
-        # "Consent Conditions": " ".join(consent_conditions) if consent_conditions else "Unknown Consent Conditions", # Removed
         "Consent Status": check_expiry(expiry_date), # This will now use the localized date
         "Text Blob": text
     }
@@ -506,7 +503,7 @@ if uploaded_files:
                     expiry_display = row['Expiry Date'].strftime('%Y-%m-%d') if pd.notna(row['Expiry Date']) else 'N/A'
                     st.markdown(f"- **Expires**: {expiry_display}")
                     safe_filename = clean_surrogates(row['__file_name__'])
-                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_{idx.item()}")
+                    st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_search_result_{idx.item()}") # Changed key for uniqueness
                     st.markdown("---")
                     displayed_results += 1
                     if displayed_results >= 3:
@@ -548,31 +545,56 @@ with st.expander("AI Chatbot", expanded=True):
             with st.spinner("AI is thinking..."):
                 try:
                     context_sample_list = []
+                    # Store information about files relevant to the AI's answer for download buttons
+                    relevant_files_for_download = [] 
+                    
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     if not df.empty:
-                        # Convert the relevant parts of the DataFrame to a JSON string or CSV string
-                        # for the LLM to process.
-                        # This ensures the LLM sees ALL relevant rows for aggregate questions.
+                        # For RAG, we will still prioritize semantically similar documents to provide context
+                        # for specific, non-aggregate questions.
                         
-                        # We'll use a subset of columns that are typically relevant for AI queries
-                        # related to trends or specific facts about consents.
+                        corpus = df["Text Blob"].tolist()
+                        corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
+                        query_embedding = embedding_model.encode(chat_input, convert_to_tensor=True)
+                        scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+
+                        # Define a threshold for "highly relevant" documents to be offered for download
+                        download_relevance_threshold = 0.3 
+                        
+                        # Get indices of documents that meet the download relevance threshold
+                        download_indices = [i for i, score in enumerate(scores) if score > download_relevance_threshold]
+
+                        # Populate relevant_files_for_download based on this broader relevance
+                        for idx in download_indices:
+                            # Avoid duplicates if the same file is relevant in multiple ways
+                            file_info = {
+                                "file_name": df.iloc[idx]['__file_name__'],
+                                "file_bytes": df.iloc[idx]['__file_bytes__']
+                            }
+                            if file_info not in relevant_files_for_download:
+                                relevant_files_for_download.append(file_info)
+
+                        # For the AI's data context, always provide the full DataFrame (or a relevant subset of columns)
+                        # This ensures aggregate questions can be answered accurately.
                         context_df_for_ai = df[[
                             "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
                             "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
-                        ]].copy() # Create a copy to avoid SettingWithCopyWarning
+                        ]].copy()
 
-                        # Convert datetime columns to string format suitable for JSON/LLM
+                        # Ensure datetime columns are formatted for JSON serialization
                         for col in ['Issue Date', 'Expiry Date']:
                             if col in context_df_for_ai.columns and pd.api.types.is_datetime64_any_dtype(context_df_for_ai[col]):
-                                context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d') # Simplified date format for AI
+                                context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d')
                             # For NaT values, ensure they become None or empty string in JSON
                             context_df_for_ai[col] = context_df_for_ai[col].replace({pd.NaT: None})
 
-                        # Convert to dictionary records for JSON
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
                         
-                        st.info(f"Providing data for {len(context_sample_list)} consents to the AI as context for aggregate analysis.")
+                        if not relevant_files_for_download:
+                            st.info("No documents found with high semantic relevance to your specific query for direct download, but the AI will analyze all uploaded data.")
+                        else:
+                            st.info(f"The AI is analyzing all uploaded data. Found {len(relevant_files_for_download)} semantically related document(s) for direct download.")
                         
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
@@ -642,6 +664,43 @@ Answer:
 
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
+
+                    # --- MODIFIED: Display download buttons for relevant files ---
+                    if relevant_files_for_download:
+                        st.markdown("### 📄 Related Documents for Download (Semantic Match):") # Changed title for clarity
+                        cols = st.columns(min(len(relevant_files_for_download), 3)) # Max 3 columns for buttons
+                        for i, file_info in enumerate(relevant_files_for_download):
+                            with cols[i % 3]: # Distribute buttons across columns
+                                safe_filename = clean_surrogates(file_info['file_name'])
+                                st.download_button(
+                                    label=f"Download {safe_filename}",
+                                    data=file_info['file_bytes'],
+                                    file_name=safe_filename,
+                                    mime="application/pdf",
+                                    key=f"ai_download_related_{i}_{time.time()}" # Unique key for each button
+                                )
+                    else:
+                        st.info("No documents found with high semantic relevance to your specific query for direct download.")
+                    # --- END MODIFIED ---
+
+                    # --- ADDED: Section to download all uploaded PDFs ---
+                    if not df.empty: # Only show if there are files processed
+                        st.markdown("### 📥 Download All Uploaded Consents:")
+                        # We can simply iterate through the original 'all_data' which contains the file bytes
+                        all_uploaded_files_info = df[['__file_name__', '__file_bytes__']].drop_duplicates().to_dict(orient='records')
+                        cols_all = st.columns(min(len(all_uploaded_files_info), 3))
+                        for i, file_info in enumerate(all_uploaded_files_info):
+                            with cols_all[i % 3]:
+                                safe_filename = clean_surrogates(file_info['__file_name__'])
+                                st.download_button(
+                                    label=f"Download All: {safe_filename}",
+                                    data=file_info['__file_bytes__'],
+                                    file_name=safe_filename,
+                                    mime="application/pdf",
+                                    key=f"ai_download_all_{i}_{time.time()}" # Unique key
+                                )
+                    # --- END ADDED ---
+
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
