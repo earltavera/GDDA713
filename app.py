@@ -79,7 +79,7 @@ st.markdown("""
     <h1 style='color:#2c6e91; text-align:center; font-size:2.7em; font-family: Quicksand, sans-serif;'>
         Auckland Air Discharge Consent Dashboard
         
-        Welcome to the Auckland Air Discharge Consent Dashboard. This dashboard allows you to upload the Air Discharge Resource Consent Decison Report to transforms your files into meaningful data.Add commentMore actions
+        Welcome to the Auckland Air Discharge Consent Dashboard. This dashboard allows you to upload the Air Discharge Resource Consent Decison Report to transforms your files into meaningful data.
         Explore the data by the csv file options or interact with the data using the Groq AI or LLM Semantic Query.
     </h1>
 """, unsafe_allow_html=True)
