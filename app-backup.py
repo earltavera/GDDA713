@@ -599,7 +599,6 @@ if uploaded_files:
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
         
-        # --- END RENDERING DASHBOARD ---
 
         # Finalize and remove the progress bar
         my_bar.progress(100, text="Dashboard Ready!")
@@ -622,7 +621,7 @@ with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<div style="background-color:#ff8da1; padding:20px; border-radius:10px;">""", unsafe_allow_html=True)
     st.markdown("**Ask anything about air discharge consents** (e.g. triggers, expiry, consent conditions, or general trends)", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Groq AI", "Gemini AI"], horizontal=True, key="llm_provider_radio")
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input_text_area")
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -681,9 +680,6 @@ with st.expander("AI Chatbot", expanded=True):
                     
                     context_sample_json = json.dumps(context_sample_list, indent=2)
                     
-                    # ==================================================================
-                    # MODIFICATION END
-                    # ==================================================================
 
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
@@ -713,9 +709,9 @@ Answer:
 """
 
                     answer_raw = ""
-                    if llm_provider == "Gemini":
+                    if llm_provider == "Gemini AI":
                         if google_api_key:
-                            GEMINI_MODEL_TO_USE = "models/gemini-1.0-pro"
+                            GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
                             try:
                                 response = gemini_model.generate_content(user_query)
@@ -728,7 +724,7 @@ Answer:
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
                     
-                    elif llm_provider == "Groq AI": # FIX: Changed from "Groq" to "Groq AI"
+                    elif llm_provider == "Groq AI": 
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-70b-8192")
                             try:
