@@ -581,7 +581,7 @@ with st.expander("AI Chatbot", expanded=True):
                     Crucial Directives:
                     1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Consent Data'. Do not introduce any external knowledge, assumptions, or speculative content.
                     2.  **Aggregate Queries:** For questions asking for counts, summaries, or trends (e.g., "how many", "list all", "which year"), process the entire provided dataset to give an accurate answer.
-                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list the 'Company Name' and 'Resource Consent Numbers' for each item within the answer*. For example: "There are 3 consents issued in 2019: [Company A (RC12345)], [Company B (DIS67890)], [Company C (BUN11223)]." This is crucial for linking to download options.
+                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list the 'Company Name' and 'Resource Consent Numbers' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: [Company A (RC12345)], [Company B (DIS67890)], [Company C (BUN11223)]." This is crucial for linking to download options.
                     4.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Consent Data' *as presented*, you *must* explicitly state: "I cannot find that specific information within the currently provided data." Do not try to guess or infer.
                     5.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
                     6.  **Concise Format:** Present your answer in clear, concise bullet points or a brief summary.
@@ -637,62 +637,8 @@ Answer:
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
 
-                    # --- New Logic: Extract consent numbers from AI's answer and prepare downloads ---
-                    # Regex to find patterns like (RCXXXXX), (DISXXXXX), (BUNXXXXX) or just RCXXXXX, DISXXXXX, BUNXXXXX
-                    consent_number_pattern = re.compile(r'\b(?:RC|DIS|BUN)[0-9]{5,}(?:[ -]?[A-Za-z0-9]+)?\b', re.IGNORECASE)
-                    
-                    # Find all potential consent numbers in the AI's raw answer
-                    extracted_consent_numbers = consent_number_pattern.findall(answer_raw)
-                    
-                    # Clean and normalize extracted consent numbers
-                    normalized_extracted_consents = set()
-                    for cn in extracted_consent_numbers:
-                        cn_cleaned = re.sub(r'(-w+)$', '', cn, flags=re.IGNORECASE).strip().upper()
-                        normalized_extracted_consents.add(cn_cleaned)
-
-                    if normalized_extracted_consents and not df.empty:
-                        found_downloadable_files = []
-                        
-                        # Create a set of all normalized consent numbers in the DataFrame for efficient lookup
-                        df_normalized_consents_to_file = {} # Map normalized consent number to file info
-                        for idx, row in df.iterrows():
-                            file_info = {
-                                "file_name": row['__file_name__'],
-                                "file_bytes": row['__file_bytes__'],
-                                "company_name": row['Company Name'], # Include company name here
-                                "resource_consent_numbers": row['Resource Consent Numbers'] # The original consent string
-                            }
-                            # Split multiple consent numbers in a single cell and add them to the map
-                            if pd.notna(row['Resource Consent Numbers']):
-                                for rc_in_df in str(row['Resource Consent Numbers']).split(','):
-                                    df_normalized_consents_to_file[rc_in_df.strip().upper()] = file_info
-
-                        # Now, match the AI's extracted consents against our prepared map
-                        for ai_cn in normalized_extracted_consents:
-                            if ai_cn in df_normalized_consents_to_file:
-                                file_info_to_add = df_normalized_consents_to_file[ai_cn]
-                                if file_info_to_add not in found_downloadable_files: # Prevent adding same file multiple times
-                                    found_downloadable_files.append(file_info_to_add)
-
-                        if found_downloadable_files:
-                            st.markdown("### 📥 Download Related Consents:")
-                            cols_download = st.columns(min(len(found_downloadable_files), 3))
-                            for i, file_info in enumerate(found_downloadable_files):
-                                with cols_download[i % 3]:
-                                    safe_filename = clean_surrogates(file_info['file_name'])
-                                    st.download_button(
-                                        label=f"Download: {file_info['company_name']} ({file_info['resource_consent_numbers']})",
-                                        data=file_info['file_bytes'],
-                                        file_name=safe_filename,
-                                        mime="application/pdf",
-                                        key=f"ai_specific_download_{i}_{time.time()}" 
-                                    )
-                                    # st.caption(f"File: {safe_filename}") # Removed this caption to rely on button label
-                        else:
-                            st.info("The AI mentioned consent numbers, but I could not find matching files among the uploaded documents.")
-                    else:
-                        st.info("The AI did not specify consent numbers that I can link to files for download, or no documents were uploaded.")
-                    # --- End New Logic ---
+                    # --- REMOVED: Logic to extract consent numbers from AI's answer and prepare downloads ---
+                    # The previous logic for extracting consent numbers and creating download buttons is removed.
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
