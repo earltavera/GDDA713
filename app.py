@@ -581,7 +581,7 @@ with st.expander("AI Chatbot", expanded=True):
                     Crucial Directives:
                     1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Consent Data'. Do not introduce any external knowledge, assumptions, or speculative content.
                     2.  **Aggregate Queries:** For questions asking for counts, summaries, or trends (e.g., "how many", "list all", "which year"), process the entire provided dataset to give an accurate answer.
-                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list the 'Company Name' and 'Resource Consent Numbers' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: [Company A (RC12345)], [Company B (DIS67890)], [Company C (BUN11223)]." This is crucial for linking to download options.
+                    3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list the 'Company Name' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: Company A, Company B, Company C." Do NOT include Resource Consent Numbers unless specifically asked.
                     4.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Consent Data' *as presented*, you *must* explicitly state: "I cannot find that specific information within the currently provided data." Do not try to guess or infer.
                     5.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
                     6.  **Concise Format:** Present your answer in clear, concise bullet points or a brief summary.
@@ -638,7 +638,7 @@ Answer:
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
 
                     # --- REMOVED: Logic to extract consent numbers from AI's answer and prepare downloads ---
-                    # The previous logic for extracting consent numbers and creating download buttons is removed.
+                    # The previous logic for extracting consent numbers and creating download buttons has been removed.
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
