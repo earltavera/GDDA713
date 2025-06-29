@@ -27,7 +27,7 @@ from langchain_core.messages import SystemMessage, HumanMessage # Needed for Lan
 # --- API Key Setup ---
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
-google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+google_api_key = os.getenv("GOOGLE_API_key") or st.secrets.get("GOOGLE_API_KEY")
 # OpenWeatherMap API key
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
 
@@ -553,47 +553,48 @@ with st.expander("AI Chatbot", expanded=True):
                     if not df.empty:
                         # For RAG, we will still prioritize semantically similar documents to provide context
                         # for specific, non-aggregate questions.
-                        # However, for broader questions, the AI will also have access to the full dataset summary.
                         
                         corpus = df["Text Blob"].tolist()
                         corpus_embeddings = get_corpus_embeddings(tuple(corpus), model_name)
                         query_embedding = embedding_model.encode(chat_input, convert_to_tensor=True)
                         scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
 
-                        top_k = 5 # Still use top_k for direct document context
-                        top_k_indices = scores.argsort(descending=True)[:top_k]
+                        # Define a threshold for "highly relevant" documents to be offered for download
+                        download_relevance_threshold = 0.3 
                         
-                        relevant_docs_data = []
-                        for idx in top_k_indices:
-                            if scores[idx.item()] > 0.3: # Only include if the relevance score is decent
-                                relevant_docs_data.append(df.iloc[idx.item()])
-                                # Capture relevant file info for download buttons
-                                relevant_files_for_download.append({
-                                    "file_name": df.iloc[idx.item()]['__file_name__'],
-                                    "file_bytes": df.iloc[idx.item()]['__file_bytes__']
-                                })
+                        # Get indices of documents that meet the download relevance threshold
+                        download_indices = [i for i, score in enumerate(scores) if score > download_relevance_threshold]
 
-                        if not relevant_docs_data:
-                            st.info("Could not find any documents highly relevant to your specific query. The AI will answer based on the full dataset summary if possible.")
-                            # Fallback to full dataset if no highly relevant documents are found for semantic RAG
-                            context_df_for_ai = df[[
-                                "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
-                                "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced"
-                            ]].copy()
-                        else:
-                            st.info(f"Found {len(relevant_docs_data)} highly relevant documents. Providing them and a dataset summary to the AI as context.")
-                            context_df_for_ai = pd.DataFrame(relevant_docs_data)[[
-                                "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
-                                "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced"
-                            ]].copy()
+                        # Populate relevant_files_for_download based on this broader relevance
+                        for idx in download_indices:
+                            # Avoid duplicates if the same file is relevant in multiple ways
+                            file_info = {
+                                "file_name": df.iloc[idx]['__file_name__'],
+                                "file_bytes": df.iloc[idx]['__file_bytes__']
+                            }
+                            if file_info not in relevant_files_for_download:
+                                relevant_files_for_download.append(file_info)
 
-                        # Ensure date columns are formatted for JSON serialization
+                        # For the AI's data context, always provide the full DataFrame (or a relevant subset of columns)
+                        # This ensures aggregate questions can be answered accurately.
+                        context_df_for_ai = df[[
+                            "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
+                            "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
+                        ]].copy()
+
+                        # Ensure datetime columns are formatted for JSON serialization
                         for col in ['Issue Date', 'Expiry Date']:
                             if col in context_df_for_ai.columns and pd.api.types.is_datetime64_any_dtype(context_df_for_ai[col]):
                                 context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d')
+                            # For NaT values, ensure they become None or empty string in JSON
                             context_df_for_ai[col] = context_df_for_ai[col].replace({pd.NaT: None})
 
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
+                        
+                        if not relevant_files_for_download:
+                            st.info("No highly semantically relevant documents found for download, but the AI will analyze all uploaded data.")
+                        else:
+                            st.info(f"The AI is analyzing all uploaded data. Found {len(relevant_files_for_download)} semantically relevant document(s) for direct download.")
                         
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
@@ -664,9 +665,9 @@ Answer:
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
 
-                    # --- ADDED: Display download buttons for relevant files ---
+                    # --- MODIFIED: Display download buttons for relevant files ---
                     if relevant_files_for_download:
-                        st.markdown("### 📄 Relevant Documents for Download:")
+                        st.markdown("### 📄 Related Documents for Download:") # Changed title for clarity
                         cols = st.columns(min(len(relevant_files_for_download), 3)) # Max 3 columns for buttons
                         for i, file_info in enumerate(relevant_files_for_download):
                             with cols[i % 3]: # Distribute buttons across columns
@@ -678,7 +679,9 @@ Answer:
                                     mime="application/pdf",
                                     key=f"ai_download_{i}_{time.time()}" # Unique key for each button
                                 )
-                    # --- END ADDED ---
+                    else:
+                        st.info("No documents found with high semantic relevance to your specific query for direct download.")
+                    # --- END MODIFIED ---
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
