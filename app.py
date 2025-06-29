@@ -27,7 +27,7 @@ from langchain_core.messages import SystemMessage, HumanMessage # Needed for Lan
 # --- API Key Setup ---
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
-google_api_key = os.getenv("GOOGLE_API_key") or st.secrets.get("GOOGLE_API_KEY")
+google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 # OpenWeatherMap API key
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
 
@@ -70,7 +70,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                     border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -591,10 +591,9 @@ with st.expander("AI Chatbot", expanded=True):
 
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
                         
-                        if not relevant_files_for_download:
-                            st.info("No highly semantically relevant documents found for download, but the AI will analyze all uploaded data.")
-                        else:
-                            st.info(f"The AI is analyzing all uploaded data. Found {len(relevant_files_for_download)} semantically relevant document(s) for direct download.")
+                        # Removed the st.info message about "highly semantically relevant documents"
+                        # as we are removing that download section.
+                        st.info("The AI is analyzing all uploaded data.")
                         
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
@@ -665,23 +664,42 @@ Answer:
 
                     st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
 
-                    # --- MODIFIED: Display download buttons for relevant files ---
-                    if relevant_files_for_download:
-                        st.markdown("### 📄 Related Documents for Download:") # Changed title for clarity
-                        cols = st.columns(min(len(relevant_files_for_download), 3)) # Max 3 columns for buttons
-                        for i, file_info in enumerate(relevant_files_for_download):
-                            with cols[i % 3]: # Distribute buttons across columns
-                                safe_filename = clean_surrogates(file_info['file_name'])
+                    # --- REMOVED: Display download buttons for semantically relevant files ---
+                    # if relevant_files_for_download:
+                    #     st.markdown("### 📄 Related Documents for Download (Semantic Match):") 
+                    #     cols = st.columns(min(len(relevant_files_for_download), 3)) 
+                    #     for i, file_info in enumerate(relevant_files_for_download):
+                    #         with cols[i % 3]:
+                    #             safe_filename = clean_surrogates(file_info['file_name'])
+                    #             st.download_button(
+                    #                 label=f"Download {safe_filename}",
+                    #                 data=file_info['file_bytes'],
+                    #                 file_name=safe_filename,
+                    #                 mime="application/pdf",
+                    #                 key=f"ai_download_related_{i}_{time.time()}" 
+                    #             )
+                    # else:
+                    #     st.info("No documents found with high semantic relevance to your specific query for direct download.")
+                    # --- END REMOVED ---
+
+                    # --- RETAINED: Section to download all uploaded PDFs ---
+                    if not df.empty: # Only show if there are files processed
+                        st.markdown("### 📥 Download All Uploaded Consents:")
+                        # We can simply iterate through the original 'all_data' which contains the file bytes
+                        all_uploaded_files_info = df[['__file_name__', '__file_bytes__']].drop_duplicates().to_dict(orient='records')
+                        cols_all = st.columns(min(len(all_uploaded_files_info), 3))
+                        for i, file_info in enumerate(all_uploaded_files_info):
+                            with cols_all[i % 3]:
+                                safe_filename = clean_surrogates(file_info['__file_name__'])
                                 st.download_button(
-                                    label=f"Download {safe_filename}",
-                                    data=file_info['file_bytes'],
+                                    label=f"Download All: {safe_filename}",
+                                    data=file_info['__file_bytes__'],
                                     file_name=safe_filename,
                                     mime="application/pdf",
-                                    key=f"ai_download_{i}_{time.time()}" # Unique key for each button
+                                    key=f"ai_download_all_{i}_{time.time()}" # Unique key
                                 )
-                    else:
-                        st.info("No documents found with high semantic relevance to your specific query for direct download.")
-                    # --- END MODIFIED ---
+                    # --- END RETAINED ---
+
 
                     if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
                         log_ai_chat(chat_input, answer_raw)
