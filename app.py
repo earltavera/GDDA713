@@ -80,7 +80,7 @@ st.markdown("""
         <h2 style='color:#012169; font-family: Quicksand, sans-serif; font-size: 2.5em;'>
             Welcome to the Auckland Air Discharge Consent Dashboard
         </h2>
-        <p style='font-size: 1.1em; color: #555;'>
+        <p style='font-size: 1.1em; color: #C8102E;'>
             This dashboard allows you to upload Air Discharge Resource Consent Decision Reports to transform your files into meaningful data.
             Explore the data using the CSV file options, or interact with the data using Gemini AI, Groq AI, or LLM Semantic Query.
         </p>
