@@ -2,26 +2,26 @@ Auckland Air Discharge Consent Dashboard
 Welcome to the Auckland Air Discharge Consent Dashboard! This tool allows you to extract, visualize, and analyze data from Air Discharge Resource Consent Decision Reports in PDF format. You can upload multiple reports, view key metadata, monitor consent statuses, and even leverage AI to query the extracted information.
 
 How to Operate the Dashboard
-1. Accessing the Dashboard
-The dashboard is a web application built with Streamlit. Once the application is running, you can access it via your web browser at the provided local URL (e.g., http://localhost:8501).
+  1. Accessing the Dashboard
+  The dashboard is a web application built with Streamlit. Once the application is running, you can access it via your web browser at the provided local   URL (e.g., http://localhost:8501).
 
 2. Dashboard Overview
-At the top of the dashboard, you'll see a banner displaying the current date and time in Auckland, along with the current weather conditions. This provides immediate local context.
+  At the top of the dashboard, you'll see a banner displaying the current date and time in Auckland, along with the current weather conditions. This       provides immediate local context.
 
 The main section is titled "Welcome to the Auckland Air Discharge Consent Dashboard," which gives a brief introduction to its purpose.
 
 3. Control Panel (Sidebar)
-The primary interactions with the dashboard happen through the Control Panel located on the left sidebar.
+  The primary interactions with the dashboard happen through the Control Panel located on the left sidebar.
 
 Choose Embedding Model:
 
-This dropdown allows you to select the AI model used for the LLM Semantic Search. Different models might offer varying levels of accuracy and speed for understanding the meaning behind your search queries.
+  This dropdown allows you to select the AI model used for the LLM Semantic Search. Different models might offer varying levels of accuracy and speed      for understanding the meaning behind your search queries.
 
 Options include: all-MiniLM-L6-v2, multi-qa-MiniLM-L6-cos-v1, BAAI/bge-base-en-v1.5, intfloat/e5-base-v2. Experiment to find the one that best suits your needs.
 
 Upload PDF files:
 
-Click the "Browse files" button to select one or more PDF files from your computer. These should be your Air Discharge Resource Consent Decision Reports.
+  Click the "Browse files" button to select one or more PDF files from your computer. These should be your Air Discharge Resource Consent Decision         Reports.
 
 The dashboard will automatically process these files upon upload. A progress bar will indicate the status of the file processing, including text extraction and geocoding.
 
@@ -32,7 +32,7 @@ Enter natural language questions or keywords here to perform a semantic search a
 For example, you could ask: "What are the conditions for the consent at 100 Main Street?", or "Show me consents related to dust emissions."
 
 4. Dashboard Sections
-Once you upload PDF files, the main dashboard area will populate with various sections:
+  Once you upload PDF files, the main dashboard area will populate with various sections:
 
 Consent Summary Metrics:
 
@@ -101,7 +101,7 @@ For each result, you'll see the company name, address, triggers, and expiry date
 Download PDF: A "Download PDF" button is provided for each search result, allowing you to download the original PDF file.
 
 5. Ask AI About Consents (Chatbot)
-This interactive AI chatbot allows you to ask more complex questions about the aggregated data or general air discharge consent information.
+  This interactive AI chatbot allows you to ask more complex questions about the aggregated data or general air discharge consent information.
 
 Choose LLM Provider: Select between Gemini AI and Groq AI as your underlying AI model.
 
