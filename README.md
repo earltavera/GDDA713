@@ -1,7 +1,7 @@
 Auckland Air Discharge Consent Dashboard
 Welcome to the Auckland Air Discharge Consent Dashboard! This tool allows you to extract, visualize, and analyze data from Air Discharge Resource Consent Decision Reports in PDF format. You can upload multiple reports, view key metadata, monitor consent statuses, and even leverage AI to query the extracted information.
 
-🚀 How to Operate the Dashboard
+How to Operate the Dashboard
 1. Accessing the Dashboard
 The dashboard is a web application built with Streamlit. Once the application is running, you can access it via your web browser at the provided local URL (e.g., http://localhost:8501).
 
