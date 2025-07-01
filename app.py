@@ -96,7 +96,7 @@ with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=
 
     This dashboard addresses that very challenge head-on. We've developed a user-friendly, web-based application that automatically extracts, visualizes, and analyzes data from these PDF consent reports. Our key innovation lies in leveraging **Artificial Intelligence (AI)**, including **Large Language Models (LLMs)**, to transform static documents into dynamic, searchable insights. This means you can now effortlessly track consent statuses, identify expiring permits, and even query the data using natural language, asking questions like, "Which companies have expired consents?" or "What conditions apply to dust emissions?".
 
-    Ultimately, the **Auckland Air Discharge Consent Dashboard** is more than just a data viewer; it's a strategic asset for proactive environmental management. By providing immediate access to comprehensive, intelligent insights, it empowers regulators, businesses, and stakeholders to ensure ongoing compliance, make informed decisions, and contribute to a healthier, more sustainable Auckland.
+    Ultimately, this dashboard is more than just a data viewer; it's a strategic asset for proactive environmental management. By providing immediate access to comprehensive, intelligent insights, it empowers regulators, businesses, and stakeholders to ensure ongoing compliance, make informed decisions, and contribute to a healthier, more sustainable Auckland.
     """)
 st.markdown("---") # Another horizontal line for separation
 # --- END MODIFIED: About Section ---
