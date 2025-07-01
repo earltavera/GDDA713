@@ -70,7 +70,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                     border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -87,6 +87,23 @@ st.markdown("""
     </div>
     <br>
 """, unsafe_allow_html=True)
+
+# --- ADDED: About Section ---
+st.markdown("---") # Horizontal line for separation
+st.markdown(
+    """
+    ## About the Auckland Air Discharge Consent Dashboard
+
+    Welcome to the **Auckland Air Discharge Consent Dashboard**, a pioneering tool designed to revolutionize how we interact with critical environmental data. In Auckland, managing **Air Discharge Resource Consents** is vital for maintaining our air quality and ensuring regulatory compliance. Traditionally, this information has been locked away in numerous, disparate PDF reports, making it incredibly challenging to access, analyze, and monitor effectively.
+
+    This dashboard addresses that very challenge head-on. We've developed a user-friendly, web-based application that automatically extracts, visualizes, and analyzes data from these PDF consent reports. Our key innovation lies in leveraging **Artificial Intelligence (AI)**, including **Large Language Models (LLMs)**, to transform static documents into dynamic, searchable insights. This means you can now effortlessly track consent statuses, identify expiring permits, and even query the data using natural language, asking questions like, "Which companies have expired consents?" or "What conditions apply to dust emissions?".
+
+    Ultimately, the **Auckland Air Discharge Consent Dashboard** is more than just a data viewer; it's a strategic asset for proactive environmental management. By providing immediate access to comprehensive, intelligent insights, it empowers regulators, businesses, and stakeholders to ensure ongoing compliance, make informed decisions, and contribute to a healthier, more sustainable Auckland.
+    """
+)
+st.markdown("---") # Another horizontal line for separation
+# --- END ADDED: About Section ---
+
 
 # --- Utility Functions ---
 def localize_to_auckland(dt):
@@ -364,7 +381,7 @@ def extract_metadata(text):
         r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)",
         r"(?:Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
         r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
         r"(?:Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
         r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
         r"(?:Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
@@ -625,7 +642,7 @@ if uploaded_files:
                         break
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
-        
+            
 
         # Finalize and remove the progress bar
         my_bar.progress(100, text="Dashboard Ready!")
@@ -647,7 +664,7 @@ st.subheader("Ask AI About Consents")
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<span style="color:#dc002e;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio") 
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")    
     chat_input = st.text_area("Search any query:", key="chat_input")
 
     if st.button("Ask AI", key="ask_ai_button"):
@@ -657,13 +674,13 @@ with st.expander("AI Chatbot", expanded=True):
             with st.spinner("AI is thinking and gathering data..."):
                 try:
                     context_sample_list = []
-                    relevant_files_for_download = [] 
+                    relevant_files_for_download = []    
                     
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     if not df.empty:
                         context_df_for_ai = df[[
-                            "Resource Consent Numbers", "Company Name", "Address", "Issue Date", 
+                            "Resource Consent Numbers", "Company Name", "Address", "Issue Date",    
                             "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
                         ]].copy()
 
