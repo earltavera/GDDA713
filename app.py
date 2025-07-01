@@ -78,7 +78,7 @@ st.markdown(f"""
 st.markdown("""
     <div style="text-align: center;">
         <h2 style='color:#004489; font-family: Quicksand, sans-serif; font-size: 2.7em;'>
-            Welcome to the Auckland Air Discharge Consent Dashboard
+            Auckland Air Discharge Consent Dashboard
         </h2>
         <p style='font-size: 1.1em; color: #dc002e;'>
             This dashboard allows you to upload Air Discharge Resource Consent Decision Reports to transform your files into meaningful data.
