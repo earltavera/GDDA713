@@ -88,7 +88,6 @@ st.markdown("""
     <br>
 """, unsafe_allow_html=True)
 
-# --- MODIFIED: About Section (now collapsible) ---
 st.markdown("---") # Horizontal line for separation
 with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=False): # Key change here: expanded=False
     st.write("""
@@ -99,8 +98,6 @@ with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=
     Ultimately, this dashboard is more than just a data viewer; it's a strategic asset for proactive environmental management. By providing immediate access to comprehensive, intelligent insights, it empowers regulators, businesses, and stakeholders to ensure ongoing compliance, make informed decisions, and contribute to a healthier, more sustainable Auckland.
     """)
 st.markdown("---") # Another horizontal line for separation
-# --- END MODIFIED: About Section ---
-
 
 # --- Utility Functions ---
 def localize_to_auckland(dt):
@@ -299,7 +296,6 @@ def extract_metadata(text):
                     break
 
                 except ValueError:
-                    # If parsing fails for this match, just continue to the next one
                     continue
             if expiry_date:
                 break
@@ -581,7 +577,6 @@ if uploaded_files:
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
             
-            # --- FIX: Dynamically check if columns exist before adding to display_df ---
             columns_to_display = [
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
                 "Consent Status Enhanced", "AUP(OP) Triggers"
@@ -591,7 +586,6 @@ if uploaded_files:
                 columns_to_display.append("Reason for Consent")
             if "Consent Condition Numbers" in filtered_df.columns:
                 columns_to_display.append("Consent Condition Numbers")
-            # --- END FIX ---
             
             display_df = filtered_df[columns_to_display].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
             
@@ -640,7 +634,6 @@ if uploaded_files:
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
             
-
         # Finalize and remove the progress bar
         my_bar.progress(100, text="Dashboard Ready!")
         time.sleep(1)
