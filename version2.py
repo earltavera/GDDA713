@@ -698,8 +698,9 @@ with st.expander("AI Chatbot", expanded=True):
 
                 except Exception as e:
                     st.error(f"An error occurred during AI interaction: {e}")
-                    import traceback
-                    st.exception(traceback.exc_info())
+                    # The 'e' object already contains all the necessary traceback info.
+                    # This is the standard and correct way to use st.exception.
+                    st.exception(e)
 
     chat_log_csv = get_chat_log_as_csv()
     if chat_log_csv:
