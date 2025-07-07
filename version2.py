@@ -495,7 +495,6 @@ if not st.session_state.master_df.empty:
     status_counts.columns = ["Consent Status", "Count"]
     fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map)
     fig_status.update_traces(textposition="outside")
-    fig_status.update_layout(title="Consent Status Overview", title_x=0.5)
     st.plotly_chart(fig_status, use_container_width=True)
 
     # Interactive Filter Dropdown
