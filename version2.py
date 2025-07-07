@@ -339,7 +339,6 @@ embedding_model = load_embedding_model(model_name)
 
 # --- File Processing & Dashboard Logic ---
 if uploaded_files:
-    my_bar = st.progress(0, text="Initializing...")
     new_data = []
     
     if not st.session_state.master_df.empty:
@@ -349,6 +348,7 @@ if uploaded_files:
         files_to_process = uploaded_files
 
     if files_to_process:
+        my_bar = st.progress(0, text="Initializing...")
         total_files = len(files_to_process)
         for i, file in enumerate(files_to_process):
             progress_stage1 = int(((i + 1) / total_files) * 70)
