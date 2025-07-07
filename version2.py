@@ -421,7 +421,7 @@ if not st.session_state.master_df.empty:
     st.subheader("Consent Status Overview")
     status_counts = df["Consent Status Enhanced"].value_counts().reset_index(name="Count")
     status_counts.columns = ["Consent Status", "Count"]
-    fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map, color_discrete_map=color_map)
+    fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map)
     fig_status.update_traces(textposition="outside")
     fig_status.update_layout(title_x=0.5)
     st.plotly_chart(fig_status, use_container_width=True)
