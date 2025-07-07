@@ -518,7 +518,7 @@ with st.expander("AI Chatbot", expanded=True):
     
     st.write("Suggested queries:")
     q_cols = st.columns(3)
-    q_cols[0].button("Which consents expire in the next year?", on_click=set_chat_input, args=("Which consents expire in the next year?",), use_container_width=True)
+    q_cols[0].button("Which consents expire in next year?", on_click=set_chat_input, args=("Which consents expire in next year?",), use_container_width=True)
     q_cols[1].button("List all companies with 'Road' in their name", on_click=set_chat_input, args=("List all companies with 'Road' in their name",), use_container_width=True)
     q_cols[2].button("Are there any consents related to concrete batching?", on_click=set_chat_input, args=("Are there any consents related to concrete batching?",), use_container_width=True)
     
