@@ -544,7 +544,7 @@ with st.expander("AI Chatbot", expanded=True):
 
                     # To avoid token limits with many files, we select key columns for the context.
                     context_for_ai = context_df[[
-                        "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "File Name",
+                        "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "__file_name__",
                         "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced", "Reason for Consent"
                     ]].copy()
 
