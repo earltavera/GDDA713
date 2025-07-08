@@ -142,7 +142,6 @@ def geocode_address(address):
 
 def extract_metadata(text):
     # This extensive function remains the same as in the original file.
-    # For brevity, its content is not repeated here. Assume it's identical.
     rc_patterns = [
         r"Application number:\s*(.+?)(?=\s*Applicant:)",
         r"Application numbers:\s*(.+?)(?=\s*Applicant:)",
@@ -324,12 +323,19 @@ def set_chat_input(query):
 # --- Sidebar & Model Loader ---
 st.sidebar.markdown("<h2 style='color:#1E90FF; font-family:Segoe UI, Roboto, sans-serif;'>Control Panel</h2>", unsafe_allow_html=True)
 model_name = st.sidebar.selectbox("Choose Embedding Model:", ["all-MiniLM-L6-v2", "multi-qa-MiniLM-L6-cos-v1", "BAAI/bge-base-en-v1.5", "intfloat/e5-base-v2"])
-uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True, help="You can add more files later without losing your current data.")
+
+# Add keys to widgets for programmatic clearing
+uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True, help="You can add more files later without losing your current data.", key="pdf_uploader")
+query_input = st.sidebar.text_input("LLM Semantic Search Query", key="query_input")
+
+# Updated "Clear All Data" button logic
 if st.sidebar.button("Clear All Data", type="primary"):
     st.session_state.master_df = pd.DataFrame()
     st.session_state.corpus_embeddings = None
+    st.session_state.pdf_uploader = None
+    st.session_state.query_input = ""
+    st.session_state.chat_input = ""
     st.rerun()
-query_input = st.sidebar.text_input("LLM Semantic Search Query")
 
 @st.cache_resource
 def load_embedding_model(name):
@@ -340,7 +346,7 @@ embedding_model = load_embedding_model(model_name)
 # --- File Processing & Dashboard Logic ---
 if uploaded_files:
     new_data = []
-    
+
     if not st.session_state.master_df.empty:
         existing_files = st.session_state.master_df['__file_name__'].tolist()
         files_to_process = [f for f in uploaded_files if f.name not in existing_files]
@@ -348,6 +354,7 @@ if uploaded_files:
         files_to_process = uploaded_files
 
     if files_to_process:
+        # Move progress bar creation inside this block
         my_bar = st.progress(0, text="Initializing...")
         total_files = len(files_to_process)
         for i, file in enumerate(files_to_process):
@@ -374,10 +381,10 @@ if uploaded_files:
             auckland_tz = pytz.timezone("Pacific/Auckland")
             for col in ['Issue Date', 'Expiry Date']:
                 new_df[col] = pd.to_datetime(new_df[col], errors='coerce', dayfirst=True).apply(localize_to_auckland)
-            
+
             st.session_state.master_df = pd.concat([st.session_state.master_df, new_df], ignore_index=True)
             st.session_state.master_df.drop_duplicates(subset=['__file_name__'], keep='last', inplace=True)
-            
+
             # --- CORRECTED LOCATION FOR ENHANCED STATUS CALCULATION ---
             df_to_update = st.session_state.master_df
             df_to_update["Consent Status Enhanced"] = df_to_update["Consent Status"]
@@ -389,10 +396,10 @@ if uploaded_files:
                 (df_to_update["Expiry Date"] <= current_nz_aware_time + timedelta(days=90))
             )
             df_to_update.loc[expiring_mask, "Consent Status Enhanced"] = "Expiring in 90 Days"
-        
+
         corpus = st.session_state.master_df["Text Blob"].tolist()
         st.session_state.corpus_embeddings = embedding_model.encode(corpus, convert_to_tensor=True, show_progress_bar=True)
-        
+
         my_bar.progress(100, text="Processing Complete!")
         time.sleep(1)
         my_bar.empty()
@@ -404,7 +411,7 @@ if not st.session_state.master_df.empty:
     st.subheader("Consent Summary Metrics")
     col1, col2, col3, col4 = st.columns(4)
     color_map = {"Unknown": "gray", "Expired": "#8B0000", "Active": "green", "Expiring in 90 Days": "orange"}
-    
+
     def colored_metric(column_obj, label, value, color):
         column_obj.markdown(f"""
             <div style="text-align: center; padding: 10px; border-radius: 5px; background-color: #f0f2f6; margin-bottom: 10px;">
@@ -421,14 +428,14 @@ if not st.session_state.master_df.empty:
     st.subheader("Consent Status Overview")
     status_counts = df["Consent Status Enhanced"].value_counts().reset_index(name="Count")
     status_counts.columns = ["Consent Status", "Count"]
-    fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map, title="Graph")
+    fig_status = px.bar(status_counts, x="Consent Status", y="Count", text="Count", color="Consent Status", color_discrete_map=color_map, title="Consent Status Overview")
     fig_status.update_traces(textposition="outside")
     fig_status.update_layout(title_x=0.5)
     st.plotly_chart(fig_status, use_container_width=True)
 
     status_options = ["All"] + df["Consent Status Enhanced"].unique().tolist()
     status_filter = st.selectbox("Filter by Status (affects table and map below)", status_options)
-    
+
     filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
 
     with st.expander("Consent Table", expanded=True):
@@ -449,7 +456,7 @@ if not st.session_state.master_df.empty:
             st.plotly_chart(fig_map, use_container_width=True)
         else:
             st.info("No geocoded locations to display for the current filter.")
-            
+
     with st.expander("Historical View", expanded=False):
         df_hist = df.copy()
         df_hist['Issue Year'] = df_hist['Issue Date'].dt.year
@@ -484,7 +491,7 @@ if not st.session_state.master_df.empty:
                 scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
                 top_k_indices = scores.argsort(descending=True)
                 similarity_threshold = st.slider("LLM Semantic Search Relevance Threshold", 0.0, 1.0, 0.5, 0.05)
-                
+
                 results_found = 0
                 for idx in top_k_indices:
                     score = scores[idx.item()]
@@ -513,65 +520,68 @@ st.markdown("---")
 st.subheader("Ask AI About Consents")
 
 with st.expander("AI Chatbot", expanded=True):
-    st.markdown("""<span style="color:#dc002e;">Ask anything about the uploaded consents. The AI will use the most relevant documents as its knowledge base.</span>""", unsafe_allow_html=True)
+    st.markdown("""<span style="color:#dc002e;">Ask anything about the uploaded consents. The AI will use the full dataset as its knowledge base.</span>""", unsafe_allow_html=True)
     llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
-    
+
     st.write("Suggested queries:")
     q_cols = st.columns(3)
     q_cols[0].button("Which consents expire in next year?", on_click=set_chat_input, args=("Which consents expire in next year?",), use_container_width=True)
     q_cols[1].button("List all companies with 'Road' in their name", on_click=set_chat_input, args=("List all companies with 'Road' in their name",), use_container_width=True)
     q_cols[2].button("Are there any consents related to concrete batching?", on_click=set_chat_input, args=("Are there any consents related to concrete batching?",), use_container_width=True)
-    
+
     chat_input = st.text_area("Your query:", key="chat_input")
-    
+
     if st.button("Ask AI", key="ask_ai_button"):
         if not chat_input.strip():
             st.warning("Please enter a query.")
         elif st.session_state.master_df.empty:
             st.error("Cannot ask AI without uploaded documents. Please upload files first.")
         else:
-            with st.spinner("AI is thinking... (Finding relevant documents & generating response)"):
+            with st.spinner("AI is thinking... (Analyzing full dataset & generating response)"):
+                # --- CORRECTED AI CONTEXT LOGIC ---
                 try:
-                    query_embedding = embedding_model.encode(chat_input, convert_to_tensor=True)
-                    scores = util.cos_sim(query_embedding, st.session_state.corpus_embeddings)[0]
-                    top_k_indices = scores.argsort(descending=True)[:5]
-                    context_df = st.session_state.master_df.iloc[top_k_indices]
-                    
+                    # Use the entire dataframe for context to answer aggregate questions
+                    context_df = st.session_state.master_df
+
+                    # To avoid token limits with many files, we select key columns for the context.
                     context_for_ai = context_df[[
                         "Resource Consent Numbers", "Company Name", "Address", "Issue Date",
                         "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced", "Reason for Consent"
                     ]].copy()
 
                     for col in ['Issue Date', 'Expiry Date']:
-                        context_for_ai[col] = context_for_ai[col].dt.strftime('%Y-%m-%d').replace({pd.NaT: "N/A"})
+                        if pd.api.types.is_datetime64_any_dtype(context_for_ai[col]):
+                             context_for_ai[col] = context_for_ai[col].dt.strftime('%Y-%m-%d')
+                        context_for_ai[col] = context_for_ai[col].fillna("N/A")
+
 
                     context_sample_json = json.dumps(context_for_ai.to_dict(orient="records"), indent=2)
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
-                    
+
                     system_message_content = f"""
-                    You are an intelligent assistant for Auckland Air Discharge Consents. Answer the user's query based *strictly and exclusively* on the provided 'Relevant Consent Data'.
+                    You are an intelligent assistant for Auckland Air Discharge Consents. Answer the user's query based *strictly and exclusively* on the provided 'Consent Data'.
 
                     Crucial Directives:
-                    1.  **Strict Data Adherence:** Base your entire response on the information in the 'Relevant Consent Data'. Do not use external knowledge.
-                    2.  **Aggregate & List:** For questions asking for counts or lists, process the entire provided dataset to give an accurate answer.
+                    1.  **Strict Data Adherence:** Base your entire response on the information in the 'Consent Data'. Do not use external knowledge.
+                    2.  **Aggregate & List:** For questions asking for counts or lists (e.g., "how many", "list all"), process the entire provided dataset to give an accurate answer.
                     3.  **MANDATORY CITATION:** When you use information from a specific consent to answer, you **MUST** cite it at the end of the sentence by referencing its 'Company Name' and 'Resource Consent Numbers' in brackets. Example: "The primary activity is a quarry operation [Some Company Ltd, DIS123456]."
-                    4.  **Handle Missing Info:** If the answer cannot be found in the provided data, state: "I cannot find that information in the relevant documents."
+                    4.  **Handle Missing Info:** If the answer cannot be found in the provided data, state: "I cannot find that information in the provided data."
                     5.  **Current Date:** The current date is {current_auckland_time_str}.
                     6.  **Concise Format:** Use bullet points or a brief summary.
-                    
+
                     ---
-                    Relevant Consent Data (JSON format):
+                    Consent Data (JSON format):
                     """
                     full_prompt_for_human_message = f"{context_sample_json}\n\nUser Query: {chat_input}"
-                    
+
                     st.markdown(f"### 🖥️ Answer from {llm_provider}")
                     answer_placeholder = st.empty()
-                    
+
                     if llm_provider == "Gemini AI":
                         if google_api_key:
                             model = genai.GenerativeModel('gemini-1.5-flash')
                             response_stream = model.generate_content(f"{system_message_content}\n{full_prompt_for_human_message}", stream=True)
-                            
+
                             def stream_to_placeholder():
                                 full_response = ""
                                 for chunk in response_stream:
@@ -579,7 +589,7 @@ with st.expander("AI Chatbot", expanded=True):
                                        full_response += chunk.text
                                        yield chunk.text
                                 log_ai_chat(chat_input, full_response)
-                            
+
                             answer_placeholder.write_stream(stream_to_placeholder)
                         else:
                             answer_placeholder.error("Gemini AI is offline (Google API key not found).")
@@ -588,7 +598,7 @@ with st.expander("AI Chatbot", expanded=True):
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-8b-8192")
                             messages = [SystemMessage(content=system_message_content), HumanMessage(content=full_prompt_for_human_message)]
-                            
+
                             def stream_to_placeholder_groq():
                                 full_response = ""
                                 for chunk in chat_groq.stream(messages):
