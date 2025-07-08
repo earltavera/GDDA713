@@ -143,7 +143,7 @@ def geocode_address(address):
     return (None, None)
 
 def extract_metadata(text):
-    # RC number patterns (kept for context, but not primary display)
+    # RC number patterns
     rc_patterns = [
         r"Application number:\s*(.+?)(?=\s*Applicant:)",
         r"Application numbers:\s*(.+?)(?=\s*Applicant:)",
@@ -171,7 +171,7 @@ def extract_metadata(text):
         company_matches.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE))
     company_str = ", ".join(list(dict.fromkeys(company_matches)))
 
-    # --- MODIFIED: Address patterns - more fallbacks to improve capture rate ---
+    # Address patterns
     address_patterns = [
         r"Site address:\s*(.+?)(?=\s*Legal description)",
         r"Site address:\s*(.+?)(?=\s*Activity status)",
@@ -182,7 +182,6 @@ def extract_metadata(text):
     for pattern in address_patterns:
         match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
-            # Clean up the extracted address and stop after the first match
             address_str = match.group(1).strip().replace('\n', ', ')
             break
 
@@ -252,7 +251,7 @@ def extract_metadata(text):
             expiry_date = issue_date + timedelta(days=num_years * 365.25)
     expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date"
 
-    # --- MODIFIED: AUP(OP) Triggers pattern ---
+    # AUP(OP) Triggers pattern
     trigger_pattern = r'\((A\d+)\)'
     triggers = re.findall(trigger_pattern, text)
     triggers_str = ", ".join(list(dict.fromkeys(triggers)))
@@ -301,11 +300,16 @@ def extract_metadata(text):
             break
 
     return {
-        "Resource Consent Numbers": rc_str or "Unknown", "Company Name": company_str or "Unknown",
-        "Address": address_str or "Unknown", "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str, "AUP(OP) Triggers": triggers_str or "None Found",
-        "Reason for Consent": proposal_str or "Unknown", "Consent Conditions": conditions_str or "Unknown",
-        "Consent Status": check_expiry(expiry_date), "Text Blob": text
+        "Resource Consent Numbers": rc_str or "Unknown",
+        "Company Name": company_str or "Unknown",
+        "Address": address_str or "Unknown",
+        "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str,
+        "AUP(OP) Triggers": triggers_str or "None Found",
+        "Reason for Consent": proposal_str or "Unknown",
+        "Consent Conditions": conditions_str or "Unknown",
+        "Consent Status": check_expiry(expiry_date),
+        "Text Blob": text
     }
 
 def clean_surrogates(text):
@@ -387,9 +391,8 @@ if uploaded_files:
         if new_data:
             my_bar.progress(75, text="Step 2/3: Creating and enriching data...")
             new_df = pd.DataFrame(new_data)
-
-            # --- ADDED: Create Consent Number from filename ---
-            new_df['Consent Number'] = new_df['__file_name__'].str.replace('.pdf', '', regex=False).str.strip()
+            
+            new_df['Consent Number'] = new_df['__file_name__'].str.replace('.pdf', '', case=False, regex=True).str.strip()
 
             new_df["GeoKey"] = new_df["Address"].str.lower().str.strip()
             new_df["Latitude"], new_df["Longitude"] = zip(*new_df["GeoKey"].apply(geocode_address))
@@ -454,10 +457,14 @@ if not st.session_state.master_df.empty:
 
     filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
 
-    # --- MODIFIED: Consent Table display ---
     with st.expander("Consent Table", expanded=True):
         columns_to_display = ["Consent Number", "Company Name", "Address", "Issue Date", "Expiry Date", "Consent Status Enhanced", "AUP(OP) Triggers"]
-        display_df = filtered_df[columns_to_display].rename(columns={"Consent Status Enhanced": "Consent Status", "AUP(OP) Triggers": "AUP(OP) Rule Codes"})
+        
+        display_df = filtered_df[columns_to_display].rename(columns={
+            "Consent Status Enhanced": "Consent Status",
+            "AUP(OP) Triggers": "AUP(OP) Rule Codes"
+        })
+        
         st.dataframe(display_df)
         csv_output = display_df.to_csv(index=False).encode("utf-8")
         st.download_button("Download Filtered CSV", csv_output, "filtered_consents.csv", "text/csv")
@@ -559,7 +566,6 @@ with st.expander("AI Chatbot", expanded=True):
                 try:
                     context_df = st.session_state.master_df
 
-                    # --- MODIFIED: Context for AI uses new Consent Number column ---
                     context_for_ai = context_df[[
                         "Consent Number", "Company Name", "Address", "Issue Date",
                         "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced", "Reason for Consent"
