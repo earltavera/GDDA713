@@ -570,7 +570,7 @@ with st.expander("AI Chatbot", expanded=True):
                         "Consent Number", "Company Name", "Address", "Issue Date",
                         "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced", "Reason for Consent"
                     ]].copy()
-                    context_for_ai.rename(columns={"AUP(OP) Triggers": "AUP(OP) Rule Codes"}, inplace=True)
+                    context_for_ai.rename(columns={"AUP(OP) Triggers": "AUP(OP) Triggers"}, inplace=True)
 
                     for col in ['Issue Date', 'Expiry Date']:
                         if pd.api.types.is_datetime64_any_dtype(context_for_ai[col]):
