@@ -462,7 +462,7 @@ if not st.session_state.master_df.empty:
         
         display_df = filtered_df[columns_to_display].rename(columns={
             "Consent Status Enhanced": "Consent Status",
-            "AUP(OP) Triggers": "AUP(OP) Rule Codes"
+            "AUP(OP) Triggers": "AUP(OP) Triggers"
         })
         
         st.dataframe(display_df)
