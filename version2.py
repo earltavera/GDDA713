@@ -510,7 +510,7 @@ if not st.session_state.master_df.empty:
                 st.warning("Please upload and process files to enable semantic search.")
 
 else:
-    st.info("👈  Please upload one or more PDF consent files using the control panel on the left to get started.")
+    st.info("👈 Please upload one or more PDF consent files using the control panel on the left to get started.")
 
 # ----------------------------
 # Ask AI About Consents Chatbot
@@ -542,11 +542,14 @@ with st.expander("AI Chatbot", expanded=True):
                     # Use the entire dataframe for context to answer aggregate questions
                     context_df = st.session_state.master_df
 
-                    # To avoid token limits with many files, we select key columns for the context.
+                    # To avoid token limits, we select key columns for the context.
+                    # CORRECTED: Use __file_name__ and then rename it for the AI.
                     context_for_ai = context_df[[
                         "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "__file_name__",
                         "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced", "Reason for Consent"
                     ]].copy()
+                    context_for_ai.rename(columns={"__file_name__": "File Name"}, inplace=True)
+
 
                     for col in ['Issue Date', 'Expiry Date']:
                         if pd.api.types.is_datetime64_any_dtype(context_for_ai[col]):
@@ -566,12 +569,11 @@ with st.expander("AI Chatbot", expanded=True):
                     3.  **MANDATORY CITATION:** When you use information from a specific consent to answer, you **MUST** cite it at the end of the sentence by referencing its 'Company Name' and 'Resource Consent Numbers' in brackets. Example: "The primary activity is a quarry operation [Some Company Ltd, DIS123456]."
                     4.  **Handle Missing Info:** If the answer cannot be found in the provided data, state: "I cannot find that information in the provided data."
                     5.  **Current Date:** The current date is {current_auckland_time_str}.
-                    6.  **Concise Format:** Use bullet points or a brief summary.
+                    6.  **Answer Structure:** Always begin your response with a direct, one-sentence summary that answers the core question. Provide any further details in a bulleted list below the summary.
                     7.  **Default Summaries:** If asked for a general summary of a specific consent (e.g., "Tell me about Company X's consent"), provide a standard summary that includes its 'Consent Status Enhanced', 'Expiry Date', and the 'Reason for Consent'.
                     8.  **Handling Ambiguity:** If a user's query is ambiguous and could refer to multiple consents (e.g., two companies with similar names), list the potential matches and ask the user for clarification instead of guessing which one they mean.
                     9.  **Calculations:** When asked to perform a calculation (e.g., average duration, count of consents in a year), state the final answer clearly, then briefly explain how you calculated it from the provided data.
-                    10. **Answer Structure:** Always begin your response with a direct, one-sentence summary that answers the core question. Provide any further details in a bulleted list below the summary.
-                   
+                    
                     ---
                     Consent Data (JSON format):
                     """
