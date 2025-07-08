@@ -125,6 +125,8 @@ def check_expiry(expiry_date):
 
 @st.cache_data(show_spinner=False)
 def geocode_address(address):
+    if not address or pd.isna(address):
+        return (None, None)
     standardized_address = address.strip()
     if not re.search(r'auckland', standardized_address, re.IGNORECASE):
         standardized_address += ", Auckland"
@@ -141,16 +143,11 @@ def geocode_address(address):
     return (None, None)
 
 def extract_metadata(text):
-    # This extensive function remains the same as in the original file.
+    # RC number patterns (kept for context, but not primary display)
     rc_patterns = [
         r"Application number:\s*(.+?)(?=\s*Applicant:)",
         r"Application numbers:\s*(.+?)(?=\s*Applicant:)",
         r"Application number(s):\s*(.+?)(?=\s*Applicant:)",
-        r"Application number:\s*(.+?)(?=\s*Original consent)",
-        r"Application numbers:\s*(.+?)(?=\s*Original consent)",
-        r"Application number:\s*(.+?)(?=\s*Site address:)",
-        r"Application numbers:\s*(.+?)(?=\s*Site address:)",
-        r"Application number(s):\s*(.+?)(?=\s*Site address:)",
         r"RC[0-9]{5,}"
     ]
     rc_matches = []
@@ -163,17 +160,33 @@ def extract_metadata(text):
         else:
             flattened_rc_matches.append(item)
     rc_str = ", ".join(list(dict.fromkeys(flattened_rc_matches)))
+
+    # Company name patterns
     company_patterns = [
         r"Applicant:\s*(.+?)(?=\s*Site address)",
         r"Applicant's name:\s*(.+?)(?=\s*Site address)"
     ]
     company_matches = []
     for pattern in company_patterns:
-        company_matches.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL))
+        company_matches.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE))
     company_str = ", ".join(list(dict.fromkeys(company_matches)))
-    address_pattern = r"Site address:\s*(.+?)(?=\s*Legal description)"
-    address_match = re.findall(address_pattern, text, re.MULTILINE | re.DOTALL)
-    address_str = ", ".join(list(dict.fromkeys(address_match)))
+
+    # --- MODIFIED: Address patterns - more fallbacks to improve capture rate ---
+    address_patterns = [
+        r"Site address:\s*(.+?)(?=\s*Legal description)",
+        r"Site address:\s*(.+?)(?=\s*Activity status)",
+        r"Site address:\s*(.+?)(?=\s*Proposal)",
+        r"Site address:\s*(.+?)(?=\n\s*\n)"
+    ]
+    address_str = ""
+    for pattern in address_patterns:
+        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+        if match:
+            # Clean up the extracted address and stop after the first match
+            address_str = match.group(1).strip().replace('\n', ', ')
+            break
+
+    # Issue date patterns
     issue_date_patterns = [
         r"Commissioner\s*(\d{1,2} [A-Za-z]+ \d{4})", r"Date:\s*(\d{1,2} [A-Za-z]+ \d{4})",
         r"Date:\s*(\d{1,2}/\d{1,2}/\d{2,4})", r"(\b\d{1,2} [A-Za-z]+ \d{4}\b)",
@@ -198,6 +211,8 @@ def extract_metadata(text):
                     continue
             if issue_date:
                 break
+
+    # Consent Expiry patterns
     expiry_patterns = [
         r"expire\s+on\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})", r"expires\s+on\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
         r"expires\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})", r"expire\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
@@ -213,7 +228,7 @@ def extract_metadata(text):
     ]
     expiry_date = None
     for pattern in expiry_patterns:
-        matches = re.findall(pattern, text)
+        matches = re.findall(pattern, text, re.IGNORECASE)
         if matches:
             for dt_val_candidate in matches:
                 dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_val_candidate
@@ -236,9 +251,13 @@ def extract_metadata(text):
             num_years = int(years_match.group(1))
             expiry_date = issue_date + timedelta(days=num_years * 365.25)
     expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date"
-    trigger_patterns = [r"(E14\.\d+\.\d+)", r"(E14\.\d+\.)", r"(NES:STO)", r"(NES:AQ)", r"(NES:IGHG)"]
-    triggers = [match for pattern in trigger_patterns for match in re.findall(pattern, text)]
-    triggers_str = " ".join(list(dict.fromkeys(triggers)))
+
+    # --- MODIFIED: AUP(OP) Triggers pattern ---
+    trigger_pattern = r'\((A\d+)\)'
+    triggers = re.findall(trigger_pattern, text)
+    triggers_str = ", ".join(list(dict.fromkeys(triggers)))
+
+    # Proposal patterns
     proposal_patterns= [
         r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)", r"Proposal\s*(.+?)(?=\n[A-Z]|\.)",
         r"Proposal\s*(.+?)(?=\n[A-Z]|\:)", r"Introduction and summary of proposal\s*(.+?)\s*Submissions",
@@ -247,6 +266,8 @@ def extract_metadata(text):
     ]
     proposal = [match for pattern in proposal_patterns for match in re.findall(pattern, text, re.MULTILINE | re.DOTALL)]
     proposal_str = "".join(list(dict.fromkeys(proposal)))
+
+    # Conditions patterns
     conditions_patterns = [
         r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)", r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
         r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)", r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
@@ -278,18 +299,13 @@ def extract_metadata(text):
         if conditions_match:
             conditions_str = conditions_match.group(0).strip()
             break
-    conditions_numbers = []
-    if conditions_str:
-        temp_conditions_matches = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
-        flattened_temp_conditions = [item[0] if isinstance(item, tuple) else item for item in temp_conditions_matches]
-        conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
-        conditions_numbers = list(dict.fromkeys(conditions_numbers))
+
     return {
-        "Resource Consent Numbers": rc_str or "Unknown Resource Consent Numbers", "Company Name": company_str or "Unknown Company Name",
-        "Address": address_str or "Unknown Address", "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown Issue Date",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str, "AUP(OP) Triggers": triggers_str or "Unknown AUP Triggers",
-        "Reason for Consent": proposal_str or "Unknown Reason for Consent", "Consent Condition Numbers": ", ".join(conditions_numbers) or "Unknown Condition Numbers",
-        "Consent Conditions": conditions_str or "Unknown Consent Conditions", "Consent Status": check_expiry(expiry_date), "Text Blob": text
+        "Resource Consent Numbers": rc_str or "Unknown", "Company Name": company_str or "Unknown",
+        "Address": address_str or "Unknown", "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
+        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str, "AUP(OP) Triggers": triggers_str or "None Found",
+        "Reason for Consent": proposal_str or "Unknown", "Consent Conditions": conditions_str or "Unknown",
+        "Consent Status": check_expiry(expiry_date), "Text Blob": text
     }
 
 def clean_surrogates(text):
@@ -324,11 +340,9 @@ def set_chat_input(query):
 st.sidebar.markdown("<h2 style='color:#1E90FF; font-family:Segoe UI, Roboto, sans-serif;'>Control Panel</h2>", unsafe_allow_html=True)
 model_name = st.sidebar.selectbox("Choose Embedding Model:", ["all-MiniLM-L6-v2", "multi-qa-MiniLM-L6-cos-v1", "BAAI/bge-base-en-v1.5", "intfloat/e5-base-v2"])
 
-# Add keys to widgets for programmatic clearing
 uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True, help="You can add more files later without losing your current data.", key="pdf_uploader")
 query_input = st.sidebar.text_input("LLM Semantic Search Query", key="query_input")
 
-# Updated "Clear All Data" button logic
 if st.sidebar.button("Clear All Data", type="primary"):
     st.session_state.master_df = pd.DataFrame()
     st.session_state.corpus_embeddings = None
@@ -354,7 +368,6 @@ if uploaded_files:
         files_to_process = uploaded_files
 
     if files_to_process:
-        # Move progress bar creation inside this block
         my_bar = st.progress(0, text="Initializing...")
         total_files = len(files_to_process)
         for i, file in enumerate(files_to_process):
@@ -372,12 +385,16 @@ if uploaded_files:
                 st.error(f"Error processing {file.name}: {e}")
 
         if new_data:
-            my_bar.progress(75, text="Step 2/3: Geocoding addresses...")
+            my_bar.progress(75, text="Step 2/3: Creating and enriching data...")
             new_df = pd.DataFrame(new_data)
+
+            # --- ADDED: Create Consent Number from filename ---
+            new_df['Consent Number'] = new_df['__file_name__'].str.replace('.pdf', '', regex=False).str.strip()
+
             new_df["GeoKey"] = new_df["Address"].str.lower().str.strip()
             new_df["Latitude"], new_df["Longitude"] = zip(*new_df["GeoKey"].apply(geocode_address))
 
-            my_bar.progress(90, text="Step 3/3: Finalizing and integrating data...")
+            my_bar.progress(90, text="Step 3/3: Finalizing data...")
             auckland_tz = pytz.timezone("Pacific/Auckland")
             for col in ['Issue Date', 'Expiry Date']:
                 new_df[col] = pd.to_datetime(new_df[col], errors='coerce', dayfirst=True).apply(localize_to_auckland)
@@ -385,7 +402,6 @@ if uploaded_files:
             st.session_state.master_df = pd.concat([st.session_state.master_df, new_df], ignore_index=True)
             st.session_state.master_df.drop_duplicates(subset=['__file_name__'], keep='last', inplace=True)
 
-            # --- CORRECTED LOCATION FOR ENHANCED STATUS CALCULATION ---
             df_to_update = st.session_state.master_df
             df_to_update["Consent Status Enhanced"] = df_to_update["Consent Status"]
             current_nz_aware_time = datetime.now(pytz.timezone("Pacific/Auckland"))
@@ -438,9 +454,10 @@ if not st.session_state.master_df.empty:
 
     filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
 
+    # --- MODIFIED: Consent Table display ---
     with st.expander("Consent Table", expanded=True):
-        columns_to_display = ["__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date", "Consent Status Enhanced", "AUP(OP) Triggers"]
-        display_df = filtered_df[columns_to_display].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
+        columns_to_display = ["Consent Number", "Company Name", "Address", "Issue Date", "Expiry Date", "Consent Status Enhanced", "AUP(OP) Triggers"]
+        display_df = filtered_df[columns_to_display].rename(columns={"Consent Status Enhanced": "Consent Status", "AUP(OP) Triggers": "AUP(OP) Rule Codes"})
         st.dataframe(display_df)
         csv_output = display_df.to_csv(index=False).encode("utf-8")
         st.download_button("Download Filtered CSV", csv_output, "filtered_consents.csv", "text/csv")
@@ -449,7 +466,7 @@ if not st.session_state.master_df.empty:
         map_df = filtered_df.dropna(subset=["Latitude", "Longitude"])
         if not map_df.empty:
             fig_map = px.scatter_mapbox(map_df, lat="Latitude", lon="Longitude", hover_name="Company Name",
-                                    hover_data={"Address": True, "Consent Status Enhanced": True, "Issue Date": True, "Expiry Date": True},
+                                    hover_data={"Address": True, "Consent Status Enhanced": True, "Issue Date": True, "Expiry Date": True, "Consent Number": True},
                                     zoom=10, color="Consent Status Enhanced", color_discrete_map=color_map)
             fig_map.update_traces(marker=dict(size=12))
             fig_map.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
@@ -474,9 +491,8 @@ if not st.session_state.master_df.empty:
         if selected_company != "- Select a consent to view details -":
             detail_row = df[df['Company Name'] == selected_company].iloc[0]
             st.subheader(f"Details for: {detail_row['Company Name']}")
-            st.markdown(f"**File Name:** {detail_row['__file_name__']}")
+            st.markdown(f"**Consent Number:** {detail_row['Consent Number']}")
             st.markdown(f"**Address:** {detail_row['Address']}")
-            st.markdown(f"**Resource Consent(s):** {detail_row['Resource Consent Numbers']}")
             st.markdown(f"**Status:** {detail_row['Consent Status Enhanced']}")
             st.markdown(f"**Issue Date:** {detail_row['Issue Date'].strftime('%d %B %Y') if pd.notna(detail_row['Issue Date']) else 'N/A'}")
             st.markdown(f"**Expiry Date:** {detail_row['Expiry Date'].strftime('%d %B %Y') if pd.notna(detail_row['Expiry Date']) else 'N/A'}")
@@ -499,7 +515,7 @@ if not st.session_state.master_df.empty:
                     score = scores[idx.item()]
                     if score >= similarity_threshold and results_found < 3:
                         row = df.iloc[idx.item()]
-                        st.markdown(f"**{results_found + 1}. {row['Company Name']} - {row['Address']}** (Similarity: {score:.2f})")
+                        st.markdown(f"**{results_found + 1}. {row['Company Name']} ({row['Consent Number']})** (Similarity: {score:.2f})")
                         expiry_display = row['Expiry Date'].strftime('%Y-%m-%d') if pd.notna(row['Expiry Date']) else 'N/A'
                         st.markdown(f"- **Expires**: {expiry_display}")
                         safe_filename = clean_surrogates(row['__file_name__'])
@@ -541,23 +557,19 @@ with st.expander("AI Chatbot", expanded=True):
         else:
             with st.spinner("AI is thinking... (Analyzing full dataset & generating response)"):
                 try:
-                    # Use the entire dataframe for context to answer aggregate questions
                     context_df = st.session_state.master_df
 
-                    # To avoid token limits, we select key columns for the context.
-                    # CORRECTED: Use __file_name__ and then rename it for the AI.
+                    # --- MODIFIED: Context for AI uses new Consent Number column ---
                     context_for_ai = context_df[[
-                        "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "__file_name__",
+                        "Consent Number", "Company Name", "Address", "Issue Date",
                         "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced", "Reason for Consent"
                     ]].copy()
-                    context_for_ai.rename(columns={"__file_name__": "File Name"}, inplace=True)
-
+                    context_for_ai.rename(columns={"AUP(OP) Triggers": "AUP(OP) Rule Codes"}, inplace=True)
 
                     for col in ['Issue Date', 'Expiry Date']:
                         if pd.api.types.is_datetime64_any_dtype(context_for_ai[col]):
                              context_for_ai[col] = context_for_ai[col].dt.strftime('%Y-%m-%d')
                         context_for_ai[col] = context_for_ai[col].fillna("N/A")
-
 
                     context_sample_json = json.dumps(context_for_ai.to_dict(orient="records"), indent=2)
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
@@ -568,13 +580,13 @@ with st.expander("AI Chatbot", expanded=True):
                     Crucial Directives:
                     1.  **Strict Data Adherence:** Base your entire response on the information in the 'Consent Data'. Do not use external knowledge.
                     2.  **Aggregate & List:** For questions asking for counts or lists (e.g., "how many", "list all"), process the entire provided dataset to give an accurate answer.
-                    3.  **MANDATORY CITATION:** When you use information from a specific consent to answer, you **MUST** cite it at the end of the sentence by referencing its 'Company Name' and 'Resource Consent Numbers' in brackets. Example: "The primary activity is a quarry operation [Some Company Ltd, DIS123456]."
+                    3.  **MANDATORY CITATION:** When you use information from a specific consent, you **MUST** cite its 'Consent Number' in brackets. Example: "The primary activity is a quarry operation [DIS123456]."
                     4.  **Handle Missing Info:** If the answer cannot be found in the provided data, state: "I cannot find that information in the provided data."
                     5.  **Current Date:** The current date is {current_auckland_time_str}.
                     6.  **Answer Structure:** Always begin your response with a direct, one-sentence summary that answers the core question. Provide any further details in a bulleted list below the summary.
-                    7.  **Default Summaries:** If asked for a general summary of a specific consent (e.g., "Tell me about Company X's consent"), provide a standard summary that includes its 'Consent Status Enhanced', 'Expiry Date', and the 'Reason for Consent'.
-                    8.  **Handling Ambiguity:** If a user's query is ambiguous and could refer to multiple consents (e.g., two companies with similar names), list the potential matches and ask the user for clarification instead of guessing which one they mean.
-                    9.  **Calculations:** When asked to perform a calculation (e.g., average duration, count of consents in a year), state the final answer clearly, then briefly explain how you calculated it from the provided data.
+                    7.  **Default Summaries:** If asked for a general summary of a specific consent (e.g., "Tell me about consent DIS123456"), provide a standard summary that includes its 'Company Name', 'Consent Status Enhanced', and 'Expiry Date'.
+                    8.  **Handling Ambiguity:** If a user's query is ambiguous and could refer to multiple consents, list the potential matches and ask the user for clarification instead of guessing.
+                    9.  **Calculations:** When asked to perform a calculation (e.g., average duration, count), state the final answer clearly, then briefly explain how you calculated it from the provided data.
                     
                     ---
                     Consent Data (JSON format):
