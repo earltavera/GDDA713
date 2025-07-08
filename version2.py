@@ -457,7 +457,8 @@ if not st.session_state.master_df.empty:
         else:
             st.info("No geocoded locations to display for the current filter.")
 
-    with st.expander("Historical View", expanded=False):
+    st.markdown("#### **Historical View**")
+    with st.expander("Expand to see consents issued per year", expanded=False):
         df_hist = df.copy()
         df_hist['Issue Year'] = df_hist['Issue Date'].dt.year
         issue_counts = df_hist['Issue Year'].value_counts().sort_index().reset_index(name='Number of Consents Issued')
@@ -466,7 +467,8 @@ if not st.session_state.master_df.empty:
         fig_hist.update_traces(line=dict(color='#004489', width=3))
         st.plotly_chart(fig_hist, use_container_width=True)
 
-    with st.expander("Detailed Consent View", expanded=False):
+    st.markdown("#### **Detailed Consent View**")
+    with st.expander("Expand to select and view a specific consent", expanded=False):
         company_list = ["- Select a consent to view details -"] + sorted(df['Company Name'].unique().tolist())
         selected_company = st.selectbox("Select Consent by Company Name", options=company_list)
         if selected_company != "- Select a consent to view details -":
