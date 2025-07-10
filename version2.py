@@ -82,7 +82,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -279,10 +279,12 @@ def extract_metadata(text):
     # Final expiry string for display (ensure this is set before return)
     expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date"
 
-    # AUP(OP) Triggers pattern
-    trigger_pattern = r'\((A\d+)\)'
-    triggers = re.findall(trigger_pattern, text)
+    # AUP(OP) Triggers pattern - MODIFIED as per user request
+    # This pattern now specifically finds "E14.4.1" and then captures the content within the following parentheses.
+    trigger_pattern = r'E14\.4\.1\s*\(([^)]+)\)'
+    triggers = re.findall(trigger_pattern, text, re.IGNORECASE)
     triggers_str = ", ".join(list(dict.fromkeys(triggers)))
+
 
     # Proposal patterns
     proposal_patterns= [
@@ -526,8 +528,8 @@ if not st.session_state.master_df.empty:
         map_df = filtered_df.dropna(subset=["Latitude", "Longitude"])
         if not map_df.empty:
             fig_map = px.scatter_mapbox(map_df, lat="Latitude", lon="Longitude", hover_name="Company Name",
-                                    hover_data={"Address": True, "Consent Status Enhanced": True, "Issue Date": True, "Expiry Date": True, "Consent Number": True},
-                                    zoom=10, color="Consent Status Enhanced", color_discrete_map=color_map)
+                                        hover_data={"Address": True, "Consent Status Enhanced": True, "Issue Date": True, "Expiry Date": True, "Consent Number": True},
+                                        zoom=10, color="Consent Status Enhanced", color_discrete_map=color_map)
             fig_map.update_traces(marker=dict(size=12))
             fig_map.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
             st.plotly_chart(fig_map, use_container_width=True)
@@ -665,8 +667,8 @@ with st.expander("AI Chatbot", expanded=True):
                                 full_response = ""
                                 for chunk in response_stream:
                                     if chunk.text:
-                                       full_response += chunk.text
-                                       yield chunk.text
+                                        full_response += chunk.text
+                                        yield chunk.text
                                 log_ai_chat(chat_input, full_response)
 
                             answer_placeholder.write_stream(stream_to_placeholder)
@@ -683,8 +685,8 @@ with st.expander("AI Chatbot", expanded=True):
                                 for chunk in chat_groq.stream(messages):
                                     content = chunk.content
                                     if content:
-                                       full_response += content
-                                       yield content
+                                        full_response += content
+                                        yield content
                                 log_ai_chat(chat_input, full_response)
 
                             answer_placeholder.write_stream(stream_to_placeholder_groq)
