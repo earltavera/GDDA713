@@ -49,6 +49,9 @@ if 'chat_input' not in st.session_state:
 # Add a key for the file_uploader to session state
 if 'file_uploader_key' not in st.session_state:
     st.session_state.file_uploader_key = 0
+# Initialize the state variable to control the semantic search input
+if 'semantic_search_query' not in st.session_state:
+    st.session_state.semantic_search_query = ""
 
 
 # --- Weather Function ---
@@ -377,12 +380,19 @@ uploaded_files = st.sidebar.file_uploader(
     help="You can add more files later without losing your current data.",
     key=f"pdf_uploader_{st.session_state.file_uploader_key}" # Dynamic key
 )
-query_input = st.sidebar.text_input("LLM Semantic Search Query", key="query_input")
+# Modified query_input to use the new semantic_search_query state variable
+query_input = st.sidebar.text_input(
+    "LLM Semantic Search Query",
+    value=st.session_state.semantic_search_query, # Control its value
+    key="query_input_unique_key" # Give it a unique key to avoid conflict with `value` param
+)
+
 
 if st.sidebar.button("Clear All Data", type="primary"):
     st.session_state.master_df = pd.DataFrame()
     st.session_state.corpus_embeddings = None
-    st.session_state.query_input = ""
+    # Corrected way to clear the text input: update its controlling state variable
+    st.session_state.semantic_search_query = ""
     st.session_state.chat_input = ""
     # Increment the key to force file_uploader to clear
     st.session_state.file_uploader_key += 1
@@ -552,7 +562,8 @@ if not st.session_state.master_df.empty:
             st.download_button(label=f"Download Original PDF", data=detail_row['__file_bytes__'], file_name=detail_row['__file_name__'], mime="application/pdf")
 
     with st.expander("LLM Semantic Search Results", expanded=False):
-        if query_input:
+        # The query_input variable is now taken directly from the widget above
+        if query_input: # This `query_input` now holds the current value of the text_input
             corpus_embeddings = st.session_state.get('corpus_embeddings')
             if corpus_embeddings is not None:
                 query_embedding = embedding_model.encode(query_input, convert_to_tensor=True)
