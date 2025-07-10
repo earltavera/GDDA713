@@ -244,11 +244,32 @@ def extract_metadata(text):
                     continue
             if expiry_date:
                 break
+    
+    # If no expiry date is found, try to infer it from phrases like "shall expire 15 years from the date of issue"
     if not expiry_date:
-        years_match = re.search(r'(\d+)\s+years', text, re.IGNORECASE)
+        # Match patterns like "shall expire 15 years from the date of issue"
+        match = re.search(
+            r"(expire[s]?|shall expire)[^\n]{0,40}?(\d{1,2})\s+years\s+from\s+the\s+date\s+of\s+issue", text,
+            re.IGNORECASE
+        )
+        if match and issue_date:
+            try:
+                years = int(match.group(2))
+                expiry_date = issue_date + timedelta(days=years * 365.25)  # leap-year adjusted
+            except Exception:
+                expiry_date = None
+
+    # Fallback: match generic "X years" if the above fails
+    if not expiry_date:
+        years_match = re.search(r'(\d{1,2})\s+years', text, re.IGNORECASE)
         if years_match and issue_date:
-            num_years = int(years_match.group(1))
-            expiry_date = issue_date + timedelta(days=num_years * 365.25)
+            try:
+                num_years = int(years_match.group(1))
+                expiry_date = issue_date + timedelta(days=num_years * 365.25)
+            except Exception:
+                expiry_date = None
+
+    # Final expiry string for display (ensure this is set before return)
     expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date"
 
     # AUP(OP) Triggers pattern
@@ -304,11 +325,11 @@ def extract_metadata(text):
         "Company Name": company_str or "Unknown",
         "Address": address_str or "Unknown",
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
-        "Expiry Date": expiry_date.strftime("%d-%m-%Y") if expiry_date else expiry_str,
+        "Expiry Date": expiry_str, # Use expiry_str which now incorporates the new logic
         "AUP(OP) Triggers": triggers_str or "None Found",
         "Reason for Consent": proposal_str or "Unknown",
         "Consent Conditions": conditions_str or "Unknown",
-        "Consent Status": check_expiry(expiry_date),
+        "Consent Status": check_expiry(expiry_date), # Pass the datetime object for check_expiry
         "Text Blob": text
     }
 
