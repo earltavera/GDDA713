@@ -46,6 +46,10 @@ if 'corpus_embeddings' not in st.session_state:
     st.session_state.corpus_embeddings = None
 if 'chat_input' not in st.session_state:
     st.session_state.chat_input = ""
+# Add a key for the file_uploader to session state
+if 'file_uploader_key' not in st.session_state:
+    st.session_state.file_uploader_key = 0
+
 
 # --- Weather Function ---
 @st.cache_data(ttl=600)
@@ -325,11 +329,11 @@ def extract_metadata(text):
         "Company Name": company_str or "Unknown",
         "Address": address_str or "Unknown",
         "Issue Date": issue_date.strftime("%d-%m-%Y") if issue_date else "Unknown",
-        "Expiry Date": expiry_str, # Use expiry_str which now incorporates the new logic
+        "Expiry Date": expiry_str,
         "AUP(OP) Triggers": triggers_str or "None Found",
         "Reason for Consent": proposal_str or "Unknown",
         "Consent Conditions": conditions_str or "Unknown",
-        "Consent Status": check_expiry(expiry_date), # Pass the datetime object for check_expiry
+        "Consent Status": check_expiry(expiry_date),
         "Text Blob": text
     }
 
@@ -365,15 +369,23 @@ def set_chat_input(query):
 st.sidebar.markdown("<h2 style='color:#1E90FF; font-family:Segoe UI, Roboto, sans-serif;'>Control Panel</h2>", unsafe_allow_html=True)
 model_name = st.sidebar.selectbox("Choose Embedding Model:", ["all-MiniLM-L6-v2", "multi-qa-MiniLM-L6-cos-v1", "BAAI/bge-base-en-v1.5", "intfloat/e5-base-v2"])
 
-uploaded_files = st.sidebar.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True, help="You can add more files later without losing your current data.", key="pdf_uploader")
+# Updated file_uploader with dynamic key
+uploaded_files = st.sidebar.file_uploader(
+    "Upload PDF files",
+    type=["pdf"],
+    accept_multiple_files=True,
+    help="You can add more files later without losing your current data.",
+    key=f"pdf_uploader_{st.session_state.file_uploader_key}" # Dynamic key
+)
 query_input = st.sidebar.text_input("LLM Semantic Search Query", key="query_input")
 
 if st.sidebar.button("Clear All Data", type="primary"):
     st.session_state.master_df = pd.DataFrame()
     st.session_state.corpus_embeddings = None
-    st.session_state.pdf_uploader = None
     st.session_state.query_input = ""
     st.session_state.chat_input = ""
+    # Increment the key to force file_uploader to clear
+    st.session_state.file_uploader_key += 1
     st.rerun()
 
 @st.cache_resource
@@ -421,14 +433,23 @@ if uploaded_files:
             my_bar.progress(90, text="Step 3/3: Finalizing data...")
             auckland_tz = pytz.timezone("Pacific/Auckland")
             for col in ['Issue Date', 'Expiry Date']:
-                new_df[col] = pd.to_datetime(new_df[col], errors='coerce', dayfirst=True).apply(localize_to_auckland)
+                # Ensure conversion to datetime objects for check_expiry function
+                new_df[col] = pd.to_datetime(new_df[col], errors='coerce', dayfirst=True)
+                # Localize only if timezone is not already present, otherwise astimezone
+                new_df[col] = new_df[col].apply(localize_to_auckland)
+
 
             st.session_state.master_df = pd.concat([st.session_state.master_df, new_df], ignore_index=True)
             st.session_state.master_df.drop_duplicates(subset=['__file_name__'], keep='last', inplace=True)
 
+            # Recalculate Consent Status Enhanced after new data is added and dates are processed
             df_to_update = st.session_state.master_df
-            df_to_update["Consent Status Enhanced"] = df_to_update["Consent Status"]
+            df_to_update["Consent Status Enhanced"] = df_to_update["Consent Status"] # Start with base status
             current_nz_aware_time = datetime.now(pytz.timezone("Pacific/Auckland"))
+            
+            # Ensure 'Expiry Date' is timezone-aware for comparison
+            df_to_update['Expiry Date'] = df_to_update['Expiry Date'].apply(localize_to_auckland)
+
             expiring_mask = (
                 (df_to_update["Consent Status"] == "Active") &
                 (df_to_update["Expiry Date"].notna()) &
@@ -436,6 +457,7 @@ if uploaded_files:
                 (df_to_update["Expiry Date"] <= current_nz_aware_time + timedelta(days=90))
             )
             df_to_update.loc[expiring_mask, "Consent Status Enhanced"] = "Expiring in 90 Days"
+
 
         corpus = st.session_state.master_df["Text Blob"].tolist()
         st.session_state.corpus_embeddings = embedding_model.encode(corpus, convert_to_tensor=True, show_progress_bar=True)
