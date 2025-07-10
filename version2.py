@@ -279,7 +279,7 @@ def extract_metadata(text):
     # Final expiry string for display (ensure this is set before return)
     expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date"
 
-    # AUP(OP) Triggers pattern - MODIFIED as per user request
+    # AUP(OP) Triggers pattern
     # This pattern now specifically finds "E14.4.1" and then captures the content within the following parentheses.
     trigger_pattern = r'E14\.4\.1\s*\(([^)]+)\)'
     triggers = re.findall(trigger_pattern, text, re.IGNORECASE)
