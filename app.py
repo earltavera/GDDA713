@@ -9,7 +9,7 @@ from sentence_transformers import SentenceTransformer, util
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import base64
-import os
+import os # <-- ADDED FOR ROBUST FILE PATHS
 from dotenv import load_dotenv
 import csv
 import io
@@ -99,14 +99,27 @@ with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=
     """)
 st.markdown("---") # Another horizontal line for separation
 
-# --- "About Us" Section UPDATED with Images ---
+# --- "About Us" Section UPDATED with Images and Corrected Paths ---
 with st.expander("About the Creators", expanded=False):
-    # Create two columns for the images
-    col1, col2 = st.columns(2)
-    with col1:
-        st.image("Alana.jpg", caption="Alana Jacobson-Pepere", use_column_width=True)
-    with col2:
-        st.image("Earl_images.jpg", caption="Earl Tavera", use_column_width=True)
+    try:
+        # --- FIX: Build robust paths to images ---
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        alana_image_path = os.path.join(script_dir, "assets", "Alana.jpg")
+        earl_image_path = os.path.join(script_dir, "assets", "Earl_images.jpg")
+
+        # Create two columns for the images
+        col1, col2 = st.columns(2)
+        with col1:
+            st.image(alana_image_path, caption="Alana Jacobson-Pepere", use_column_width=True)
+        with col2:
+            st.image(earl_image_path, caption="Earl Tavera", use_column_width=True)
+        # --- End of fix ---
+
+    except FileNotFoundError:
+        st.error("Creator images not found. Please ensure 'Alana.jpg' and 'Earl_images.jpg' are in an 'assets' subfolder.")
+    except Exception as e:
+        st.error(f"An error occurred while loading creator images: {e}")
+
 
     # Add the descriptive text below the images
     st.write("""
@@ -758,7 +771,7 @@ Answer:
                                     SystemMessage(content=system_message_content),
                                     HumanMessage(content=f"{context_sample_json}\n\nUser Query: {chat_input}")
                                 ])
-                                answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                                answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(gro_q_response)
                             except Exception as e:
                                 answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('llama3-8b-8192') not being available or an API issue, or the input context being too long for the model."
                         else:
