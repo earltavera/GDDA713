@@ -70,7 +70,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -89,7 +89,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("---") # Horizontal line for separation
-with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=False): # Key change here: expanded=False
+with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=False):
     st.write("""
     Kia Ora! Welcome to the **Auckland Air Discharge Consent Dashboard**, a pioneering tool designed to revolutionize how we interact with critical environmental data. In Auckland, managing **Air Discharge Resource Consents** is vital for maintaining our air quality and ensuring regulatory compliance. Traditionally, this information has been locked away in numerous, disparate PDF reports, making it incredibly challenging to access, analyze, and monitor effectively.
 
@@ -98,6 +98,16 @@ with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=
     Ultimately, this dashboard is more than just a data viewer; it's a strategic asset for proactive environmental management. By providing immediate access to comprehensive, intelligent insights, it empowers regulators, businesses, and stakeholders to ensure ongoing compliance, make informed decisions, and contribute to a healthier, more sustainable Auckland.
     """)
 st.markdown("---") # Another horizontal line for separation
+
+# --- "About Us" Section Added Here ---
+with st.expander("About the Creators", expanded=False):
+    st.write("""
+    This dashboard was developed by **Earl Tavera, Data Analytics Student, NZSE GDDA7224C** and **Alana Jacobson-Pepere, Data Analytics Student, NZSE GDDA7224C**.
+
+    Combining expertise in data science, artificial intelligence, and environmental regulation, their goal was to create a powerful yet accessible tool for stakeholders in Auckland. They are passionate about leveraging technology to simplify complex data, empower informed decision-making, and contribute to the sustainable management of our city's resources.
+    """)
+st.markdown("---") # Add a separator after the new section
+# --- END: "About Us" Section ---
 
 # --- Utility Functions ---
 def localize_to_auckland(dt):
@@ -244,7 +254,7 @@ def extract_metadata(text):
                         issue_date = datetime.strptime(dt_str, "%d %B %Y")
                     break
                 except ValueError:
-                    continue            
+                    continue           
             if issue_date:
                 break
 
@@ -633,7 +643,7 @@ if uploaded_files:
                         break
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
-            
+        
         # Finalize and remove the progress bar
         my_bar.progress(100, text="Dashboard Ready!")
         time.sleep(1)
@@ -664,7 +674,7 @@ with st.expander("AI Chatbot", expanded=True):
             with st.spinner("AI is thinking and gathering data..."):
                 try:
                     context_sample_list = []
-                    relevant_files_for_download = []    
+                    relevant_files_for_download = []  
                     
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
@@ -718,7 +728,7 @@ Answer:
                     answer_raw = ""
                     if llm_provider == "Gemini AI":
                         if google_api_key:
-                            GEMINI_MODEL_TO_USE = "models/gemini-2.5-pro"
+                            GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest" # Updated to a reliable and fast model
                             gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
                             try:
                                 response = gemini_model.generate_content(user_query)
@@ -731,9 +741,9 @@ Answer:
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
                     
-                    elif llm_provider == "Groq AI":    
+                    elif llm_provider == "Groq AI":   
                         if groq_api_key:
-                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama-3.1-8b-instant")
+                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-8b-8192") # Updated to a reliable model
                             try:
                                 groq_response = chat_groq.invoke([
                                     SystemMessage(content=system_message_content),
@@ -741,10 +751,10 @@ Answer:
                                 ])
                                 answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
                             except Exception as e:
-                                answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('llama-3.1-8b-instant') not being available or an API issue, or the input context being too long for the model."
+                                answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('llama3-8b-8192') not being available or an API issue, or the input context being too long for the model."
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    else:    
+                    else:   
                         st.warning("Selected LLM provider is not available or supported.")
                         answer_raw = "AI provider not available."
 
@@ -773,4 +783,5 @@ Answer:
         st.info("No chat history available yet.")
 
 st.markdown("---")
-st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
+# Updated caption to be more descriptive
+st.caption("Auckland Air Discharge Intelligence © 2025 | Built by Earl Tavera & Alana Jacobson-Pepere")
