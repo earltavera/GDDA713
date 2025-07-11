@@ -78,7 +78,7 @@ st.markdown(f"""
 st.markdown("""
     <div style="text-align: center;">
         <h2 style='color:#004489; font-family: Quicksand, sans-serif; font-size: 2.7em;'>
-            Auckland Air Discharge Consent Dashboard  
+            Auckland Air Discharge Consent Dashboard
         </h2>
         <p style='font-size: 1.1em; color: #dc002e;'>
             This dashboard allows you to upload Air Discharge Resource Consent Decision Reports to transform your files into meaningful data.
@@ -99,15 +99,24 @@ with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=
     """)
 st.markdown("---") # Another horizontal line for separation
 
-# --- "About Us" Section Added Here ---
+# --- "About Us" Section UPDATED with Images ---
 with st.expander("About the Creators", expanded=False):
+    # Create two columns for the images
+    col1, col2 = st.columns(2)
+    with col1:
+        st.image("Alana.jpg", caption="Alana Jacobson-Pepere", use_column_width=True)
+    with col2:
+        st.image("Earl_images.jpg", caption="Earl Tavera", use_column_width=True)
+
+    # Add the descriptive text below the images
     st.write("""
-    This dashboard was developed by **Earl Tavera, Data Analytics Student | NZSE GDDA7224C** and **Alana Jacobson-Pepere, Data Analytics Student | NZSE GDDA7224C**.
+    This dashboard was developed by **Alana Jacobson-Pepere** and **Earl Tavera**.
 
     Combining expertise in data science, artificial intelligence, and environmental regulation, their goal was to create a powerful yet accessible tool for stakeholders in Auckland. They are passionate about leveraging technology to simplify complex data, empower informed decision-making, and contribute to the sustainable management of our city's resources.
     """)
 st.markdown("---") # Add a separator after the new section
 # --- END: "About Us" Section ---
+
 
 # --- Utility Functions ---
 def localize_to_auckland(dt):
@@ -233,7 +242,7 @@ def extract_metadata(text):
         r"Date:\s*(\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}\b)",
         r"(\b\d{2}/\d{2}/\d{2}\b)"
     ]
-    
+
     issue_date = None
     for pattern in issue_date_patterns:
         matches = re.findall(pattern, text, re.DOTALL | re.MULTILINE)
@@ -254,7 +263,7 @@ def extract_metadata(text):
                         issue_date = datetime.strptime(dt_str, "%d %B %Y")
                     break
                 except ValueError:
-                    continue           
+                    continue
             if issue_date:
                 break
 
@@ -283,7 +292,7 @@ def extract_metadata(text):
         r"(\d{1,}\s+years)",
     ]
     expiry_date = None
-    
+
     for pattern in expiry_patterns:
         matches = re.findall(pattern, text)
         if matches:
@@ -309,14 +318,14 @@ def extract_metadata(text):
                     continue
             if expiry_date:
                 break
-    
+
     # If no specific expiry date is found, try to infer it from "X years" phrases
     if not expiry_date:
         years_match = re.search(r'(\d+)\s+years', text, re.IGNORECASE)
         if years_match and issue_date:
             num_years = int(years_match.group(1))
             expiry_date = issue_date + timedelta(days=num_years * 365.25) # Account for leap years
-    
+
     expiry_str = expiry_date.strftime("%d-%m-%Y") if expiry_date else "Unknown Expiry Date"
 
     # AUP triggers
@@ -537,7 +546,7 @@ if uploaded_files:
         df['Issue Date'] = df['Issue Date'].apply(localize_to_auckland)
         df['Expiry Date'] = pd.to_datetime(df['Expiry Date'], errors='coerce', dayfirst=True)
         df['Expiry Date'] = df['Expiry Date'].apply(localize_to_auckland)
-        
+
         # --- ENHANCED STATUS CALCULATION ---
         df["Consent Status Enhanced"] = df["Consent Status"]
         current_nz_aware_time = datetime.now(pytz.timezone("Pacific/Auckland"))
@@ -549,7 +558,7 @@ if uploaded_files:
         ] = "Expiring in 90 Days"
 
         # --- START RENDERING DASHBOARD ---
-        
+
         # Metrics
         st.subheader("Consent Summary Metrics")
         col1, col2, col3, col4 = st.columns(4)
@@ -586,7 +595,7 @@ if uploaded_files:
         with st.expander("Consent Table", expanded=True):
             status_filter = st.selectbox("Filter by Status", ["All"] + df["Consent Status Enhanced"].unique().tolist())
             filtered_df = df if status_filter == "All" else df[df["Consent Status Enhanced"] == status_filter]
-            
+
             columns_to_display = [
                 "__file_name__", "Resource Consent Numbers", "Company Name", "Address", "Issue Date", "Expiry Date",
                 "Consent Status Enhanced", "AUP(OP) Triggers"
@@ -596,9 +605,9 @@ if uploaded_files:
                 columns_to_display.append("Reason for Consent")
             if "Consent Condition Numbers" in filtered_df.columns:
                 columns_to_display.append("Consent Condition Numbers")
-            
+
             display_df = filtered_df[columns_to_display].rename(columns={"__file_name__": "File Name", "Consent Status Enhanced": "Consent Status"})
-            
+
             st.dataframe(display_df)
             csv_output = display_df.to_csv(index=False).encode("utf-8")
             st.download_button("Download CSV", csv_output, "filtered_consents.csv", "text/csv")
@@ -643,7 +652,7 @@ if uploaded_files:
                         break
                 if displayed_results == 0:
                     st.info(f"No highly relevant documents found for your query with a similarity score above {similarity_threshold:.2f}.")
-        
+
         # Finalize and remove the progress bar
         my_bar.progress(100, text="Dashboard Ready!")
         time.sleep(1)
@@ -664,7 +673,7 @@ st.subheader("Ask AI About Consents")
 with st.expander("AI Chatbot", expanded=True):
     st.markdown("""<span style="color:#dc002e;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
 
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")    
+    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
     chat_input = st.text_area("Search any query:", key="chat_input")
 
     if st.button("Ask AI", key="ask_ai_button"):
@@ -674,13 +683,13 @@ with st.expander("AI Chatbot", expanded=True):
             with st.spinner("AI is thinking and gathering data..."):
                 try:
                     context_sample_list = []
-                    relevant_files_for_download = []  
-                    
+                    relevant_files_for_download = []
+
                     current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
 
                     if not df.empty:
                         context_df_for_ai = df[[
-                            "Resource Consent Numbers", "Company Name", "Address", "Issue Date",    
+                            "Resource Consent Numbers", "Company Name", "Address", "Issue Date",
                             "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
                         ]].copy()
 
@@ -690,15 +699,15 @@ with st.expander("AI Chatbot", expanded=True):
                             context_df_for_ai[col] = context_df_for_ai[col].replace({pd.NaT: None})
 
                         context_sample_list = context_df_for_ai.to_dict(orient="records")
-                        
+
                         st.info("The AI is analyzing all uploaded data.")
-                        
+
                     else:
                         st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
                         context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31"}]
 
                     context_sample_json = json.dumps(context_sample_list, indent=2)
-                    
+
                     system_message_content = f"""
                     You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions based *strictly and exclusively* on the "Provided Consent Data" below.
 
@@ -740,8 +749,8 @@ Answer:
                                 answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue, or the input context being too long for the model."
                         else:
                             answer_raw = "Gemini AI is offline (Google API key not found)."
-                    
-                    elif llm_provider == "Groq AI":   
+
+                    elif llm_provider == "Groq AI":
                         if groq_api_key:
                             chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-8b-8192") # Updated to a reliable model
                             try:
@@ -754,7 +763,7 @@ Answer:
                                 answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('llama3-8b-8192') not being available or an API issue, or the input context being too long for the model."
                         else:
                             answer_raw = "Groq AI is offline (Groq API key not found)."
-                    else:   
+                    else:
                         st.warning("Selected LLM provider is not available or supported.")
                         answer_raw = "AI provider not available."
 
