@@ -109,7 +109,7 @@ with st.expander("About the Creators", expanded=False):
         # Check if the file exists before trying to display it
         if os.path.exists(alana_image_path):
             # FIX 1: Changed use_column_width to use_container_width
-            st.image(alana_image_path, caption="Alana Jacobson-Pepere|Data Analytics Student|NZSE GDDA7224C", use_container_width=True)
+            st.image(alana_image_path, caption="Alana Jacobson-Pepere | Data Analytics Student | NZSE GDDA7224C", use_container_width=True)
         else:
             st.warning("Image file 'Alana.jpg' not found. Please ensure it is in the 'assets' subfolder.")
 
@@ -117,7 +117,7 @@ with st.expander("About the Creators", expanded=False):
         # Check if the file exists before trying to display it
         if os.path.exists(earl_image_path):
             # FIX 1: Changed use_column_width to use_container_width
-            st.image(earl_image_path, caption="Earl Tavera|Data Analytics Student|NZSE GDDA7224C", use_container_width=True)
+            st.image(earl_image_path, caption="Earl Tavera | Data Analytics Student | NZSE GDDA7224C", use_container_width=True)
         else:
             st.warning("Image file 'Earl_images.jpg' not found. Please ensure it is in the 'assets' subfolder.")
 
