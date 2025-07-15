@@ -82,7 +82,7 @@ weather = get_auckland_weather()
 
 st.markdown(f"""
     <div style='text-align:center; padding:12px; font-size:1.2em; background-color:#656e6b;
-                 border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
+                    border-radius:10px; margin-bottom:15px; font-weight:500; color:white;'>
         📍 <strong>Auckland</strong> &nbsp;&nbsp;&nbsp; 📅 <strong>{today}</strong> &nbsp;&nbsp;&nbsp; ⏰ <strong>{current_time}</strong> &nbsp;&nbsp;&nbsp; 🌦️ <strong>{weather}</strong>
     </div>
 """, unsafe_allow_html=True)
@@ -110,39 +110,6 @@ with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=
     Ultimately, this dashboard is more than just a data viewer; it's a strategic asset for proactive environmental management. By providing immediate access to comprehensive, intelligent insights, it empowers regulators, businesses, and stakeholders to ensure ongoing compliance, make informed decisions, and contribute to a healthier, more sustainable Auckland.
     """)
 st.markdown("---")
-
-# --- "About Us" Section  ---
-with st.expander("About the Creators", expanded=False):
-    # Build robust paths to images
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    alana_image_path = os.path.join(script_dir, "assets", "Alana.jpg")
-    earl_image_path = os.path.join(script_dir, "assets", "Earl_images.jpg")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        # Check if the file exists before trying to display it
-        if os.path.exists(alana_image_path):
-            # FIX 1: Changed use_column_width to use_container_width
-            st.image(alana_image_path, caption="Alana Jacobson-Pepere | Data Analytics Student | NZSE GDDA7224C", use_container_width=True)
-        else:
-            st.warning("Image file 'Alana.jpg' not found. Please ensure it is in the 'assets' subfolder.")
-
-    with col2:
-        # Check if the file exists before trying to display it
-        if os.path.exists(earl_image_path):
-            # FIX 1: Changed use_column_width to use_container_width
-            st.image(earl_image_path, caption="Earl Tavera | Data Analytics Student | NZSE GDDA7224C", use_container_width=True)
-        else:
-            st.warning("Image file 'Earl_images.jpg' not found. Please ensure it is in the 'assets' subfolder.")
-
-    # Add the descriptive text below the images
-    st.write("""
-    This dashboard was developed by **Alana Jacobson-Pepere** and **Earl Tavera**.
-
-    Combining expertise in data science, artificial intelligence, and environmental regulation, their goal was to create a powerful yet accessible tool for stakeholders in Auckland. They are passionate about leveraging technology to simplify complex data, empower informed decision-making, and contribute to the sustainable management of our city's resources.
-    """)
-st.markdown("---")
-# --- END: "About Us" Section ---
 
 # --- Utility Functions ---
 def localize_to_auckland(dt):
@@ -257,8 +224,8 @@ def extract_metadata(text):
         r"expires\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})", r"expire\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
         r"expire\s+on\s+(\d{1,2}-\d{1,2}-\d{4})", r"expires\s+([A-Za-z]+\s+years)",
         r"expire\s+([A-Za-z]+\s+years)", r"DIS\d{5,}(?:-w+)?\b\s+will\s+expire\s+(\d{1,}\s+years)",
-        r"expires\s+(\d{1,}\s+months\s+[A-Za-z])+\s+[.?!]", r"expires\s+on\s+(\d{1,2}(?:st|nd|rd|th)\s+of\s+?\s+[A-Za-z]+\s+\d{4}\b)",
-        r"expires\s+on\s+the\s+(\d{1,2}(?:st|nd|rd|th)\s+of\s+?\s+[A-Za-z]+\s+\d{4}\b)", r"expire\s+on\s+(\d{1,2}/\d{1,2}/\d{4})",
+        r"expires\s+(\d{1,}\s+months\s+[A-Za-z])+\s+[.?!]", r"expires\s+on\s+(\d{1,2}(?:st|nd|rd|th)?\s+of\s+?\s+[A-Za-z]+\s+\d{4}\b)",
+        r"expires\s+on\s+the\s+(\d{1,2}(?:st|nd|rd|th)?\s+of\s+?\s+[A-Za-z]+\s+\d{4}\b)", r"expire\s+on\s+(\d{1,2}/\d{1,2}/\d{4})",
         r"expire\s+on\s+(\d{1,2}-\d{1,2}-\d{4})", r"expire\s+([A-Za-z]+\s+(\d{1,})\s+years)",
         r"expire\s+(\d{1,2}\s+years)", r"expires\s+(\d{1,2}\s+years)",
         r"expire\s+([A-Za-z]+\s+(\d{1,2})\s+[A-Za-z]+)", r"earlier\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
@@ -433,6 +400,36 @@ if st.sidebar.button("Clear All Data", type="primary"):
     st.session_state.file_uploader_key += 1
     st.rerun()
 
+# --- "About Us" Section in Sidebar ---
+st.sidebar.markdown("---") # Add a separator for better visual grouping
+with st.sidebar.expander("About the Creators", expanded=False):
+    # Build robust paths to images
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    alana_image_path = os.path.join(script_dir, "assets", "Alana.jpg")
+    earl_image_path = os.path.join(script_dir, "assets", "Earl_images.jpg")
+
+    # Use a narrower column layout for images in the sidebar
+    col1_sidebar, col2_sidebar = st.columns(2)
+    with col1_sidebar:
+        if os.path.exists(alana_image_path):
+            st.image(alana_image_path, caption="Alana Jacobson-Pepere", use_container_width=True)
+        else:
+            st.warning("Image file 'Alana.jpg' not found.")
+
+    with col2_sidebar:
+        if os.path.exists(earl_image_path):
+            st.image(earl_image_path, caption="Earl Tavera", use_container_width=True)
+        else:
+            st.warning("Image file 'Earl_images.jpg' not found.")
+
+    st.write("""
+    This dashboard was developed by **Alana Jacobson-Pepere** and **Earl Tavera**, Data Analytics Students at NZSE GDDA7224C.
+
+    They are passionate about leveraging technology to simplify complex data, empower informed decision-making, and contribute to the sustainable management of our city's resources.
+    """)
+st.sidebar.markdown("---")
+# --- END: "About Us" Section in Sidebar ---
+
 @st.cache_resource
 def load_embedding_model(name):
     return SentenceTransformer(name)
@@ -586,154 +583,172 @@ if not st.session_state.master_df.empty:
         if selected_company != "- Select a consent to view details -":
             detail_row = df[df['Company Name'] == selected_company].iloc[0]
             st.subheader(f"Details for: {detail_row['Company Name']}")
-            st.markdown(f"**Consent Number:** {detail_row['Consent Number']}")
+            st.markdown(f"**Resource Consent Number(s):** {detail_row['Resource Consent Numbers']}")
             st.markdown(f"**Address:** {detail_row['Address']}")
-            st.markdown(f"**Status:** {detail_row['Consent Status Enhanced']}")
-            st.markdown(f"**Issue Date:** {detail_row['Issue Date'].strftime('%d %B %Y') if pd.notna(detail_row['Issue Date']) else 'N/A'}")
-            st.markdown(f"**Expiry Date:** {detail_row['Expiry Date'].strftime('%d %B %Y') if pd.notna(detail_row['Expiry Date']) else 'N/A'}")
-            with st.container(height=300):
-                 st.markdown("**Full Consent Conditions:**")
-                 st.text(detail_row['Consent Conditions'])
-            st.download_button(label=f"Download Original PDF", data=detail_row['__file_bytes__'], file_name=detail_row['__file_name__'], mime="application/pdf")
+            st.markdown(f"**Issue Date:** {detail_row['Issue Date'].strftime('%d-%m-%Y') if pd.notna(detail_row['Issue Date']) else 'Unknown'}")
+            st.markdown(f"**Expiry Date:** {detail_row['Expiry Date'].strftime('%d-%m-%Y') if pd.notna(detail_row['Expiry Date']) else 'Unknown'}")
+            st.markdown(f"**Consent Status:** {detail_row['Consent Status Enhanced']}")
+            st.markdown(f"**AUP(OP) Triggers:** {detail_row['AUP(OP) Triggers']}")
+            st.markdown(f"**Reason for Consent:** {detail_row['Reason for Consent']}")
+            st.markdown(f"**Consent Conditions:** {detail_row['Consent Conditions']}")
 
-    with st.expander("LLM Semantic Search Results", expanded=False):
-        # The query_input variable is now taken directly from the widget above
-        if query_input: # This `query_input` now holds the current value of the text_input
-            corpus_embeddings = st.session_state.get('corpus_embeddings')
-            if corpus_embeddings is not None:
-                query_embedding = embedding_model.encode(query_input, convert_to_tensor=True)
-                scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-                top_k_indices = scores.argsort(descending=True)
-                similarity_threshold = st.slider("LLM Semantic Search Relevance Threshold", 0.0, 1.0, 0.5, 0.05)
+            # Provide PDF download link
+            file_name_for_download = detail_row['__file_name__']
+            file_bytes_for_download = detail_row['__file_bytes__']
+            st.download_button(
+                label=f"Download Original PDF: {file_name_for_download}",
+                data=file_bytes_for_download,
+                file_name=file_name_for_download,
+                mime="application/pdf"
+            )
 
-                results_found = 0
-                for idx in top_k_indices:
-                    score = scores[idx.item()]
-                    if score >= similarity_threshold and results_found < 3:
-                        row = df.iloc[idx.item()]
-                        st.markdown(f"**{results_found + 1}. {row['Company Name']} ({row['Consent Number']})** (Similarity: {score:.2f})")
-                        expiry_display = row['Expiry Date'].strftime('%Y-%m-%d') if pd.notna(row['Expiry Date']) else 'N/A'
-                        st.markdown(f"- **Expires**: {expiry_display}")
-                        safe_filename = clean_surrogates(row['__file_name__'])
-                        st.download_button(label=f"Download PDF ({safe_filename})", data=row['__file_bytes__'], file_name=safe_filename, mime="application/pdf", key=f"download_search_{idx.item()}")
-                        st.markdown("---")
-                        results_found += 1
-                if results_found == 0:
-                    st.info(f"No documents found above the {similarity_threshold:.2f} relevance threshold.")
+    st.markdown("---")
+
+    # --- LLM Chatbots ---
+    st.subheader("AI Chatbots")
+    tab_gemini, tab_groq, tab_semantic = st.tabs(["Gemini AI Chat", "Groq AI Chat (Langchain)", "LLM Semantic Query"])
+
+    # --- Gemini AI Chat ---
+    with tab_gemini:
+        if not google_api_key:
+            st.warning("Google API Key not found. Please add it to your .env file or Streamlit secrets for Gemini AI functionality.")
+        else:
+            model = genai.GenerativeModel('gemini-pro')
+            if "gemini_chat_history" not in st.session_state:
+                st.session_state.gemini_chat_history = []
+
+            for message in st.session_state.gemini_chat_history:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["parts"])
+
+            if prompt := st.chat_input("Ask Gemini about the consent data..."):
+                st.session_state.gemini_chat_history.append({"role": "user", "parts": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                # Prepare context for Gemini
+                context_for_gemini = "Here is the parsed consent data in a DataFrame format:\n"
+                context_for_gemini += df.to_markdown(index=False)
+                context_for_gemini += "\n\nBased on this data, " + prompt
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Gemini is thinking..."):
+                        try:
+                            response = model.generate_content(context_for_gemini)
+                            gemini_response = response.text
+                            st.markdown(gemini_response)
+                            st.session_state.gemini_chat_history.append({"role": "assistant", "parts": gemini_response})
+                            log_ai_chat(prompt, gemini_response)
+                        except Exception as e:
+                            st.error(f"Gemini AI error: {e}")
+                            st.session_state.gemini_chat_history.append({"role": "assistant", "parts": f"Sorry, I encountered an error: {e}"})
+
+    # --- Groq AI Chat ---
+    with tab_groq:
+        if not groq_api_key:
+            st.warning("Groq API Key not found. Please add it to your .env file or Streamlit secrets for Groq AI functionality.")
+        else:
+            if "groq_chat_history" not in st.session_state:
+                st.session_state.groq_chat_history = []
+
+            # Display chat messages from history on app rerun
+            for message in st.session_state.groq_chat_history:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+            if prompt := st.chat_input("Ask Groq about the consent data... ", key="groq_chat_input"):
+                st.session_state.groq_chat_history.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                # Prepare context for Groq (Langchain)
+                context_for_groq = "Here is the parsed consent data in a DataFrame format:\n"
+                context_for_groq += df.to_markdown(index=False)
+                context_for_groq += "\n\nBased on this data, " + prompt
+
+                # Initialize ChatGroq model
+                chat = ChatGroq(temperature=0, groq_api_key=groq_api_key, model_name="llama3-8b-8192")
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Groq is thinking..."):
+                        try:
+                            # Use Langchain's message format
+                            messages = [
+                                SystemMessage(content="You are a helpful AI assistant that answers questions based on provided consent data."),
+                                HumanMessage(content=context_for_groq)
+                            ]
+                            response = chat.invoke(messages)
+                            groq_response = response.content
+                            st.markdown(groq_response)
+                            st.session_state.groq_chat_history.append({"role": "assistant", "content": groq_response})
+                            log_ai_chat(prompt, groq_response)
+                        except Exception as e:
+                            st.error(f"Groq AI error: {e}")
+                            st.session_state.groq_chat_history.append({"role": "assistant", "content": f"Sorry, I encountered an error: {e}"})
+
+    # --- LLM Semantic Query ---
+    with tab_semantic:
+        st.info("Use this to find relevant consent reports based on semantic similarity to your query.")
+        # The query_input variable is already defined in the sidebar and updates st.session_state.semantic_search_query
+
+        if st.session_state.corpus_embeddings is not None:
+            if st.session_state.semantic_search_query: # Check if the query input actually has a value
+                with st.spinner("Performing semantic search..."):
+                    try:
+                        query_embedding = embedding_model.encode(st.session_state.semantic_search_query, convert_to_tensor=True)
+                        # Calculate cosine similarities
+                        cosine_scores = util.cos_sim(query_embedding, st.session_state.corpus_embeddings)[0]
+                        
+                        # Get the top 5 most similar
+                        top_results = st.session_state.master_df.copy()
+                        top_results['score'] = cosine_scores.cpu().numpy()
+                        top_results = top_results.sort_values(by='score', ascending=False).head(5)
+
+                        st.subheader("Top 5 Semantically Similar Consent Reports:")
+                        if not top_results.empty:
+                            for index, row in top_results.iterrows():
+                                with st.expander(f"**Consent:** {row['Company Name']} ({row['Consent Number']}) - Score: {row['score']:.4f}", expanded=False):
+                                    st.markdown(f"**Address:** {row['Address']}")
+                                    st.markdown(f"**Issue Date:** {row['Issue Date'].strftime('%d-%m-%Y') if pd.notna(row['Issue Date']) else 'Unknown'}")
+                                    st.markdown(f"**Expiry Date:** {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notna(row['Expiry Date']) else 'Unknown'}")
+                                    st.markdown(f"**Consent Status:** {row['Consent Status Enhanced']}")
+                                    st.markdown(f"**Reason for Consent (Snippet):** {row['Reason for Consent'][:500]}...") # Show a snippet
+                                    st.markdown(f"**Consent Conditions (Snippet):** {row['Consent Conditions'][:500]}...") # Show a snippet
+
+                                    file_name_sem = row['__file_name__']
+                                    file_bytes_sem = row['__file_bytes__']
+                                    st.download_button(
+                                        label=f"Download Original PDF: {file_name_sem}",
+                                        data=file_bytes_sem,
+                                        file_name=file_name_sem,
+                                        mime="application/pdf",
+                                        key=f"download_sem_{index}"
+                                    )
+                        else:
+                            st.info("No relevant results found.")
+                    except Exception as e:
+                        st.error(f"Semantic search error: {e}")
             else:
-                st.warning("Please upload and process files to enable semantic search.")
+                st.info("Enter a query in the sidebar to perform a semantic search.")
+        else:
+            st.info("Please upload PDF files first to enable semantic search.")
 
 else:
-    st.info("👈 Please upload one or more PDF consent files using the control panel on the left to get started.")
+    st.info("Upload PDF files using the sidebar to get started!")
 
-# ----------------------------
-# Ask AI About Consents Chatbot
-# ----------------------------
-
-st.markdown("---")
-st.subheader("Ask AI About Consents")
-
-with st.expander("AI Chatbot", expanded=True):
-    st.markdown("""<span style="color:#dc002e;">Ask anything about the uploaded consents. The AI will use the full dataset as its knowledge base.</span>""", unsafe_allow_html=True)
-    llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
-
-    st.write("Suggested queries:")
-    q_cols = st.columns(3)
-    q_cols[0].button("What is the average expiry duration for consents?", on_click=set_chat_input, args=("What is the average expiry duration for consents?",), use_container_width=True)
-    q_cols[1].button("List all companies with 'Road' in their name", on_click=set_chat_input, args=("List all companies with 'Road' in their name",), use_container_width=True)
-    q_cols[2].button("Are there any consents related to concrete batching?", on_click=set_chat_input, args=("Are there any consents related to concrete batching?",), use_container_width=True)
-
-    chat_input = st.text_area("Your query:", key="chat_input")
-
-    if st.button("Ask AI", key="ask_ai_button"):
-        if not chat_input.strip():
-            st.warning("Please enter a query.")
-        elif st.session_state.master_df.empty:
-            st.error("Cannot ask AI without uploaded documents. Please upload files first.")
-        else:
-            with st.spinner("AI is thinking... (Analyzing full dataset & generating response)"):
-                try:
-                    context_df = st.session_state.master_df
-
-                    context_for_ai = context_df[[
-                        "Consent Number", "Company Name", "Address", "Issue Date",
-                        "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced", "Reason for Consent"
-                    ]].copy()
-                    context_for_ai.rename(columns={"AUP(OP) Triggers": "AUP(OP) Triggers"}, inplace=True)
-
-                    for col in ['Issue Date', 'Expiry Date']:
-                        if pd.api.types.is_datetime64_any_dtype(context_for_ai[col]):
-                             context_for_ai[col] = context_for_ai[col].dt.strftime('%Y-%m-%d')
-                        context_for_ai[col] = context_for_ai[col].fillna("N/A")
-
-                    context_sample_json = json.dumps(context_for_ai.to_dict(orient="records"), indent=2)
-                    current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
-
-                    system_message_content = f"""
-                    You are an intelligent assistant for Auckland Air Discharge Consents. Answer the user's query based *strictly and exclusively* on the provided 'Consent Data'.
-
-                    Crucial Directives:
-                    1.  **Strict Data Adherence:** Base your entire response on the information in the 'Consent Data'. Do not use external knowledge.
-                    2.  **Aggregate & List:** For questions asking for counts or lists (e.g., "how many", "list all"), process the entire provided dataset to give an accurate answer.
-                    3.  **MANDATORY CITATION:** When you use information from a specific consent, you **MUST** cite its 'Consent Number' in brackets. Example: "The primary activity is a quarry operation [DIS123456]."
-                    4.  **Handle Missing Info:** If the answer cannot be found in the provided data, state: "I cannot find that information in the provided data."
-                    5.  **Current Date:** The current date is {current_auckland_time_str}.
-                    6.  **Answer Structure:** Always begin your response with a direct, one-sentence summary that answers the core question. Provide any further details in a bulleted list below the summary.
-                    7.  **Default Summaries:** If asked for a general summary of a specific consent (e.g., "Tell me about consent DIS123456"), provide a standard summary that includes its 'Company Name', 'Consent Status Enhanced', and 'Expiry Date'.
-                    8.  **Handling Ambiguity:** If a user's query is ambiguous and could refer to multiple consents, list the potential matches and ask the user for clarification instead of guessing.
-                    9.  **Calculations:** When asked to perform a calculation (e.g., average duration, count), state the final answer clearly, then briefly explain how you calculated it from the provided data.
-                    
-                    ---
-                    Consent Data (JSON format):
-                    """
-                    full_prompt_for_human_message = f"{context_sample_json}\n\nUser Query: {chat_input}"
-
-                    st.markdown(f"### 🖥️ Answer from {llm_provider}")
-                    answer_placeholder = st.empty()
-
-                    if llm_provider == "Gemini AI":
-                        if google_api_key:
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            response_stream = model.generate_content(f"{system_message_content}\n{full_prompt_for_human_message}", stream=True)
-
-                            def stream_to_placeholder():
-                                full_response = ""
-                                for chunk in response_stream:
-                                    if chunk.text:
-                                        full_response += chunk.text
-                                        yield chunk.text
-                                log_ai_chat(chat_input, full_response)
-
-                            answer_placeholder.write_stream(stream_to_placeholder)
-                        else:
-                            answer_placeholder.error("Gemini AI is offline (Google API key not found).")
-
-                    elif llm_provider == "Groq AI":
-                        if groq_api_key:
-                            chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-8b-8192")
-                            messages = [SystemMessage(content=system_message_content), HumanMessage(content=full_prompt_for_human_message)]
-
-                            def stream_to_placeholder_groq():
-                                full_response = ""
-                                for chunk in chat_groq.stream(messages):
-                                    content = chunk.content
-                                    if content:
-                                        full_response += content
-                                        yield content
-                                log_ai_chat(chat_input, full_response)
-
-                            answer_placeholder.write_stream(stream_to_placeholder_groq)
-                        else:
-                            answer_placeholder.error("Groq AI is offline (Groq API key not found).")
-                except Exception as e:
-                    st.error(f"An error occurred during AI interaction: {e}")
-                    st.exception(e)
-
-    chat_log_csv = get_chat_log_as_csv()
-    if chat_log_csv:
-        st.download_button("Download Chat History (CSV)", data=chat_log_csv, file_name="ai_chat_history.csv", mime="text/csv")
-    else:
-        st.info("No chat history available to download yet.")
+# --- Chat Log Download ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("#### Chat History")
+chat_log_csv = get_chat_log_as_csv()
+if chat_log_csv:
+    st.sidebar.download_button(
+        label="Download Chat Log (CSV)",
+        data=chat_log_csv,
+        file_name="ai_chat_log.csv",
+        mime="text/csv"
+    )
+else:
+    st.sidebar.info("No chat history to download yet.")
 
 st.markdown("---")
 st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
