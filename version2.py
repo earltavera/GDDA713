@@ -111,6 +111,39 @@ with st.expander("About the Auckland Air Discharge Consent Dashboard", expanded=
     """)
 st.markdown("---")
 
+# --- "About Us" Section  ---
+with st.expander("About the Creators", expanded=False):
+    # Build robust paths to images
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    alana_image_path = os.path.join(script_dir, "assets", "Alana.jpg")
+    earl_image_path = os.path.join(script_dir, "assets", "Earl_images.jpg")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        # Check if the file exists before trying to display it
+        if os.path.exists(alana_image_path):
+            # FIX 1: Changed use_column_width to use_container_width
+            st.image(alana_image_path, caption="Alana Jacobson-Pepere | Data Analytics Student | NZSE GDDA7224C", use_container_width=True)
+        else:
+            st.warning("Image file 'Alana.jpg' not found. Please ensure it is in the 'assets' subfolder.")
+
+    with col2:
+        # Check if the file exists before trying to display it
+        if os.path.exists(earl_image_path):
+            # FIX 1: Changed use_column_width to use_container_width
+            st.image(earl_image_path, caption="Earl Tavera | Data Analytics Student | NZSE GDDA7224C", use_container_width=True)
+        else:
+            st.warning("Image file 'Earl_images.jpg' not found. Please ensure it is in the 'assets' subfolder.")
+
+    # Add the descriptive text below the images
+    st.write("""
+    This dashboard was developed by **Alana Jacobson-Pepere** and **Earl Tavera**.
+
+    Combining expertise in data science, artificial intelligence, and environmental regulation, their goal was to create a powerful yet accessible tool for stakeholders in Auckland. They are passionate about leveraging technology to simplify complex data, empower informed decision-making, and contribute to the sustainable management of our city's resources.
+    """)
+st.markdown("---")
+# --- END: "About Us" Section ---
+
 # --- Utility Functions ---
 def localize_to_auckland(dt):
     if pd.isna(dt) or not isinstance(dt, datetime):
