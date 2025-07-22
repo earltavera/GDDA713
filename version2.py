@@ -135,17 +135,21 @@ def geocode_address(address):
     if not address or pd.isna(address):
         return (None, None)
     standardized_address = address.strip()
+    # Add Auckland and New Zealand if not already present, ensuring better geocoding accuracy
     if not re.search(r'auckland', standardized_address, re.IGNORECASE):
         standardized_address += ", Auckland"
     if not re.search(r'new zealand|nz', standardized_address, re.IGNORECASE):
         standardized_address += ", New Zealand"
     geolocator = Nominatim(user_agent="air_discharge_dashboard")
-    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+    # Increase timeout for geocoding
+    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1, max_tries=5, error_wait_seconds=5)
     try:
-        location = geocode(standardized_address)
+        location = geocode(standardized_address, timeout=10) # Increased timeout to 10 seconds
         if location:
             return (location.latitude, location.longitude)
-    except Exception:
+    except Exception as e:
+        # Log geocoding errors for debugging, but don't show to user constantly
+        print(f"Geocoding error for '{standardized_address}': {e}")
         pass
     return (None, None)
 
@@ -301,25 +305,25 @@ def extract_metadata(text):
         r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)", r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
         r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)", r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
         r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)", r"(?:Conditions Specific to air quality).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge - DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:regional discharge DIS\d{5:0}(?:-w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - discharge permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific conditions - DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)",
-        r"(?:Specific conditions - Air Discharge DIS\d{5:0}\b).*?(?=Advice notes)", r"(?:Air discharge - DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:DIS\d{5:0}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)", r"(?:DIS\d{5:0}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5:0}(?:-\w+)?\b - Specific conditions)",
-        r"(?:Specific Conditions - DIS\d{5:0}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)", r"(?:Conditions relevant to Air Discharge Permit DIS\d{5:0}(?:-\w+)?\b Only).*?(?=Advice notes)",
-        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Specific Conditions -)", r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Conditions relevant to Discharge Permit DIS\d{5:0}(?:-\w+)?\b only).*?(?=Advice notes)", r"(?:Specific conditions - air discharge permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge permit (DIS\d{5:0}(?:-\w+)?\b)).*?(?=Advice notes)", r"(?:Specific conditions - DIS\d{5:0}(?:-\w+)?\b (air)).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Specifc conditions)", r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
-        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)", r"(?:Specific conditions - Discharge to Air: DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)",
-        r"(?:Specific conditions - discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific conditions - air discharge permit (s15) DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Secific conditions)", r"(?:Specific conditions relating to Air discharge permit - DIS\d{5:0}(?:-\w+)?\b).*?(?=General Advice notes)",
-        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific Conditions - discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Specific conditions)",
-        r"(?:Specific conditions - Discharge to air: DIS\d{5:0}(?:-\w+)?\b).*?(?=Specific conditions)", r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
-        r"(?:Specific conditions - Air Discharge consent - DIS\d{5:0}(?:-\w+)?\b).*?(?=Specific conditions)", r"(?:Specific conditions - Discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:DIS\d{5:0}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5:0}\b) - Subdivision", r"(?:DIS\d{5:0}(?:-\w+)?\b & DIS\d{5:0}(?:-\w+)?\b).*?(?=SUB\d{5:0}\b) - Subdivision",
-        r"(?:Specific conditions - Discharge Permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice Notes - General)", r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
+        r"(?:Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)", r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)", r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
+        r"(?:Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)", r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)", r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)", r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)", r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)", r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)", r"(?:Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)",
+        r"(?:Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)", r"(?:Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
+        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)", r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
+        r"(?:Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)", r"(?:Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision", r"(?:DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)", r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
         r"(?<=Conditions).*?(?=Advice notes)"
     ]
     conditions_str = ""
@@ -343,8 +347,7 @@ def extract_metadata(text):
     }
 
 def clean_surrogates(text):
-    # This function is now crucial for preventing UnicodeDecodeError
-    # It handles characters that Python's default string encoding might struggle with.
+    # This function is crucial for preventing UnicodeDecodeError by handling problematic characters.
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
 def log_ai_chat(question, answer):
@@ -609,165 +612,193 @@ if not st.session_state.master_df.empty:
 
     st.markdown("---")
 
-    # --- LLM Chatbots ---
-    st.subheader("AI Chatbots")
-    tab_gemini, tab_groq, tab_semantic = st.tabs(["Gemini AI Chat", "Groq AI Chat (Langchain)", "LLM Semantic Query"])
+    # --- LLM Semantic Query (moved below the new chatbot for logical flow) ---
+    st.subheader("LLM Semantic Query")
+    st.info("Use this to find relevant consent reports based on semantic similarity to your query.")
+    
+    if st.session_state.corpus_embeddings is not None:
+        if st.session_state.semantic_search_query: # Check if the query input actually has a value
+            with st.spinner("Performing semantic search..."):
+                try:
+                    query_embedding = embedding_model.encode(st.session_state.semantic_search_query, convert_to_tensor=True)
+                    # Calculate cosine similarities
+                    cosine_scores = util.cos_sim(query_embedding, st.session_state.corpus_embeddings)[0]
+                    
+                    # Get the top 5 most similar
+                    top_results = st.session_state.master_df.copy()
+                    top_results['score'] = cosine_scores.cpu().numpy()
+                    top_results = top_results.sort_values(by='score', ascending=False).head(5)
 
-    # --- Gemini AI Chat ---
-    with tab_gemini:
-        if not google_api_key:
-            st.warning("Google API Key not found. Please add it to your .env file or Streamlit secrets for Gemini AI functionality.")
-        else:
-            model = genai.GenerativeModel('gemini-pro')
-            if "gemini_chat_history" not in st.session_state:
-                st.session_state.gemini_chat_history = []
+                    st.subheader("Top 5 Semantically Similar Consent Reports:")
+                    if not top_results.empty:
+                        for index, row in top_results.iterrows():
+                            with st.expander(f"**Consent:** {row['Company Name']} ({row['Consent Number']}) - Score: {row['score']:.4f}", expanded=False):
+                                st.markdown(f"**Address:** {row['Address']}")
+                                st.markdown(f"**Issue Date:** {row['Issue Date'].strftime('%d-%m-%Y') if pd.notna(row['Issue Date']) else 'Unknown'}")
+                                st.markdown(f"**Expiry Date:** {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notna(row['Expiry Date']) else 'Unknown'}")
+                                st.markdown(f"**Consent Status:** {row['Consent Status Enhanced']}")
+                                st.markdown(f"**Reason for Consent (Snippet):** {row['Reason for Consent'][:500]}...") # Show a snippet
+                                st.markdown(f"**Consent Conditions (Snippet):** {row['Consent Conditions'][:500]}...") # Show a snippet
 
-            for message in st.session_state.gemini_chat_history:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["parts"])
-
-            if prompt := st.chat_input("Ask Gemini about the consent data..."):
-                st.session_state.gemini_chat_history.append({"role": "user", "parts": prompt})
-                with st.chat_message("user"):
-                    st.markdown(prompt)
-
-                # Prepare context for Gemini: Ensure all data is string-compatible for to_markdown
-                df_for_markdown_gemini = df.copy()
-                for col in df_for_markdown_gemini.columns:
-                    # Apply a robust string conversion that handles potential non-string types and NaNs
-                    df_for_markdown_gemini[col] = df_for_markdown_gemini[col].apply(
-                        lambda x: str(x).encode('utf-8', 'ignore').decode('utf-8') if pd.notna(x) else ''
-                    )
-                
-                context_for_gemini = "Here is the parsed consent data in a DataFrame format:\n"
-                context_for_gemini += df_for_markdown_gemini.to_markdown(index=False) # Use the cleaned DataFrame
-                context_for_gemini += "\n\nBased on this data, " + prompt
-
-                with st.chat_message("assistant"):
-                    with st.spinner("Gemini is thinking..."):
-                        try:
-                            response = model.generate_content(context_for_gemini)
-                            gemini_response = response.text
-                            st.markdown(gemini_response)
-                            st.session_state.gemini_chat_history.append({"role": "assistant", "parts": gemini_response})
-                            log_ai_chat(prompt, gemini_response)
-                        except Exception as e:
-                            st.error(f"Gemini AI error: {e}")
-                            st.session_state.gemini_chat_history.append({"role": "assistant", "parts": f"Sorry, I encountered an error: {e}"})
-
-    # --- Groq AI Chat ---
-    with tab_groq:
-        if not groq_api_key:
-            st.warning("Groq API Key not found. Please add it to your .env file or Streamlit secrets for Groq AI functionality.")
-        else:
-            if "groq_chat_history" not in st.session_state:
-                st.session_state.groq_chat_history = []
-
-            # Display chat messages from history on app rerun
-            for message in st.session_state.groq_chat_history:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-
-            if prompt := st.chat_input("Ask Groq about the consent data... ", key="groq_chat_input"):
-                st.session_state.groq_chat_history.append({"role": "user", "content": prompt})
-                with st.chat_message("user"):
-                    st.markdown(prompt)
-
-                # Prepare context for Groq (Langchain): Ensure all data is string-compatible for to_markdown
-                df_for_markdown_groq = df.copy()
-                for col in df_for_markdown_groq.columns:
-                    # Apply a robust string conversion that handles potential non-string types and NaNs
-                    df_for_markdown_groq[col] = df_for_markdown_groq[col].apply(
-                        lambda x: str(x).encode('utf-8', 'ignore').decode('utf-8') if pd.notna(x) else ''
-                    )
-
-                context_for_groq = "Here is the parsed consent data in a DataFrame format:\n"
-                context_for_groq += df_for_markdown_groq.to_markdown(index=False)
-                context_for_groq += "\n\nBased on this data, " + prompt
-
-                # Initialize ChatGroq model
-                chat = ChatGroq(temperature=0, groq_api_key=groq_api_key, model_name="llama3-8b-8192")
-
-                with st.chat_message("assistant"):
-                    with st.spinner("Groq is thinking..."):
-                        try:
-                            # Use Langchain's message format
-                            messages = [
-                                SystemMessage(content="You are a helpful AI assistant that answers questions based on provided consent data."),
-                                HumanMessage(content=context_for_groq)
-                            ]
-                            response = chat.invoke(messages)
-                            groq_response = response.content
-                            st.markdown(groq_response)
-                            st.session_state.groq_chat_history.append({"role": "assistant", "content": groq_response})
-                            log_ai_chat(prompt, groq_response)
-                        except Exception as e:
-                            st.error(f"Groq AI error: {e}")
-                            st.session_state.groq_chat_history.append({"role": "assistant", "content": f"Sorry, I encountered an error: {e}"})
-
-    # --- LLM Semantic Query ---
-    with tab_semantic:
-        st.info("Use this to find relevant consent reports based on semantic similarity to your query.")
-
-        if st.session_state.corpus_embeddings is not None:
-            if st.session_state.semantic_search_query: # Check if the query input actually has a value
-                with st.spinner("Performing semantic search..."):
-                    try:
-                        query_embedding = embedding_model.encode(st.session_state.semantic_search_query, convert_to_tensor=True)
-                        # Calculate cosine similarities
-                        cosine_scores = util.cos_sim(query_embedding, st.session_state.corpus_embeddings)[0]
-                        
-                        # Get the top 5 most similar
-                        top_results = st.session_state.master_df.copy()
-                        top_results['score'] = cosine_scores.cpu().numpy()
-                        top_results = top_results.sort_values(by='score', ascending=False).head(5)
-
-                        st.subheader("Top 5 Semantically Similar Consent Reports:")
-                        if not top_results.empty:
-                            for index, row in top_results.iterrows():
-                                with st.expander(f"**Consent:** {row['Company Name']} ({row['Consent Number']}) - Score: {row['score']:.4f}", expanded=False):
-                                    st.markdown(f"**Address:** {row['Address']}")
-                                    st.markdown(f"**Issue Date:** {row['Issue Date'].strftime('%d-%m-%Y') if pd.notna(row['Issue Date']) else 'Unknown'}")
-                                    st.markdown(f"**Expiry Date:** {row['Expiry Date'].strftime('%d-%m-%Y') if pd.notna(row['Expiry Date']) else 'Unknown'}")
-                                    st.markdown(f"**Consent Status:** {row['Consent Status Enhanced']}")
-                                    st.markdown(f"**Reason for Consent (Snippet):** {row['Reason for Consent'][:500]}...") # Show a snippet
-                                    st.markdown(f"**Consent Conditions (Snippet):** {row['Consent Conditions'][:500]}...") # Show a snippet
-
-                                    file_name_sem = row['__file_name__']
-                                    file_bytes_sem = row['__file_bytes__']
-                                    st.download_button(
-                                        label=f"Download Original PDF: {file_name_sem}",
-                                        data=file_bytes_sem,
-                                        file_name=file_name_sem,
-                                        mime="application/pdf",
-                                        key=f"download_sem_{index}"
-                                    )
-                        else:
-                            st.info("No relevant results found.")
-                    except Exception as e:
-                        st.error(f"Semantic search error: {e}")
+                                file_name_sem = row['__file_name__']
+                                file_bytes_sem = row['__file_bytes__']
+                                st.download_button(
+                                    label=f"Download Original PDF: {file_name_sem}",
+                                    data=file_bytes_sem,
+                                    file_name=file_name_sem,
+                                    mime="application/pdf",
+                                    key=f"download_sem_{index}"
+                                )
+                    else:
+                        st.info("No relevant results found.")
+                except Exception as e:
+                    st.error(f"Semantic search error: {e}")
             else: # This 'else' aligns with 'if st.session_state.semantic_search_query:'
                 st.info("Enter a query in the sidebar to perform a semantic search.")
         else: # This 'else' aligns with 'if st.session_state.corpus_embeddings is not None:'
             st.info("Please upload PDF files first to enable semantic search.")
 
+    # ----------------------------
+    # Ask AI About Consents Chatbot (NEW SECTION)
+    # ----------------------------
+
+    st.markdown("---") # Horizontal line for separation
+    st.subheader("Ask AI About Consents")
+
+    with st.expander("AI Chatbot", expanded=True):
+        st.markdown("""<span style="color:#dc002e;">Ask anything about air discharge consents (e.g. common triggers, expiry date, or consents in Manukau)</span>""", unsafe_allow_html=True)
+
+        llm_provider = st.radio("Choose LLM Provider", ["Gemini AI", "Groq AI"], horizontal=True, key="llm_provider_radio")
+        chat_input = st.text_area("Search any query:", key="chat_input")
+
+        if st.button("Ask AI", key="ask_ai_button"):
+            if not chat_input.strip():
+                st.warning("Please enter a query.")
+            else:
+                with st.spinner("AI is thinking and gathering data..."):
+                    try:
+                        context_sample_list = []
+                        # relevant_files_for_download = [] # This variable was unused in your snippet
+
+                        current_auckland_time_str = datetime.now(pytz.timezone("Pacific/Auckland")).strftime("%Y-%m-%d")
+
+                        if not df.empty:
+                            context_df_for_ai = df[[
+                                "Resource Consent Numbers", "Company Name", "Address", "Issue Date",
+                                "Expiry Date", "AUP(OP) Triggers", "Consent Status Enhanced" # Using Enhanced Status for AI
+                            ]].copy()
+
+                            # Apply robust string conversion and handle NaNs for columns before JSON conversion
+                            for col in context_df_for_ai.columns:
+                                if pd.api.types.is_datetime64_any_dtype(context_df_for_ai[col]):
+                                    # Format datetime objects explicitly for JSON readability
+                                    context_df_for_ai[col] = context_df_for_ai[col].dt.strftime('%Y-%m-%d').fillna('')
+                                else:
+                                    # For other columns, convert to string and fill NaNs
+                                    context_df_for_ai[col] = context_df_for_ai[col].astype(str).fillna('')
+
+                            context_sample_list = context_df_for_ai.to_dict(orient="records")
+
+                            st.info("The AI is analyzing all uploaded data.")
+
+                        else:
+                            st.info("No documents uploaded. AI is answering with general knowledge or default sample data.")
+                            context_sample_list = [{"Company Name": "Default Sample Ltd", "Resource Consent Numbers": "DIS60327400", "Address": "123 Default St, Auckland", "Consent Status": "Active", "AUP(OP) Triggers": "E14.1.1 (default)", "Issue Date": "2024-01-01", "Expiry Date": "2025-12-31"}]
+
+                        context_sample_json = json.dumps(context_sample_list, indent=2)
+
+                        system_message_content = f"""
+                        You are an intelligent assistant specializing in Auckland Air Discharge Consents. Your core task is to answer user questions based *strictly and exclusively* on the "Provided Consent Data" below.
+
+                        Crucial Directives:
+                        1.  **Strict Data Adherence:** Base your entire response solely on the information contained within the 'Provided Consent Data'. Do not introduce any external knowledge, assumptions, or speculative content.
+                        2.  **Aggregate Queries:** For questions asking for counts, summaries, or trends (e.g., "how many", "list all", "which year"), process the entire provided dataset to give an accurate answer.
+                        3.  **Direct Retrieval & Listing:** If the user asks for a count of items (e.g., consents issued in a year), after providing the count, *also list ONLY the 'Company Name' for each item in a clear, formatted way within the answer*. For example: "There are 3 consents issued in 2019: Company A, Company B, Company C." Do NOT include Resource Consent Numbers or any other identifiers unless explicitly asked for them.
+                        4.  **Handling Missing Information:** If the answer to any part of the user's query cannot be directly found or calculated from the 'Provided Consent Data' *as presented*, you *must* explicitly state: "I cannot find that specific information within the currently provided data." Do not try to guess or infer.
+                        5.  **Current Date Context:** The current date in Auckland for reference is {current_auckland_time_str}. Use this if the query relates to the current status or remaining time for consents.
+                        6.  **Concise Format:** Present your answer in clear, concise bullet points or a brief summary.
+                        7.  **Tone:** Maintain a helpful, professional, and purely data-driven tone.
+
+                        ---
+                        Provided Consent Data (JSON format, each object is a consent record):
+                        """
+
+                        user_query = f"""
+{system_message_content}
+{context_sample_json}
+
+---
+User Query: {chat_input}
+
+Answer:
+"""
+
+                        answer_raw = ""
+                        if llm_provider == "Gemini AI":
+                            if google_api_key:
+                                GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest" # Updated to a reliable and fast model
+                                gemini_model = genai.GenerativeModel(GEMINI_MODEL_TO_USE)
+                                try:
+                                    response = gemini_model.generate_content(user_query)
+                                    if response and hasattr(response, 'text'):
+                                        answer_raw = response.text
+                                    else:
+                                        answer_raw = "Gemini generated an empty or invalid response. It might have been filtered for safety reasons or encountered an internal error. Check your console for details."
+                                except Exception as e:
+                                    answer_raw = f"Gemini API error: {e}. This could be due to the chosen Gemini model ('{GEMINI_MODEL_TO_USE}') not being available or an API issue, or the input context being too long for the model."
+                            else:
+                                answer_raw = "Gemini AI is offline (Google API key not found)."
+
+                        elif llm_provider == "Groq AI":
+                            if groq_api_key:
+                                chat_groq = ChatGroq(groq_api_key=groq_api_key, model_name="llama3-8b-8192") # Updated to a reliable model
+                                try:
+                                    groq_response = chat_groq.invoke([
+                                        SystemMessage(content=system_message_content),
+                                        HumanMessage(content=f"{context_sample_json}\n\nUser Query: {chat_input}")
+                                    ])
+                                    answer_raw = groq_response.content if hasattr(groq_response, 'content') else str(groq_response)
+                                except Exception as e:
+                                    answer_raw = f"Groq API error: {e}. This could be due to the chosen Groq model ('llama3-8b-8192') not being available or an API issue, or the input context being too long for the model."
+                            else:
+                                answer_raw = "Groq AI is offline (Groq API key not found)."
+                        else:
+                            st.warning("Selected LLM provider is not available or supported.")
+                            answer_raw = "AI provider not available."
+
+
+                        st.markdown(f"### 🖥️  Answer from {llm_provider}\n\n{answer_raw}")
+
+                        if answer_raw and "offline" not in answer_raw and "unavailable" not in answer_raw and "API error" not in answer_raw and "Gemini API error" not in answer_raw:
+                            log_ai_chat(chat_input, answer_raw)
+
+                    except Exception as e:
+                        st.error(f"AI interaction error: {e}")
+                        # Log the full traceback for debugging in the console
+                        import traceback
+                        st.exception(traceback.exc_info())
+
+        chat_log_csv = get_chat_log_as_csv()
+        if chat_log_csv:
+            st.download_button(
+                label="Download Chat History (CSV)",
+                data=chat_log_csv,
+                file_name="ai_chat_history.csv",
+                mime="text/csv",
+                help="Download a CSV file containing all past AI chat interactions."
+            )
+        else:
+            st.info("No chat history available yet.")
+
+
 # --- This 'else' must be at the very same indentation level as the 'if not st.session_state.master_df.empty:' block ---
 else:
     st.info("Upload PDF files using the sidebar to get started!")
 
-# --- Chat Log Download ---
-st.sidebar.markdown("---")
-st.sidebar.markdown("#### Chat History")
-chat_log_csv = get_chat_log_as_csv()
-if chat_log_csv:
-    st.sidebar.download_button(
-        label="Download Chat Log (CSV)",
-        data=chat_log_csv,
-        file_name="ai_chat_log.csv",
-        mime="text/csv"
-    )
-else:
-    st.sidebar.info("No chat history to download yet.")
+# --- Chat Log Download (for entire app history if needed, though the one in chatbot is more relevant now) ---
+# Removed the redundant chat log download button from the sidebar as it's now inside the chatbot expander for direct relevance.
+# If you want a global chat log download button, you can place it back here with a different key.
 
-st.markdown("---")
-st.caption("Built by Earl Tavera & Alana Jacobson-Pepere | Auckland Air Discharge Intelligence © 2025")
+
+st.markdown("---") # Horizontal line for separation
+st.caption("Auckland Air Discharge Intelligence © 2025 | Built by Earl Tavera & Alana Jacobson-Pepere")
