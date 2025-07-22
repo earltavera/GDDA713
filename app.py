@@ -281,8 +281,93 @@ def extract_metadata(text):
     for pattern in trigger_patterns:
         triggers.extend(re.findall(pattern, text))
     triggers_str = " ".join(list(dict.fromkeys(triggers)))
+    
+    # Reason (Proposal)
+    proposal_patterns= [
+        r"Proposal\s*:\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Proposal\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Proposal\s*(.+?)(?=\n[A-Z]|\:)",
+        r"Introduction and summary of proposal\s*(.+?)\s*Submissions",
+        r"Proposal, site and locality description\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Summary of Decision\s*(.+?)(?=\n[A-Z]|\.)",
+        r"Summary of proposal and activity status\s*(.+?)(?=\n[A-Z]|\.)"
+    ]
+    proposal = []
+    for pattern in proposal_patterns:
+        proposal.extend(re.findall(pattern, text, re.MULTILINE | re.DOTALL))
+    proposal_str = "".join(list(dict.fromkeys(proposal)))
 
-    # ... (rest of the function is unchanged)
+    # Conditions (consolidated pattern for broader capture)
+    conditions_patterns = [
+        r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)",
+        r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
+        r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)",
+        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?:Conditions Specific to air quality).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)",
+        r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
+        r"(?:Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)",
+        r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)",
+        r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)",
+        r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)",
+        r"(?:Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)",
+        r"(?:Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)",
+        r"(?:Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
+        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
+        r"(?:Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?:DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision",
+        r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)",
+        r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
+        # Fallback broad pattern if specific ones fail
+        r"(?<=Conditions).*?(?=Advice notes)"
+    ]
+
+    conditions_str = ""
+    for pattern in conditions_patterns:
+        conditions_match = re.search(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
+        if conditions_match:
+            conditions_str = conditions_match.group(0).strip()
+            break
+
+    conditions_numbers = []
+    if conditions_str:
+        temp_conditions_matches = re.findall(r"^\s*(\d+\.?\d*)\s*[A-Z].*?(?=\n\s*\d+\.?\d*\s*[A-Z]|\Z)", conditions_str, re.MULTILINE | re.DOTALL)
+        flattened_temp_conditions = []
+        for item in temp_conditions_matches:
+            if isinstance(item, tuple):
+                flattened_temp_conditions.append(item[0])
+            else:
+                flattened_temp_conditions.append(item)
+
+        conditions_numbers = [re.match(r'^(\d+\.?\d*)', cn.strip()).group(1) for cn in flattened_temp_conditions if isinstance(cn, str) and re.match(r'^(\d+\.?\d*)', cn.strip())]
+        conditions_numbers = list(dict.fromkeys(conditions_numbers))
+
+
     
     return {
         "Resource Consent Numbers": rc_str or "Unknown", "Company Name": company_str or "Unknown",
