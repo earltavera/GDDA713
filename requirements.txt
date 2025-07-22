@@ -21,3 +21,4 @@ pdf2image
 pytesseract
 python-dateutil
 pdfplumber
+tabulate
