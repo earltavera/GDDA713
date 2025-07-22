@@ -626,9 +626,13 @@ if not st.session_state.master_df.empty:
                 with st.chat_message("user"):
                     st.markdown(prompt)
 
-                # Prepare context for Gemini
+                # Prepare context for Gemini: Ensure all data is string-compatible for to_markdown
+                df_for_markdown_gemini = df.copy()
+                for col in df_for_markdown_gemini.columns:
+                    df_for_markdown_gemini[col] = df_for_markdown_gemini[col].astype(str).fillna('')
+
                 context_for_gemini = "Here is the parsed consent data in a DataFrame format:\n"
-                context_for_gemini += df.to_markdown(index=False)
+                context_for_gemini += df_for_markdown_gemini.to_markdown(index=False)
                 context_for_gemini += "\n\nBased on this data, " + prompt
 
                 with st.chat_message("assistant"):
@@ -661,9 +665,13 @@ if not st.session_state.master_df.empty:
                 with st.chat_message("user"):
                     st.markdown(prompt)
 
-                # Prepare context for Groq (Langchain)
+                # Prepare context for Groq (Langchain): Ensure all data is string-compatible for to_markdown
+                df_for_markdown_groq = df.copy()
+                for col in df_for_markdown_groq.columns:
+                    df_for_markdown_groq[col] = df_for_markdown_groq[col].astype(str).fillna('')
+
                 context_for_groq = "Here is the parsed consent data in a DataFrame format:\n"
-                context_for_groq += df.to_markdown(index=False)
+                context_for_groq += df_for_markdown_groq.to_markdown(index=False)
                 context_for_groq += "\n\nBased on this data, " + prompt
 
                 # Initialize ChatGroq model
