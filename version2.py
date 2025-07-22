@@ -343,6 +343,8 @@ def extract_metadata(text):
     }
 
 def clean_surrogates(text):
+    # This function is now crucial for preventing UnicodeDecodeError
+    # It handles characters that Python's default string encoding might struggle with.
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
 def log_ai_chat(question, answer):
@@ -456,6 +458,12 @@ if uploaded_files:
                 file_bytes = file.read()
                 with fitz.open(stream=file_bytes, filetype="pdf") as doc:
                     text = "\n".join(page.get_text() for page in doc)
+                
+                # --- IMPORTANT CHANGE HERE ---
+                # Apply clean_surrogates immediately after extracting text from PDF
+                text = clean_surrogates(text)
+                # --- END IMPORTANT CHANGE ---
+
                 data = extract_metadata(text)
                 data["__file_name__"] = file.name
                 data["__file_bytes__"] = file_bytes
@@ -629,8 +637,13 @@ if not st.session_state.master_df.empty:
                 # Prepare context for Gemini: Ensure all data is string-compatible for to_markdown
                 df_for_markdown_gemini = df.copy()
                 for col in df_for_markdown_gemini.columns:
-                    df_for_markdown_gemini[col] = df_for_markdown_gemini[col].astype(str).fillna('')
-
+                    # Apply a more robust string conversion that handles potential non-string types and NaNs
+                    # The .astype(str) can still be prone to Unicode errors if the underlying data is truly messed up
+                    # This .apply(lambda x: str(x).encode...decode) is more explicit about error handling
+                    df_for_markdown_gemini[col] = df_for_markdown_gemini[col].apply(
+                        lambda x: str(x).encode('utf-8', 'ignore').decode('utf-8') if pd.notna(x) else ''
+                    )
+                
                 context_for_gemini = "Here is the parsed consent data in a DataFrame format:\n"
                 context_for_gemini += df_for_markdown_gemini.to_markdown(index=False)
                 context_for_gemini += "\n\nBased on this data, " + prompt
@@ -668,7 +681,10 @@ if not st.session_state.master_df.empty:
                 # Prepare context for Groq (Langchain): Ensure all data is string-compatible for to_markdown
                 df_for_markdown_groq = df.copy()
                 for col in df_for_markdown_groq.columns:
-                    df_for_markdown_groq[col] = df_for_markdown_groq[col].astype(str).fillna('')
+                    # Apply a more robust string conversion that handles potential non-string types and NaNs
+                    df_for_markdown_groq[col] = df_for_markdown_groq[col].apply(
+                        lambda x: str(x).encode('utf-8', 'ignore').decode('utf-8') if pd.notna(x) else ''
+                    )
 
                 context_for_groq = "Here is the parsed consent data in a DataFrame format:\n"
                 context_for_groq += df_for_markdown_groq.to_markdown(index=False)
