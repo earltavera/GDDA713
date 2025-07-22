@@ -32,7 +32,7 @@ google_api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY") or st.secrets.get("OPENWEATHER_API_KEY")
 
 # ------------------------
-# Streamlit Page Config & Style (MUST BE THE FIRST STREAMLIT COMMAND)
+# Streamlit Page Config & Style
 # ------------------------
 st.set_page_config(page_title="Auckland Air Discharge Consent Dashboard", layout="wide", page_icon="🇳🇿", initial_sidebar_state="expanded")
 
@@ -393,22 +393,19 @@ query_input = st.sidebar.text_input(
 if st.sidebar.button("Clear All Data", type="primary"):
     st.session_state.master_df = pd.DataFrame()
     st.session_state.corpus_embeddings = None
-    # Corrected way to clear the text input: update its controlling state variable
     st.session_state.semantic_search_query = ""
     st.session_state.chat_input = ""
-    # Increment the key to force file_uploader to clear
     st.session_state.file_uploader_key += 1
     st.rerun()
 
 # --- "About Us" Section in Sidebar ---
-st.sidebar.markdown("---") # Add a separator for better visual grouping
+st.sidebar.markdown("---")
 with st.sidebar.expander("About the Creators", expanded=False):
-    # Build robust paths to images
+   
     script_dir = os.path.dirname(os.path.abspath(__file__))
     alana_image_path = os.path.join(script_dir, "assets", "Alana.jpg")
     earl_image_path = os.path.join(script_dir, "assets", "Earl_images.jpg")
 
-    # Use a narrower column layout for images in the sidebar
     col1_sidebar, col2_sidebar = st.columns(2)
     with col1_sidebar:
         if os.path.exists(alana_image_path):
@@ -689,14 +686,12 @@ if not st.session_state.master_df.empty:
     # --- LLM Semantic Query ---
     with tab_semantic:
         st.info("Use this to find relevant consent reports based on semantic similarity to your query.")
-        # The query_input variable is already defined in the sidebar and updates st.session_state.semantic_search_query
 
         if st.session_state.corpus_embeddings is not None:
-            if st.session_state.semantic_search_query: # Check if the query input actually has a value
+            if st.session_state.semantic_search_query: 
                 with st.spinner("Performing semantic search..."):
                     try:
                         query_embedding = embedding_model.encode(st.session_state.semantic_search_query, convert_to_tensor=True)
-                        # Calculate cosine similarities
                         cosine_scores = util.cos_sim(query_embedding, st.session_state.corpus_embeddings)[0]
                         
                         # Get the top 5 most similar
