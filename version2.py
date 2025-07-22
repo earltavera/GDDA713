@@ -744,7 +744,7 @@ with tab_groq:
         else:
             st.info("Please upload PDF files first to enable semantic search.")
 
-else:
+    else:
     st.info("Upload PDF files using the sidebar to get started!")
 
 # --- Chat Log Download ---
