@@ -237,7 +237,7 @@ def extract_metadata(text):
         matches = re.findall(pattern, text, re.IGNORECASE)
         if matches:
             for dt_val_candidate in matches:
-                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_str_candidate
+                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_val_candidate
                 if not isinstance(dt_str, str) or not dt_str.strip():
                     continue
                 try:
@@ -301,25 +301,25 @@ def extract_metadata(text):
         r"(?:Specific conditions - Air Discharge DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions -)", r"(?:Air Quality conditions).*?(?=Wastewater Discharge conditions)",
         r"(?:Air Discharge Permit Conditions).*?(?=E\. Definitions)", r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=DIS\d{5,}(?:-\w+)?\b)",
         r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)", r"(?:Conditions Specific to air quality).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:regional discharge DIS\d{5,}(?:-w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)",
-        r"(?:Specific conditions - Air Discharge DIS\d{5,}\b).*?(?=Advice notes)", r"(?:Air discharge - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)", r"(?:DIS\d{5,}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5,}(?:-\w+)?\b - Specific conditions)",
-        r"(?:Specific Conditions - DIS\d{5,}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)", r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b Only).*?(?=Advice notes)",
-        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Specific Conditions -)", r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Conditions relevant to Discharge Permit DIS\d{5,}(?:-\w+)?\b only).*?(?=Advice notes)", r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge permit (DIS\d{5,}(?:-\w+)?\b)).*?(?=Advice notes)", r"(?:Specific conditions - DIS\d{5,}(?:-\w+)?\b (air)).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specifc conditions)", r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
-        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)", r"(?:Specific conditions - Discharge to Air: DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)",
-        r"(?:Specific conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific conditions - air discharge permit (s15) DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:Specific conditions - air discharge permit DIS\d{5,}(?:-\w+)?\b).*?(?=Secific conditions)", r"(?:Specific conditions relating to Air discharge permit - DIS\d{5,}(?:-\w+)?\b).*?(?=General Advice notes)",
-        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific Conditions - discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)",
-        r"(?:Specific conditions - Discharge to air: DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)", r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
-        r"(?:Specific conditions - Air Discharge consent - DIS\d{5,}(?:-\w+)?\b).*?(?=Specific conditions)", r"(?:Specific conditions - Discharge consent DIS\d{5,}(?:-\w+)?\b).*?(?=Advice notes)",
-        r"(?:DIS\d{5,}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5,}\b) - Subdivision", r"(?:DIS\d{5,}(?:-\w+)?\b & DIS\d{5,}(?:-\w+)?\b).*?(?=SUB\d{5,}\b) - Subdivision",
-        r"(?:Specific conditions - Discharge Permit DIS\d{5,}(?:-\w+)?\b).*?(?=Advice Notes - General)", r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
+        r"(?:Specific conditions - air discharge - DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:regional discharge DIS\d{5:0}(?:-w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific conditions - DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific conditions - Air Discharge DIS\d{5:0}\b).*?(?=Advice notes)", r"(?:Air discharge - DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5:0}(?:-\w+)?\b - Specific conditions).*?(?=Advice notes)", r"(?:DIS\d{5:0}(?:-\w+)?\b - Specific conditions).*?(?=DIS\d{5:0}(?:-\w+)?\b - Specific conditions)",
+        r"(?:Specific Conditions - DIS\d{5:0}(?:-\w+)?\b (s15 Air Discharge permit)).*?(?=Advice notes)", r"(?:Conditions relevant to Air Discharge Permit DIS\d{5:0}(?:-\w+)?\b Only).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Air Discharge Permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Specific Conditions -)", r"(?:SPECIFIC CONDITIONS - DISCHARGE TO AIR DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Conditions relevant to Discharge Permit DIS\d{5:0}(?:-\w+)?\b only).*?(?=Advice notes)", r"(?:Specific conditions - air discharge permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit (DIS\d{5:0}(?:-\w+)?\b)).*?(?=Advice notes)", r"(?:Specific conditions - DIS\d{5:0}(?:-\w+)?\b (air)).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Specifc conditions)", r"(?:Attachment 1: Consolidated conditions of consent as amended).*?(?=Advice notes)",
+        r"(?:Specific Air Discharge Conditions).*?(?=Advice notes)", r"(?:Specific conditions - Discharge to Air: DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - discharge permit (air discharge) DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Air Discharge Limits).*?(?= Acoustic Conditions)",
+        r"(?:Specific conditions - discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific conditions - air discharge permit (s15) DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:Specific conditions - air discharge permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Secific conditions)", r"(?:Specific conditions relating to Air discharge permit - DIS\d{5:0}(?:-\w+)?\b).*?(?=General Advice notes)",
+        r"(?:Specific conditions - Discharge permit (s15) - DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)", r"(?:Specific Conditions - discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Specific conditions)",
+        r"(?:Specific conditions - Discharge to air: DIS\d{5:0}(?:-\w+)?\b).*?(?=Specific conditions)", r"(?:Attachement 1: Consolidated conditions of consent as amended).*?(?=Resource Consent Notice of Works Starting)",
+        r"(?:Specific conditions - Air Discharge consent - DIS\d{5:0}(?:-\w+)?\b).*?(?=Specific conditions)", r"(?:Specific conditions - Discharge consent DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice notes)",
+        r"(?:DIS\d{5:0}(?:-\w+)?\b - Air Discharge).*?(?=SUB\d{5:0}\b) - Subdivision", r"(?:DIS\d{5:0}(?:-\w+)?\b & DIS\d{5:0}(?:-\w+)?\b).*?(?=SUB\d{5:0}\b) - Subdivision",
+        r"(?:Specific conditions - Discharge Permit DIS\d{5:0}(?:-\w+)?\b).*?(?=Advice Notes - General)", r"(?:AIR QUALITY - ROCK CRUSHER).*?(?=GROUNDWATER)",
         r"(?<=Conditions).*?(?=Advice notes)"
     ]
     conditions_str = ""
@@ -343,6 +343,8 @@ def extract_metadata(text):
     }
 
 def clean_surrogates(text):
+    # This function is now crucial for preventing UnicodeDecodeError
+    # It handles characters that Python's default string encoding might struggle with.
     return text.encode('utf-16', 'surrogatepass').decode('utf-16', 'ignore')
 
 def log_ai_chat(question, answer):
@@ -511,6 +513,7 @@ if uploaded_files:
         my_bar.empty()
 
 # --- Main Dashboard Display ---
+# This is the main IF block for the entire dashboard content
 if not st.session_state.master_df.empty:
     df = st.session_state.master_df.copy()
 
@@ -748,8 +751,8 @@ if not st.session_state.master_df.empty:
         else: # This 'else' aligns with 'if st.session_state.corpus_embeddings is not None:'
             st.info("Please upload PDF files first to enable semantic search.")
 
-# --- The problem was here! The global else must align with the global if. ---
-else: # This 'else' aligns with 'if not st.session_state.master_df.empty:'
+# --- This 'else' must be at the very same indentation level as the 'if not st.session_state.master_df.empty:' block ---
+else:
     st.info("Upload PDF files using the sidebar to get started!")
 
 # --- Chat Log Download ---
