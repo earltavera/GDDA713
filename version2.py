@@ -237,7 +237,7 @@ def extract_metadata(text):
         matches = re.findall(pattern, text, re.IGNORECASE)
         if matches:
             for dt_val_candidate in matches:
-                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_val_candidate
+                dt_str = dt_val_candidate[0] if isinstance(dt_val_candidate, tuple) and dt_val_candidate else dt_str_candidate
                 if not isinstance(dt_str, str) or not dt_str.strip():
                     continue
                 try:
@@ -401,7 +401,7 @@ if st.sidebar.button("Clear All Data", type="primary"):
 # --- "About Us" Section in Sidebar ---
 st.sidebar.markdown("---")
 with st.sidebar.expander("About the Creators", expanded=False):
-   
+    
     script_dir = os.path.dirname(os.path.abspath(__file__))
     alana_image_path = os.path.join(script_dir, "assets", "Alana.jpg")
     earl_image_path = os.path.join(script_dir, "assets", "Earl_images.jpg")
@@ -453,6 +453,11 @@ if uploaded_files:
                 file_bytes = file.read()
                 with fitz.open(stream=file_bytes, filetype="pdf") as doc:
                     text = "\n".join(page.get_text() for page in doc)
+                
+                # --- IMPORTANT: Apply clean_surrogates immediately after extracting text ---
+                text = clean_surrogates(text)
+                # --- END IMPORTANT CHANGE ---
+
                 data = extract_metadata(text)
                 data["__file_name__"] = file.name
                 data["__file_bytes__"] = file_bytes
@@ -606,108 +611,107 @@ if not st.session_state.master_df.empty:
     tab_gemini, tab_groq, tab_semantic = st.tabs(["Gemini AI Chat", "Groq AI Chat (Langchain)", "LLM Semantic Query"])
 
     # --- Gemini AI Chat ---
-with tab_gemini:
-    if not google_api_key:
-        st.warning("Google API Key not found. Please add it to your .env file or Streamlit secrets for Gemini AI functionality.")
-    else:
-        model = genai.GenerativeModel('gemini-pro')
-        if "gemini_chat_history" not in st.session_state:
-            st.session_state.gemini_chat_history = []
+    with tab_gemini:
+        if not google_api_key:
+            st.warning("Google API Key not found. Please add it to your .env file or Streamlit secrets for Gemini AI functionality.")
+        else:
+            model = genai.GenerativeModel('gemini-pro')
+            if "gemini_chat_history" not in st.session_state:
+                st.session_state.gemini_chat_history = []
 
-        for message in st.session_state.gemini_chat_history:
-            with st.chat_message(message["role"]):
-                st.markdown(message["parts"])
+            for message in st.session_state.gemini_chat_history:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["parts"])
 
-        if prompt := st.chat_input("Ask Gemini about the consent data..."):
-            st.session_state.gemini_chat_history.append({"role": "user", "parts": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+            if prompt := st.chat_input("Ask Gemini about the consent data..."):
+                st.session_state.gemini_chat_history.append({"role": "user", "parts": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
 
-            # --- CORRECTED PREPARATION FOR MARKDOWN ---
-            df_for_markdown_gemini = df.copy()
-            # Iterate through columns and apply robust string conversion
-            for col in df_for_markdown_gemini.columns:
-                df_for_markdown_gemini[col] = df_for_markdown_gemini[col].apply(
-                    lambda x: str(x).encode('utf-8', 'ignore').decode('utf-8') if pd.notna(x) else ''
-                )
-            # --- END CORRECTED PREPARATION ---
+                # Prepare context for Gemini: Ensure all data is string-compatible for to_markdown
+                df_for_markdown_gemini = df.copy()
+                for col in df_for_markdown_gemini.columns:
+                    # Apply a robust string conversion that handles potential non-string types and NaNs
+                    df_for_markdown_gemini[col] = df_for_markdown_gemini[col].apply(
+                        lambda x: str(x).encode('utf-8', 'ignore').decode('utf-8') if pd.notna(x) else ''
+                    )
+                
+                context_for_gemini = "Here is the parsed consent data in a DataFrame format:\n"
+                context_for_gemini += df_for_markdown_gemini.to_markdown(index=False) # Use the cleaned DataFrame
+                context_for_gemini += "\n\nBased on this data, " + prompt
 
-            context_for_gemini = "Here is the parsed consent data in a DataFrame format:\n"
-            context_for_gemini += df_for_markdown_gemini.to_markdown(index=False) # Use the cleaned DataFrame
-            context_for_gemini += "\n\nBased on this data, " + prompt
+                with st.chat_message("assistant"):
+                    with st.spinner("Gemini is thinking..."):
+                        try:
+                            response = model.generate_content(context_for_gemini)
+                            gemini_response = response.text
+                            st.markdown(gemini_response)
+                            st.session_state.gemini_chat_history.append({"role": "assistant", "parts": gemini_response})
+                            log_ai_chat(prompt, gemini_response)
+                        except Exception as e:
+                            st.error(f"Gemini AI error: {e}")
+                            st.session_state.gemini_chat_history.append({"role": "assistant", "parts": f"Sorry, I encountered an error: {e}"})
 
-            with st.chat_message("assistant"):
-                with st.spinner("Gemini is thinking..."):
-                    try:
-                        response = model.generate_content(context_for_gemini)
-                        gemini_response = response.text
-                        st.markdown(gemini_response)
-                        st.session_state.gemini_chat_history.append({"role": "assistant", "parts": gemini_response})
-                        log_ai_chat(prompt, gemini_response)
-                    except Exception as e:
-                        st.error(f"Gemini AI error: {e}")
-                        st.session_state.gemini_chat_history.append({"role": "assistant", "parts": f"Sorry, I encountered an error: {e}"})
+    # --- Groq AI Chat ---
+    with tab_groq:
+        if not groq_api_key:
+            st.warning("Groq API Key not found. Please add it to your .env file or Streamlit secrets for Groq AI functionality.")
+        else:
+            if "groq_chat_history" not in st.session_state:
+                st.session_state.groq_chat_history = []
 
-# --- Groq AI Chat ---
-with tab_groq:
-    if not groq_api_key:
-        st.warning("Groq API Key not found. Please add it to your .env file or Streamlit secrets for Groq AI functionality.")
-    else:
-        if "groq_chat_history" not in st.session_state:
-            st.session_state.groq_chat_history = []
+            # Display chat messages from history on app rerun
+            for message in st.session_state.groq_chat_history:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
 
-        # Display chat messages from history on app rerun
-        for message in st.session_state.groq_chat_history:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+            if prompt := st.chat_input("Ask Groq about the consent data... ", key="groq_chat_input"):
+                st.session_state.groq_chat_history.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
 
-        if prompt := st.chat_input("Ask Groq about the consent data... ", key="groq_chat_input"):
-            st.session_state.groq_chat_history.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+                # Prepare context for Groq (Langchain): Ensure all data is string-compatible for to_markdown
+                df_for_markdown_groq = df.copy()
+                for col in df_for_markdown_groq.columns:
+                    # Apply a robust string conversion that handles potential non-string types and NaNs
+                    df_for_markdown_groq[col] = df_for_markdown_groq[col].apply(
+                        lambda x: str(x).encode('utf-8', 'ignore').decode('utf-8') if pd.notna(x) else ''
+                    )
 
-            # --- CORRECTED PREPARATION FOR MARKDOWN ---
-            df_for_markdown_groq = df.copy()
-            # Iterate through columns and apply robust string conversion
-            for col in df_for_markdown_groq.columns:
-                df_for_markdown_groq[col] = df_for_markdown_groq[col].apply(
-                    lambda x: str(x).encode('utf-8', 'ignore').decode('utf-8') if pd.notna(x) else ''
-                )
-            # --- END CORRECTED PREPARATION ---
+                context_for_groq = "Here is the parsed consent data in a DataFrame format:\n"
+                context_for_groq += df_for_markdown_groq.to_markdown(index=False)
+                context_for_groq += "\n\nBased on this data, " + prompt
 
-            context_for_groq = "Here is the parsed consent data in a DataFrame format:\n"
-            context_for_groq += df_for_markdown_groq.to_markdown(index=False)
-            context_for_groq += "\n\nBased on this data, " + prompt
+                # Initialize ChatGroq model
+                chat = ChatGroq(temperature=0, groq_api_key=groq_api_key, model_name="llama3-8b-8192")
 
-            # Initialize ChatGroq model
-            chat = ChatGroq(temperature=0, groq_api_key=groq_api_key, model_name="llama3-8b-8192")
-
-            with st.chat_message("assistant"):
-                with st.spinner("Groq is thinking..."):
-                    try:
-                        # Use Langchain's message format
-                        messages = [
-                            SystemMessage(content="You are a helpful AI assistant that answers questions based on provided consent data."),
-                            HumanMessage(content=context_for_groq)
-                        ]
-                        response = chat.invoke(messages)
-                        groq_response = response.content
-                        st.markdown(groq_response)
-                        st.session_state.groq_chat_history.append({"role": "assistant", "content": groq_response})
-                        log_ai_chat(prompt, groq_response)
-                    except Exception as e:
-                        st.error(f"Groq AI error: {e}")
-                        st.session_state.groq_chat_history.append({"role": "assistant", "content": f"Sorry, I encountered an error: {e}"})
+                with st.chat_message("assistant"):
+                    with st.spinner("Groq is thinking..."):
+                        try:
+                            # Use Langchain's message format
+                            messages = [
+                                SystemMessage(content="You are a helpful AI assistant that answers questions based on provided consent data."),
+                                HumanMessage(content=context_for_groq)
+                            ]
+                            response = chat.invoke(messages)
+                            groq_response = response.content
+                            st.markdown(groq_response)
+                            st.session_state.groq_chat_history.append({"role": "assistant", "content": groq_response})
+                            log_ai_chat(prompt, groq_response)
+                        except Exception as e:
+                            st.error(f"Groq AI error: {e}")
+                            st.session_state.groq_chat_history.append({"role": "assistant", "content": f"Sorry, I encountered an error: {e}"})
 
     # --- LLM Semantic Query ---
     with tab_semantic:
         st.info("Use this to find relevant consent reports based on semantic similarity to your query.")
 
         if st.session_state.corpus_embeddings is not None:
-            if st.session_state.semantic_search_query: 
+            if st.session_state.semantic_search_query: # Check if the query input actually has a value
                 with st.spinner("Performing semantic search..."):
                     try:
                         query_embedding = embedding_model.encode(st.session_state.semantic_search_query, convert_to_tensor=True)
+                        # Calculate cosine similarities
                         cosine_scores = util.cos_sim(query_embedding, st.session_state.corpus_embeddings)[0]
                         
                         # Get the top 5 most similar
@@ -739,13 +743,14 @@ with tab_groq:
                             st.info("No relevant results found.")
                     except Exception as e:
                         st.error(f"Semantic search error: {e}")
-            else:
+            else: # This 'else' aligns with 'if st.session_state.semantic_search_query:'
                 st.info("Enter a query in the sidebar to perform a semantic search.")
-        else:
+        else: # This 'else' aligns with 'if st.session_state.corpus_embeddings is not None:'
             st.info("Please upload PDF files first to enable semantic search.")
 
-    else:
-        st.info("Upload PDF files using the sidebar to get started!")
+# --- The problem was here! The global else must align with the global if. ---
+else: # This 'else' aligns with 'if not st.session_state.master_df.empty:'
+    st.info("Upload PDF files using the sidebar to get started!")
 
 # --- Chat Log Download ---
 st.sidebar.markdown("---")
