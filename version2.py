@@ -653,10 +653,10 @@ if not st.session_state.master_df.empty:
                         st.info("No relevant results found.")
                 except Exception as e:
                     st.error(f"Semantic search error: {e}")
-            else: 
-                st.info("Enter a query in the sidebar to perform a semantic search.")
         else: 
-            st.info("Please upload PDF files first to enable semantic search.")
+            st.info("Enter a query in the sidebar to perform a semantic search.")
+    else: 
+        st.info("Please upload PDF files first to enable semantic search.")
 
     # ----------------------------
     # Ask AI About Consents Chatbot (NEW SECTION)
