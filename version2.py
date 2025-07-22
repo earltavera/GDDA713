@@ -653,9 +653,9 @@ if not st.session_state.master_df.empty:
                         st.info("No relevant results found.")
                 except Exception as e:
                     st.error(f"Semantic search error: {e}")
-         else: 
-            st.info("Enter a query in the sidebar to perform a semantic search.")
-        else:
+            else: 
+                st.info("Enter a query in the sidebar to perform a semantic search.")
+        else: 
             st.info("Please upload PDF files first to enable semantic search.")
 
     # ----------------------------
